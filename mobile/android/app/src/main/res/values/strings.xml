@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">知事 RuleFlow</string>
+    <string name="title_activity_main">知事 RuleFlow</string>
+    <string name="package_name">com.zhishi.ruleflow</string>
+    <string name="custom_url_scheme">com.zhishi.ruleflow</string>
+</resources>

@@ -1,0 +1,803 @@
+[
+  {
+    "id": "demo-public-f5e1695a87317e1c",
+    "notice": {
+      "id": "demo-public-f5e1695a87317e1c",
+      "title": "关于做好2026年国家助学金评审工作的通知（公开通知演示）",
+      "category": "award",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于做好2026年国家助学金评审工作的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/15272.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-f5e1695a87317e1c:6",
+        "text": "普通本专科学生国家助学金通过四川省学生资助管理系统进行申请审批",
+        "source_name": "关于做好2026年国家助学金评审工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/15272.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-f5e1695a87317e1c:16",
+        "text": "10月20日前\t学院指标分配、学生申请、小班评议、学院评审、公示、通过系统上报学校",
+        "source_name": "关于做好2026年国家助学金评审工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/15272.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-f5e1695a87317e1c-task-0",
+          "title": "通过四川省学生资助管理系统提交国家助学金申请",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-f5e1695a87317e1c:6",
+            "block:public-f5e1695a87317e1c:16"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-5898a88503c081fb",
+    "notice": {
+      "id": "demo-public-5898a88503c081fb",
+      "title": "关于举办2026-2027学年四川农业大学勤工助学双选会的通知（公开通知演示）",
+      "category": "career",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于举办2026-2027学年四川农业大学勤工助学双选会的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14902.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-5898a88503c081fb:13",
+        "text": "学生持填好的《四川农业大学勤工助学申请表》（附件）\n参加双选会并现场投递，现场了解岗位要求",
+        "source_name": "关于举办2026-2027学年四川农业大学勤工助学双选会的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14902.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-5898a88503c081fb-task-0",
+          "title": "填写《四川农业大学勤工助学申请表》",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-5898a88503c081fb:13"
+          ]
+        },
+        {
+          "id": "demo-public-5898a88503c081fb-task-1",
+          "title": "参加双选会并现场投递申请表",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-5898a88503c081fb:13"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-a688d7a480113442",
+    "notice": {
+      "id": "demo-public-a688d7a480113442",
+      "title": "关于发布2025-2026学年度综合素质测评（毕业年级）第一版成绩的通知（公开通知演示）",
+      "category": "academic",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于发布2025-2026学年度综合素质测评（毕业年级）第一版成绩的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14462.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-a688d7a480113442:17",
+        "text": "个别确有错误的，请准备好充分的佐证材料，带上本人身份证或学生证原件在上班时间到指定地点进行咨询",
+        "source_name": "关于发布2025-2026学年度综合素质测评（毕业年级）第一版成绩的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14462.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-a688d7a480113442-task-0",
+          "title": "如体质健康测试成绩确有错误，准备佐证材料并携带身份证或学生证原件到指定地点咨询",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-a688d7a480113442:17"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-cb19a765e182a0c4",
+    "notice": {
+      "id": "demo-public-cb19a765e182a0c4",
+      "title": "关于开展第九届感恩中国近现代科学家奖助学金评选笔试与面试工作的通知（公开通知演示）",
+      "category": "award",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于开展第九届感恩中国近现代科学家奖助学金评选笔试与面试工作的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/15192.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-cb19a765e182a0c4:3",
+        "text": "时 间：10月9日上午10:00-11:00",
+        "source_name": "关于开展第九届感恩中国近现代科学家奖助学金评选笔试与面试工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/15192.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-cb19a765e182a0c4:4",
+        "text": "地 点：成都校区1教309",
+        "source_name": "关于开展第九届感恩中国近现代科学家奖助学金评选笔试与面试工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/15192.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-cb19a765e182a0c4:7",
+        "text": "时 间：10月9日下午15:00",
+        "source_name": "关于开展第九届感恩中国近现代科学家奖助学金评选笔试与面试工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/15192.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-cb19a765e182a0c4:8",
+        "text": "奖学金组：成都校区1教304",
+        "source_name": "关于开展第九届感恩中国近现代科学家奖助学金评选笔试与面试工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/15192.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-cb19a765e182a0c4:9",
+        "text": "助学金组：成都校区1教305",
+        "source_name": "关于开展第九届感恩中国近现代科学家奖助学金评选笔试与面试工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/15192.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-cb19a765e182a0c4-task-0",
+          "title": "参加笔试（10月9日上午10:00-11:00，成都校区1教309）",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-cb19a765e182a0c4:3",
+            "block:public-cb19a765e182a0c4:4"
+          ]
+        },
+        {
+          "id": "demo-public-cb19a765e182a0c4-task-1",
+          "title": "参加面试（10月9日下午15:00）",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-cb19a765e182a0c4:7",
+            "block:public-cb19a765e182a0c4:8",
+            "block:public-cb19a765e182a0c4:9"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-05e66ebcf265ab3d",
+    "notice": {
+      "id": "demo-public-05e66ebcf265ab3d",
+      "title": "关于开展2026年顶新康师傅明日朝阳奖学金评选工作的通知（公开通知演示）",
+      "category": "award",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于开展2026年顶新康师傅明日朝阳奖学金评选工作的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1017/14522.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-05e66ebcf265ab3d:18",
+        "text": "以上材料请于9月20日前将纸质版申请材料提交至学生资助中心（成都校区1教112，雅安校区学生事务大厅，都江堰校区5206）；电子版材料报送至腾讯文档收集表（具体链接将发至评优评奖工作QQ群）",
+        "source_name": "关于开展2026年顶新康师傅明日朝阳奖学金评选工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1017/14522.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-05e66ebcf265ab3d-task-0",
+          "title": "9月20日前将纸质版申请材料提交至学生资助中心（成都校区1教112，雅安校区学生事务大厅，都江堰校区5206）",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-05e66ebcf265ab3d:18"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-896202a81767f475",
+    "notice": {
+      "id": "demo-public-896202a81767f475",
+      "title": "关于开展“同心筑梦，暖心护航”心理委员风采展示大赛的通知（公开通知演示）",
+      "category": "competition",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于开展“同心筑梦，暖心护航”心理委员风采展示大赛的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1028/11802.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-896202a81767f475:12",
+        "text": "5月6日前扫描下方腾讯文档二维码，填写报名信息",
+        "source_name": "关于开展“同心筑梦，暖心护航”心理委员风采展示大赛的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1028/11802.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-896202a81767f475:8",
+        "text": "内容以班级心理活动为主，不超过10页",
+        "source_name": "关于开展“同心筑梦，暖心护航”心理委员风采展示大赛的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1028/11802.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-896202a81767f475-task-0",
+          "title": "扫描腾讯文档二维码填写报名信息",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-896202a81767f475:12"
+          ]
+        },
+        {
+          "id": "demo-public-896202a81767f475-task-1",
+          "title": "准备初赛工作展示PPT（不超过10页）",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-896202a81767f475:8"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-e5969df33e9e0094",
+    "notice": {
+      "id": "demo-public-e5969df33e9e0094",
+      "title": "关于开展2025-2026学年度优秀学生奖学金评选工作的通知（公开通知演示）",
+      "category": "award",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于开展2025-2026学年度优秀学生奖学金评选工作的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14972.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-e5969df33e9e0094:18",
+        "text": "1.10月19日前，学生自愿申请，学院完成资格审查、评选、公示，拟评学生在学工系统（新）完成申请，学院审批后报送学校。",
+        "source_name": "关于开展2025-2026学年度优秀学生奖学金评选工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14972.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-e5969df33e9e0094-task-0",
+          "title": "在学工系统（新）完成优秀学生奖学金申请",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-e5969df33e9e0094:18"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-2f17a5603d967835",
+    "notice": {
+      "id": "demo-public-2f17a5603d967835",
+      "title": "关于开展2025-2026学年学生处学生教育管理服务中心评优工作的通知（公开通知演示）",
+      "category": "award",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于开展2025-2026学年学生处学生教育管理服务中心评优工作的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14832.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-2f17a5603d967835:6",
+        "text": "9月22日线下答辩，三校区连线同步进行",
+        "source_name": "关于开展2025-2026学年学生处学生教育管理服务中心评优工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14832.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-2f17a5603d967835:9",
+        "text": "申请人于2026年9月23日中午12:00前将附件5",
+        "source_name": "关于开展2025-2026学年学生处学生教育管理服务中心评优工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14832.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-2f17a5603d967835-task-0",
+          "title": "参加团队奖项线下答辩（三校区连线同步）",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-2f17a5603d967835:6"
+          ]
+        },
+        {
+          "id": "demo-public-2f17a5603d967835-task-1",
+          "title": "本人提交突出贡献奖申请表（附件5）",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-2f17a5603d967835:9"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-697be174c2d458f0",
+    "notice": {
+      "id": "demo-public-697be174c2d458f0",
+      "title": "关于做好2026－2027学年第一学期学生在外住宿申请工作的通知（公开通知演示）",
+      "category": "other",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于做好2026－2027学年第一学期学生在外住宿申请工作的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14792.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-697be174c2d458f0:12",
+        "text": "申请人登录“学生管理系统”，进入“功能列表”版块，选择“校外住宿（走读）”进行在线申请，并上传相关证明材料",
+        "source_name": "关于做好2026－2027学年第一学期学生在外住宿申请工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14792.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-697be174c2d458f0:8",
+        "text": "《安全责任承诺书》（见附件1）",
+        "source_name": "关于做好2026－2027学年第一学期学生在外住宿申请工作的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14792.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-697be174c2d458f0-task-0",
+          "title": "登录“学生管理系统”在线提交校外住宿（走读）申请并上传证明材料",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-697be174c2d458f0:12"
+          ]
+        },
+        {
+          "id": "demo-public-697be174c2d458f0-task-1",
+          "title": "准备《安全责任承诺书》",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-697be174c2d458f0:8"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-f7d111617f8a80fa",
+    "notice": {
+      "id": "demo-public-f7d111617f8a80fa",
+      "title": "关于开展“辅导员公开课第十季 —— 百廿川农校史宣讲”集体备课的通知（公开通知演示）",
+      "category": "other",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于开展“辅导员公开课第十季 —— 百廿川农校史宣讲”集体备课的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14772.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-f7d111617f8a80fa:2",
+        "text": "一、时间：9 月 20 日 16:00",
+        "source_name": "关于开展“辅导员公开课第十季 —— 百廿川农校史宣讲”集体备课的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14772.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-f7d111617f8a80fa:3",
+        "text": "二、地点：成都校区：1 教 301 会议室",
+        "source_name": "关于开展“辅导员公开课第十季 —— 百廿川农校史宣讲”集体备课的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14772.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-f7d111617f8a80fa:4",
+        "text": "雅安校区：四政101",
+        "source_name": "关于开展“辅导员公开课第十季 —— 百廿川农校史宣讲”集体备课的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14772.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-f7d111617f8a80fa:5",
+        "text": "都江堰校区：5409",
+        "source_name": "关于开展“辅导员公开课第十季 —— 百廿川农校史宣讲”集体备课的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14772.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-f7d111617f8a80fa:11",
+        "text": "请参会人员提前做好工作安排，准时到场参会，遵守会场纪律。",
+        "source_name": "关于开展“辅导员公开课第十季 —— 百廿川农校史宣讲”集体备课的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14772.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-f7d111617f8a80fa-task-0",
+          "title": "参加辅导员公开课第十季集体备课",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-f7d111617f8a80fa:2",
+            "block:public-f7d111617f8a80fa:3",
+            "block:public-f7d111617f8a80fa:4",
+            "block:public-f7d111617f8a80fa:5",
+            "block:public-f7d111617f8a80fa:11"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-f796c14fa1cc880b",
+    "notice": {
+      "id": "demo-public-f796c14fa1cc880b",
+      "title": "关于组织2026级新生激活学工系统及线上填写《四川农业大学学生登记表》的通知（公开通知演示）",
+      "category": "other",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于组织2026级新生激活学工系统及线上填写《四川农业大学学生登记表》的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14762.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-f796c14fa1cc880b:1",
+        "text": "线上填写《四川农业大学学生登记表》",
+        "source_name": "关于组织2026级新生激活学工系统及线上填写《四川农业大学学生登记表》的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14762.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-f796c14fa1cc880b:10",
+        "text": "完成《四川农业大学学生登记表》线上填报",
+        "source_name": "关于组织2026级新生激活学工系统及线上填写《四川农业大学学生登记表》的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14762.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      },
+      {
+        "id": "block:public-f796c14fa1cc880b:12",
+        "text": "填写后务必点击“提交”",
+        "source_name": "关于组织2026级新生激活学工系统及线上填写《四川农业大学学生登记表》的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14762.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-f796c14fa1cc880b-task-0",
+          "title": "线上填写并提交《四川农业大学学生登记表》",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-f796c14fa1cc880b:1",
+            "block:public-f796c14fa1cc880b:10",
+            "block:public-f796c14fa1cc880b:12"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  },
+  {
+    "id": "demo-public-4ddd63c29af474ef",
+    "notice": {
+      "id": "demo-public-4ddd63c29af474ef",
+      "title": "关于开展易班“每月‘易’主题”9-10月主题活动的通知（公开通知演示）",
+      "category": "other",
+      "status": "demo",
+      "relevance": "UNKNOWN",
+      "deadline": null,
+      "deadline_evidence_ids": [],
+      "source_name": "关于开展易班“每月‘易’主题”9-10月主题活动的通知",
+      "source_url": "https://xsc.sicau.edu.cn/info/1013/14682.htm"
+    },
+    "blocks": [
+      {
+        "id": "block:public-4ddd63c29af474ef:17",
+        "text": "请于9月25日前，填写活动信息报备表（附件3）发送至邮箱",
+        "source_name": "关于开展易班“每月‘易’主题”9-10月主题活动的通知（公开原文节选）",
+        "source_url": "https://xsc.sicau.edu.cn/info/1013/14682.htm",
+        "locator": "官网原文节选；历史通知，仅供演示",
+        "confidence": 1
+      }
+    ],
+    "tasks": {
+      "nodes": [
+        {
+          "id": "demo-public-4ddd63c29af474ef-task-0",
+          "title": "填写活动信息报备表（附件3）并发送至指定邮箱",
+          "status": "todo",
+          "deadline": null,
+          "duration_minutes": null,
+          "origin": "document",
+          "evidence_ids": [
+            "block:public-4ddd63c29af474ef:17"
+          ]
+        }
+      ],
+      "edges": []
+    },
+    "materials": [],
+    "rules": [],
+    "facts": [],
+    "analysis": {
+      "summary": "公开通知的行动节选；已核对任务短引，未替演示用户认定资格或确认截止时间。",
+      "questions": [
+        "请在真实使用时核对个人资格、具体日期及通知完整上下文。"
+      ],
+      "review_reasons": [
+        "历史公开通知，只读演示，任务状态与真实账户隔离。"
+      ]
+    }
+  }
+]

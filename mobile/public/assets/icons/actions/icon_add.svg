@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink" baseProfile="full" height="128" version="1.1" viewBox="0 0 128 128" width="128">
+  <defs/>
+  <circle cx="64" cy="64" fill="#def8ef" r="42"/>
+  <line stroke="#10b796" stroke-linecap="round" stroke-width="9" x1="64" x2="64" y1="42" y2="86"/>
+  <line stroke="#10b796" stroke-linecap="round" stroke-width="9" x1="42" x2="86" y1="64" y2="64"/>
+</svg>

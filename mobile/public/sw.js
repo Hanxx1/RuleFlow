@@ -1,0 +1,5 @@
+const CACHE='zhishi-offline-v4';
+const ASSETS=['/','/manifest.webmanifest','/demo/public-cases.json','/demo/notice.json','/demo/blocks.json','/demo/rules.json','/demo/tasks.json','/demo/materials.json','/demo/facts.json','/demo/schedule.json','/assets/illustrations/empty_inbox.png','/assets/illustrations/hero_notice_checklist.png','/assets/illustrations/hero_goal_mountain.png','/assets/icons/navigation/nav_home.svg','/assets/icons/navigation/nav_home_active.svg','/assets/icons/navigation/nav_tasks.svg','/assets/icons/navigation/nav_tasks_active.svg','/assets/icons/navigation/nav_plan.svg','/assets/icons/navigation/nav_plan_active.svg','/assets/icons/navigation/nav_profile.svg','/assets/icons/navigation/nav_profile_active.svg'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))));
+self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(cached=>cached||fetch(e.request))));

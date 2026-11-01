@@ -1,0 +1,5 @@
+[
+  {"id":"material-application","title":"综合测评申请表","state":"待填写（演示）","evidence_ids":["block:form:5"]},
+  {"id":"material-award-proof","title":"获奖证明材料","state":"待核对（演示）","evidence_ids":["block:rules:23"]},
+  {"id":"material-service-proof","title":"志愿服务证明","state":"待核对（演示）","evidence_ids":["block:rules:23"]}
+]

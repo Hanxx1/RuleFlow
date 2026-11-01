@@ -1,0 +1,8 @@
+[
+  {"id":"schedule-course-tue","title":"数据结构课程","type":"course","day_index":1,"start_time":"08:30","end_time":"10:00","location":"示例教学楼 A203","evidence_ids":["block:schedule:course"]},
+  {"id":"schedule-task-tue","title":"核对德育加分项目","type":"task","day_index":1,"start_time":"14:00","end_time":"15:00","location":"图书馆 2 层（模拟）","evidence_ids":["block:schedule:plan"]},
+  {"id":"schedule-busy-wed","title":"小组课程讨论","type":"busy","day_index":2,"start_time":"10:30","end_time":"11:30","location":"线上会议（模拟）","evidence_ids":["block:schedule:busy"]},
+  {"id":"schedule-task-wed","title":"整理证明材料","type":"task","day_index":2,"start_time":"16:00","end_time":"17:15","location":"宿舍自习区（模拟）","evidence_ids":["block:schedule:plan"]},
+  {"id":"schedule-course-thu","title":"软件工程课程","type":"course","day_index":3,"start_time":"10:00","end_time":"12:00","location":"示例教学楼 B305","evidence_ids":["block:schedule:course"]},
+  {"id":"schedule-task-fri","title":"填写并检查申请表","type":"task","day_index":4,"start_time":"15:00","end_time":"16:30","location":"图书馆 2 层（模拟）","evidence_ids":["block:schedule:plan"]}
+]

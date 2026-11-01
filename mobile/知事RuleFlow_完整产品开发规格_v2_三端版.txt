@@ -1,0 +1,819 @@
+知事 RuleFlow｜完整产品开发规格 v2.0
+基于现有 Demo 的增量开发方案 · Android / iOS / HarmonyOS
+日期：2026-09-18
+文件编码：UTF-8，无 BOM
+交付对象：负责 E:\ZhiShi 项目的 Codex 与开发者
+
+【执行总纲】
+本文件完整替代旧版《Zhishi_RuleFlow_Android_开发规格.txt》的产品范围与阶段目标。
+目标是把已有 Demo 升级成可实际使用的完整应用，包括账号、真实导入、跨文档理解、个人判断、执行规划、资料管理、同步、三端客户端和部署。综测只是一个样例，不是唯一业务。
+继续在现有仓库增量开发，保留可用资产与回归样例；不得另建一个只会播放静态数据的新 Demo 冒充完成。
+本文描述目标设计，并不表示所有功能已经存在。历史事实、已查阅源码和新设计决定在下文分开标注。
+本轮产物是开发规格；编程代理收到本文后，应按阶段真正实现与验收。
+
+一、历史要求与现有工程基线
+
+1.1 查阅依据
+已查阅历史对话“分支 · 设计防诈应用 գաղափար”，以及开发任务“你照着里面的开发规格做出这个软件来。”的实施记录，并只读检查 E:\ZhiShi 的主要源码。
+历史明确的产品方向：用户主动提供网页、附件、截图、文字；系统判断“是否与我相关、是否符合条件、材料、依赖顺序、时间、原文依据”。信息理解 → 规则计算 → 个体判断 → 执行规划 → 证据验证是主线。
+历史出现的综测、奖学金、竞赛、考试、大创等应视为不同场景，不得把页面字段全部锁死为“德育加分”。早期“只做网页”“不做原生端”等方案已被后续移动端要求及本次三端要求取代。
+不采用早期自动批量爬取全站的设想；保留用户提交页面、显式附件及用户主动检查更新。
+
+1.2 已观察到的实现（源码快照，不等于运行验收）
+mobile/src/App.vue：单文件页面，主页、综测详情、计划、画像四种局部状态，证据弹窗。
+mobile/src/stores/app.ts：画像与任务状态存 localStorage，缺少账户隔离。
+mobile/src/services/demo.ts：读取固定 /demo/*.json，规则与材料显示依赖固定样例。
+shared/demo/assessment_2024：综测通知、Blocks、规则、任务和两套画像。
+server/app/main.py：FastAPI 示例接口；profile、task_status 是进程级全局变量，未接用户数据库。
+server/app/rules.py：已有部分三值运算，可作为重构起点，但需补严格类型、完整 trace、Schema 约束和一致性测试。
+mobile/android、mobile/ios：已有 Capacitor 工程目录；目录存在不代表已打包或真机验收。
+Android ShareReceiverActivity.java：能复制部分 URI，写 pending preferences；需完成消费 bridge、队列、多文件、失败反馈。
+docs/platform-adaptation.md：鸿蒙目前描述 PWA/未来容器方向；没有已核实的原生鸿蒙产品。
+历史开发记录称 Web 构建及两项前端脱敏测试通过；Python 测试、APK、IPA、HAP 不得据此宣称通过。
+
+1.3 首批需要改造的具体位置
+A. App.vue 拆成路由页面与组件；清除业务 UI 中固定标题、2025-09-30、固定 evidence id、只显示德育申请表等逻辑。
+B. demo.ts 升级成多事项仓库与通用求值器；不能用 rules[0]/rules[1] 推定规则角色，不能把未支持操作符当 eq。
+C. store 拆 auth/profile/case/plan/sync，落地数据库和账号命名空间。
+D. main.py 拆路由、服务、仓储；删除生产路径全局 profile/task_status，修正 Demo 目录实际解析路径并测试。
+E. rules.py 不可原地修改 AST 的 evidence 数组；父节点保留子节点 trace；空逻辑节点视为非法输入。
+F. Android pending 数据要有 import_id、ack、错误记录，禁止异常被静默吞掉后显示成功。
+G. PWA 的简单 Service Worker 不足以证明离线完整：构建资产要版本化缓存，私人 API 响应不进入公共缓存。
+H. 现有 green/neutral 样式可继承为视觉基础，不能以重做 UI 为理由丢失功能。
+
+二、完整产品定义与范围
+
+2.1 产品名称与定位
+名称：知事 RuleFlow。
+面向用户的副标题：看懂复杂通知，知道自己该怎么办。
+目标人群以大学生为首批，但核心模型使用 Case（事项）、Fact（事实）、Rule（规则）、Evidence（证据）、Task（任务），不能写死为学生综测系统。
+首版完整产品面向个人使用，无需依赖学校合作接口或教师审批系统。
+
+2.2 必须支持的六类业务
+① 奖助评优：奖学金、助学金、荣誉称号。区分范围资格、申请资格、竞争性评选结果。
+② 竞赛活动：个人/团队报名、成员条件、作品材料、校赛/省赛多节点。
+③ 考试考证：报名资格、缴费、准考证、考试时间地点；缴费状态由用户确认，不代付。
+④ 项目科研：大创/科研申报、申请书、导师确认、学院审核、终稿提交。
+⑤ 实习就业：招聘、实习申请、学历/毕业年份/技能要求、投递与面试安排。
+⑥ 教务与日常办理：综测、选课/转专业/交流项目、证明办理，以及用户导入的其他复杂通知。
+场景是分类与默认字段模板；同一个通用引擎处理全部场景。无法归类的通知用“其他”，仍支持证据、材料与计划。
+
+2.3 完整版必须交付
+登录注册、找回密码、退出与账户删除；用户画像及事项内补充事实；多事项管理；多来源导入；真实解析与可选云端模型抽取；规则求值；证据定位；冲突复核；材料清单与个人材料库；DAG 与日程；本地提醒；跨端同步；导出；隐私设置；错误恢复；三端原生安装形态。
+没有模型密钥时保留样例体验、手动建事项、任务与离线缓存；新文档的智能分析明确显示服务未配置，不能返回某个预置样例冒充分析。
+
+2.4 边界
+平台管理自己的信息和办理计划，不代表学校给出正式资格认证、审核结果、录取结果。
+不自动读取微信/QQ 私有聊天记录，不抓取登录态校园系统；通过系统分享/复制/文件选择导入。
+不做论坛、商城、全校教务管理、自动代填代提交或通用聊天机器人首页。
+允许用户手动记录审核结果和提交回执；“用户标记已提交”与“官方已审核通过”不能混淆。
+政府补贴、医疗、金融等高风险领域不作为首版预置场景，避免把通用能力写成自动专业裁定。
+
+三、运行模式、账号与数据归属
+
+3.1 三种明确模式
+样例体验：不登录、无网络，使用独立样例数据分区；可以改画像和任务；一键重置。界面持续标记“示例数据”。
+本机使用：不登录，可手动建事项、保存导入草稿、管理本地材料、阅读本地已解析内容、执行任务；不具备跨端云同步。
+账户模式：真实注册登录后启用在线分析、云端事项同步与设备管理。私密原件默认仅本地，逐项选择是否云备份。
+本机数据在登录时显示迁移预览，用户选择迁入哪些事项；样例不默认混入真实账号。
+在线账号离线时可读已缓存事项、修改任务、填写画像；修改加入待同步队列，不伪装同步成功。
+
+3.2 完整登录体系（必做）
+默认可完整实施路径：邮箱 + 密码注册登录、邮箱验证、忘记密码/重置、修改密码、设备会话、退出全部设备。
+手机号验证码登录作为适配扩展；仅在真实短信供应商配置、限流和验收完成后显示入口，不放不能点击的占位按钮。
+不强依赖微信/Apple/Huawei 第三方登录；以后接入另按对应平台规则评估，当前无需为了三端适配引入三种身份系统。
+
+登录页布局：品牌名与一句话价值 → 邮箱 → 密码（可切换可见）→ 登录 → 忘记密码/注册 → 体验样例/仅本机使用。提交前明确服务协议与隐私政策链接；不默认勾选同意。
+注册页：邮箱、密码、确认密码、协议确认；提交后进入验证页，显示脱敏邮箱、重新发送倒计时、修改邮箱。
+密码规则作为产品策略：12–128 字符，允许密码管理器粘贴与自动填充，不强制无意义的字符组合。
+重置：提交邮箱后统一提示“如账号存在将发送邮件”；链接有效期 15 分钟、一次性；完成后撤销旧会话。
+验证码/邮件本地开发可使用 Mailpit 等测试邮箱，生产禁止固定万能验证码或直接返回验证码。
+
+3.3 会话实现
+后端密码用 Argon2id 哈希。访问 token 建议 15 分钟；refresh token 随机不可预测、轮换、服务端仅存哈希、绝对有效期 30 天；检测重复使用时撤销对应会话族。
+原生端 refresh token 存平台安全存储（Android Keystore 支持的加密存储、iOS Keychain、鸿蒙安全存储适配）；access token 仅内存。
+Web 预览用 HttpOnly/Secure/SameSite cookie 的刷新会话并处理 CSRF；不可把长期 token 塞 localStorage。Web 与原生会话传输方式分开测试。
+并发 401 由单次刷新锁处理；刷新失败进入重新登录，已编辑草稿保留在原账号本地分区。
+登录/邮件限流按账号与 IP 联合处理，返回 429 与重试时间；生产至少支持可配置阈值、审计和通用失败消息。
+device_id 只标识设备，不作为身份凭证。每个私人资源由服务端验证 owner_id。
+
+四、信息架构与逐页需求
+
+4.1 一级导航
+底部：工作台 / 事项 / 计划 / 我的。全局“导入”主操作在工作台首屏和事项列表可达；消息入口是标题栏铃铛；材料库在“我的”及事项材料页可达。
+不把所有详情页挤进底部导航。Android 返回、iOS 侧滑、鸿蒙返回都能回到原列表位置。
+
+4.2 页面清单（路由名称为目标契约）
+P01 启动 /bootstrap：恢复会话、打开数据库、恢复 pending 分享；迁移失败进入可恢复错误页，不能无限白屏。
+P02 欢迎 /welcome：价值说明，登录注册、本机使用、体验样例。
+P03 登录 /auth/login；P04 注册 /auth/register；P05 验证 /auth/verify；P06 找回 /auth/reset。
+P07 画像引导 /onboarding：昵称、角色；选学生时询问学校、学历、入学年份，其余按需补充；每项可跳过。
+P08 工作台 /home：今日待处理、待补信息、临近截止、导入入口、最近事项；数量全部来自当前用户数据。
+P09 新建导入 /imports/new：链接/文字/图片/文件；也可“手动建事项”。多来源合并到一个事项或分开处理需明确选择。
+P10 来源预览 /imports/:id/sources：正文、选中文件、发现附件、文件大小、隐私处理方式、删除来源。
+P11 分析进度 /imports/:id/progress：逐来源状态、实际阶段、失败原因、取消/重试；未可估算的阶段用不定进度，不编百分比。
+P12 分析结果确认 /imports/:id/review：标题、分类、适用人群、抽取覆盖度、关键结论、待核对信息；确认纳入事项中心。
+P13 事项列表 /cases：搜索标题/来源、按分类/活动状态/资格筛选、排序、收藏、归档、回收站。
+P14 事项概览 /cases/:id：这是什么、与我是否相关、资格如何、待补问题、下一步、最近时间点、来源数量。
+P15 规则与资格 /cases/:id/rules：可展开条件树、已知/不满足/未知、事实来源、原文引用、重算按钮。
+P16 补充信息 /cases/:id/questions：一次一个或同组问题，提供“不确定”；注明仅用于此事项或保存到画像。
+P17 材料 /cases/:id/materials：必需/条件必需/可选；缺失/已选/待更新；对应模板、材料格式要求、已关联个人文件。
+P18 流程 /cases/:id/flow：可执行列表为默认，切换依赖图；展示前置任务、预计耗时、硬截止与建议开始日。
+P19 来源 /cases/:id/sources：全部版本与来源文档、解析状态、附件关系、手动添加和检查更新。
+P20 证据 /cases/:id/evidence/:id：结论 → 规则 → 原文；原文面板与引用高亮、前后文、版本。
+P21 冲突复核 /cases/:id/conflicts：并列展示矛盾日期/范围/材料要求，用户可暂定或标记等待发布方确认。
+P22 计划 /plan：今天/本周/全部、日历、逾期；跨事项任务排序和时间冲突提示。
+P23 任务 /tasks/:id：状态、前置、材料、地点/联系人、截止、提醒、备注、证据、活动记录。
+P24 材料库 /vault：用户自己的文件；分类/搜索/有效期/仅本机标识；可关联多事项但不替代官方模板来源。
+P25 消息 /inbox：分析完成、需复核、提醒、同步冲突；可读/未读、点击跳转；没有广告/社交消息。
+P26 我的 /me：账号、本地/同步状态、画像、材料库、设置、帮助、关于。
+P27 画像 /profile：分类事实、来源、适用期、撤回/清空；按学年存排名等时效信息。
+P28 隐私 /settings/privacy：云同步范围、文件保留、模型发送记录摘要、清理、导出、账户删除。
+P29 设备 /settings/devices：当前与其他设备会话、最近活跃、撤销。
+P30 通知 /settings/notifications：提醒默认值、系统权限状态、打开设置入口。
+P31 帮助 /help：格式限制、截图链接限制、离线范围、反馈；反馈附日志必须再次预览脱敏。
+P32 手动事项 /cases/new；P33 导出 /cases/:id/export：执行方案、材料清单、ICS、可选证据节选。
+
+4.3 每页必须实现的共性状态
+首次空白、正常、加载、离线缓存、局部失败、无权限、账号过期；返回重试不丢表单；错误页给用户能做的下一步。
+事项详情不因一个附件失败而整页不可看；需显示覆盖范围“已解析 3/4，1 个失败”，相关结论进入需复核状态。
+只有在画像数据不存在时展示引导；不能每次进入应用都弹登录或补资料。
+
+4.4 界面设计约束
+继承当前绿色与浅灰底：主色 #176B4D、背景 #F6F7F3、正文 #17221D，语义红/黄/绿配文字和图标，不能只靠颜色。
+首页以“导入通知”和“下一步”形成层次，避免满屏图表和虚构统计；详情默认先给结果，技术规则树按需展开。
+正文建议 16sp/等效单位，标题 22–28；触摸区域统一至少 48 逻辑单位；支持系统字体放大、深色模式和屏幕阅读器。
+窄屏单列；横屏/平板可双栏详情；安全区、软键盘、底部栏、长标题、中文换行必须真实测试。
+显示日期精度，不能把“9月25日前”画成已确定的“9月25日23:59”。提醒与官方时间使用不同标签。
+
+五、关键用户闭环
+
+5.1 新用户
+欢迎 → 注册/登录或本机体验 → 简短画像 → 工作台 → 导入 → 来源确认与隐私选择 → 分析 → 先看相关性和资格 → 回答缺失信息 → 确认材料与计划 → 接收提醒 → 用户标记提交 → 归档。
+收到外部分享时直接保留导入草稿，再按需登录；登录完成回到该草稿，不返回空首页。
+
+5.2 任意新通知
+不要求用户先选业务类型。系统给分类候选可修改；未知规则仍作为引用原文展示并要求确认。
+简单通知可以直接提取时间/地点生成单任务；复杂通知走规则与附件管线；两者都可手动编辑。
+至少用一份不在样例库里的奖学金或招聘通知通过端到端验收，验证不是关键词匹配固定 JSON。
+
+5.3 事项持续变化
+用户补充个人事实 → 重新计算受影响规则 → 展示资格/材料/计划变化 → 确认应用计划差异。
+用户导入更新通知 → 创建来源新版本 → 保留旧证据 → 比较规则和日期 → 提示变更 → 更新提醒。
+已完成任务不能因重新生成而变回待办；删除的旧任务存历史，新增任务单独标识。
+
+六、三端技术路线与能力契约
+
+6.1 决定
+保留现有 Vue 3 + TypeScript + Ionic Vue + Capacitor，继续服务 Android 和 iOS；Web 为开发预览和辅助访问。
+鸿蒙采用单独 ArkTS + ArkUI 原生客户端，使用同一 HTTP API、JSON 协议、设计 tokens、样例和一致性测试。完整范围包含与 Android/iOS 对齐的产品页面与业务闭环。
+这样保留现有 Web 投入；不假设 Capacitor 直接输出 HarmonyOS 原生包，不把 PWA 添加桌面算作鸿蒙适配完成。
+可共用接口 DTO 的来源和测试数据；不得保证任意 TypeScript/npm 包能直接在 ArkTS 运行。鸿蒙规则求值器按同一语义单独实现并跑同一测试向量。
+鸿蒙 Web 容器只允许在过渡预览中使用；若阶段采用它，标记“过渡实现”，不得替代本文件最终 ArkUI 客户端验收。
+
+6.2 建议目标支持策略（产品目标，待实际 SDK/设备验证后锁定）
+Android：最低 Android 10，目标 SDK 按发布时平台要求；至少测最低档、主流档、发布时当前档。
+iOS：最低 iOS 16，使用可支持该目标的 SDK/插件组合；最低档、主流档、当前档实测。
+HarmonyOS：原生 HarmonyOS 5 及以上作为规划范围；在 P0 用目标设备和 DevEco 验证最低 API，记录实际支持矩阵，不把兼容 APK 的旧系统混为原生验收。
+现有 Capacitor 6 等是工程快照，不代表推荐长期锁死；P0 核验维护、安全及工具链兼容性，做一次受测升级并锁文件。
+
+6.3 NativePort 接口
+定义 capabilities()、pickFiles()、pickImages()、captureImage()、readPendingImports()、ackImport(id)、secureStore、localDatabase、scheduleReminder/cancelReminder、shareFile、openExternalUrl。
+返回统一 Result<T>：ok/data 或 code/message/retryable；权限 denied、unsupported、cancelled、failed 必须分开。
+每端建立能力表；某功能不可用时显示可操作回退，如相机拒绝后选择已有图片，不静默失败。
+Bridge 只传 opaque 文件句柄与经过校验的数据；不暴露任意文件路径或任意脚本执行接口。
+
+6.4 Android 分享
+在现有工程补 SEND 和 SEND_MULTIPLE；text/plain、image、PDF、DOC/DOCX、XLS/XLSX、TXT 的 MIME 按实际支持配置，避免无差别抢占所有分享。
+处理 EXTRA_TEXT、EXTRA_STREAM、ClipData，URI 去重；ContentResolver 读取，流式限制大小，立即复制私有沙箱；需要长期 URI 权限时只使用合法可持久化授权。
+分享接收线程不得在主线程复制大文件；冷启动/onNewIntent/连续分享/用户取消均验收。
+pending_imports 为队列，原子保存元数据；每项 id、created_at、kind、display_name、mime、size、local_ref、state、error。前端成功导入后 ack，清理已消费缓存。
+通知与文件权限按需请求，不申请全盘存储或自动读取聊天软件目录。
+
+6.5 iOS 分享
+建立独立 Share Extension target，与主 App 配置相同 App Group；使用 NSItemProvider 接收受支持类型，复制共享容器并建立 pending 记录。
+扩展负责轻量收件与“已存到知事”，不在扩展里长时间 OCR/模型分析；不依赖非公开接口强制拉起主 App。
+用户打开主 App 后消费共享队列，进入来源确认。扩展被终止时不留半份被标为成功的文件。
+限制文件数量/总量，做好扩展内错误与取消 UI；接收链接/图片/PDF 逐项实机验证。
+文件选择用系统文档选择器，照片使用系统选择器；安全区/侧滑返回/键盘自动填充/通知权限走 iOS 行为。
+
+6.6 HarmonyOS 分享与系统能力
+使用 Stage 模型的 UIAbility；按目标 SDK 官方接收分享规范声明 Want 匹配与支持数据类型，处理 onCreate/onNewWant，统一转换为 pending_imports。
+需区分发送分享与接收分享，不能接上 Share Kit 的发送面板就宣称可接收外部通知；接收的文本/URI 数据处理按目标 API 官方样例核验。
+文件复制到沙箱、URI 授权、关系型本地存储、安全存储、通知权限、外部链接打开均由 ArkTS 适配器负责。
+不要依赖 GMS 或 Android 专属插件；原生鸿蒙需真实 HAP 安装与至少一次外部文件分享闭环。
+
+七、工程结构与增量重构
+
+保持根目录 mobile/server/shared，新增 harmony；逐步拆文件，不一次性大搬家：
+mobile/src/app/                  应用启动、router、全局错误
+mobile/src/pages/                逐页组件
+mobile/src/features/auth/        登录、注册、会话
+mobile/src/features/cases/       事项、分析、规则、材料
+mobile/src/features/plans/       DAG、日历、提醒
+mobile/src/features/profile/     画像与问题
+mobile/src/features/vault/       材料库
+mobile/src/core/rules/           TS 通用三值求值
+mobile/src/core/planner/         本地计划计算
+mobile/src/repositories/         demo/local/api 与同步门面
+mobile/src/platform/             Web/Android/iOS NativePort
+mobile/android/                 Kotlin/Java 插件、原生配置
+mobile/ios/                     主 App、Share Extension
+harmony/                        DevEco 工程、ArkUI 页面、NativePort、规则引擎
+server/app/api/v1/               API 路由
+server/app/domain/               rules/planner/conflicts
+server/app/services/             auth/imports/analysis/sync/export
+server/app/parsers/              各格式解析器
+server/app/providers/            LLM/OCR/mail/storage 接口
+server/app/models/               SQLAlchemy
+server/app/workers/              持久化后台任务
+server/alembic/                  数据迁移
+shared/schemas/                 Rule AST、CaseBundle、EvidenceRef 等
+shared/test-vectors/             TS/Python/ArkTS 一致性用例
+shared/demo/                     多场景可重放样例
+docs/                           迁移、API、三端验收、部署与发布记录
+
+TypeScript 严格模式，业务核心消除 any；OpenAPI 生成 API 客户端。所有接口版本、schema_version、日期/数值约定统一。
+SQLite 用于本机持久化；浏览器开发用 IndexedDB。同一 Repository 接口与迁移测试，不把 localStorage 当关系数据库。
+服务端生产用 PostgreSQL；本地可用 SQLite 做功能开发，锁/事务/任务队列的集成测试必须跑 PostgreSQL。
+后端维持 FastAPI/Pydantic/SQLAlchemy/Alembic；解析库按格式选择、版本锁定并记录许可证；不因“完整产品”自动引入微服务。
+
+7.1 实现选型补充
+HTTP 抓取 httpx；HTML 解析 BeautifulSoup；PDF 解析/页图可用 PyMuPDF（采用前核验其许可证与发行方式，不符合项目发行条件则换合适库）；DOCX 用 python-docx；XLSX 用 openpyxl；XLS 用支持旧格式的 xlrd；DOC 转换使用隔离的 LibreOffice headless，禁宏且设资源上限。
+后端 OCR 采用 RapidOCR + ONNX Runtime 的可替换 provider；模型文件在部署时固定版本和校验和，不在每次请求下载。
+移动端 PDF 预览可用 pdfjs-dist；本地 DOCX/XLSX 文本抽取单独封装并测试包体/内存，不能将浏览器解析库可运行推定为鸿蒙可运行。
+Android 图片本地 OCR 优先验证 ML Kit Text Recognition 的 bundled 中文模型方案，测试无 GMS、断网设备；不选择必须临时从 Play Services 下载才能工作的配置作为唯一离线路径。
+iOS 图片 OCR 使用 Vision 文字识别；鸿蒙优先验证 Core Vision Kit 通用文字识别接口，按实际设备能力查询与失败回退。模型语言、坐标方向和本地数据处理边界均需要平台测试。
+Android/iOS SQLite 优先验证成熟 Capacitor 适配器，鸿蒙使用系统关系型存储；加密能力单独验证，不能因为包名包含 sqlite 就宣称数据库已加密。
+API 测试 pytest/httpx，Web 单元测试 Vitest，浏览器流程 Playwright；iOS/Android/鸿蒙系统能力使用对应原生测试或可重复真机验收脚本。
+
+八、核心数据模型与数据库
+
+8.1 统一概念
+Case 是用户的一件事务；Source 是正文/附件；DocumentVersion 是不可变内容快照；Block 是引用单位；RuleSetVersion 是规则快照；Evaluation 是某规则版本对某事实快照的计算。
+官方申请表模板与用户填写的申请材料必须分开：前者 source/template，后者 personal_asset。
+私人数据必含 owner_id；同一用户多个设备共享，但 A 用户不能读到 B 用户对象。
+
+8.2 服务器主要表（省略项按统一基列补齐）
+统一基列：id(UUID)、created_at、updated_at、version(integer)、deleted_at；不可变快照表不原地覆盖。
+users：normalized_email UNIQUE、password_hash、email_verified_at、status、display_name。
+auth_sessions：user_id、device_id、refresh_hash、family_id、expires_at、revoked_at、last_seen_at。
+auth_challenges：purpose、subject_hash、token_hash、expires_at、used_at、attempt_count。
+user_settings：owner_id UNIQUE、timezone、locale、reminder_defaults、privacy_policy_version。
+fact_definitions：key UNIQUE、label、value_type、unit、enum_values、scope、sensitive、schema_version。
+user_facts：owner_id、key、value_json、state、valid_from/to、period_key、source_type、source_ref、confirmed_at。
+cases：owner_id、title、category、status、pinned、archived_at、active_rule_version_id、active_plan_version_id。
+case_facts：case_id、owner_id、key、value_json、state、period_key、source_type、confirmed_at。
+sources：case_id、owner_id、kind、parent_source_id、display_name、canonical_url、selected、parse_state。
+document_versions：source_id、owner_id、sha256、object_key、mime、byte_size、redaction_mode、captured_at、parser_version。
+blocks：document_version_id、block_type、text、ordinal、locator_json、confidence、text_hash。
+imports：owner_id、case_id、state、idempotency_key、consent_snapshot、coverage_json。
+analysis_jobs：owner_id、import_id、stage、status、attempt、lease_owner、lease_until、cancel_requested、error_code。
+rule_sets：case_id、version_number、schema_version、status、coverage_json、created_by、source_version_ids。
+rules：rule_set_id、rule_key、purpose、effect_target、ast_json、review_state、supersedes_rule_id。
+rule_evidence：rule_id、block_id、relation；必须验证同一 Case 内合法引用。
+evaluations：case_id、rule_set_id、fact_snapshot_json、fact_snapshot_hash、engine_version、as_of、result_json。
+conflicts：case_id、kind、left_ref、right_ref、status、resolution、resolved_by、resolved_at。
+material_requirements：case_id、stable_key、label、condition_rule_key、required_level、format_json、template_source_id。
+personal_assets：owner_id、label、mime、sha256、object_key(nullable)、storage_mode、expires_at。
+case_materials：case_id、requirement_id、asset_id、status、user_note。
+plan_versions：case_id、evaluation_id、planner_version、created_at、diff_json。
+tasks：case_id、stable_key、plan_version_id、title、action_type、gate_rule_key、duration_minutes、deadline_json、provenance_json。
+task_edges：plan_version_id、predecessor_id、successor_id、edge_kind；联合唯一，禁止自环与跨 Case 边。
+task_progress：owner_id、case_id、stable_key、status、completed_at、skip_reason、version；与生成任务定义分离。
+reminders：owner_id、task_key、scheduled_at、channel、status、schedule_revision。
+inbox_messages：owner_id、kind、target_ref、read_at、dedupe_key UNIQUE。
+sync_changes：owner_id、server_seq、entity_type、entity_id、operation、version、changed_at。
+sync_operations：owner_id、device_id、operation_id UNIQUE、result_json，支持重试去重。
+audit_events：owner_id、action、target_ref、request_id、safe_metadata；禁止存原文/凭据。
+
+8.3 约束与索引
+用户列表用 (owner_id, updated_at, id)；tasks 索引 case_id/stable_key；blocks 索引 document_version_id/ordinal；后台任务索引 status/lease_until。
+业务写入及其 sync_changes 在同一事务提交；软删除写 tombstone；对象存储访问必须先鉴权再发短期链接。
+文件散列去重限制在同一用户作用域，避免跨用户泄露“别人是否上传了某文件”。
+本地数据库使用相同业务 id，另含 sync_cursor、outbox、pending_imports、local_assets、scheduled_notifications；安全 token 不在普通业务表。
+
+九、后端 API 契约
+
+9.1 通用约定
+前缀 /api/v2；旧 /api/v1 为迁移兼容路径，停止新增业务，按文档给出弃用期限。
+成功：{data, request_id, meta?}；错误：{error:{code,message,details?,retryable}, request_id}。
+列表 cursor/limit 分页，limit 默认 20、最大 100；时间为 ISO 8601，存 UTC，日期精度独立表达。
+创建导入/分析/导出用 Idempotency-Key；同用户同 key 不重复扣额度/建事项。
+PATCH 写请求携带 expected_version；版本冲突 409；无效 Schema 422；超限 413；格式不支持 415；未登录 401；越权统一 404 或无泄漏的 403。
+后端不信任客户端传来的 user_id、资格结论、任务拓扑或文件路径。
+
+9.2 账号
+POST /auth/register {email,password,terms_version} → 验证流程，不泄露已存在账号详情。
+POST /auth/verify-email {token}；POST /auth/resend-verification {email}。
+POST /auth/login {email,password,device_label,device_id} → 会话与用户。
+POST /auth/refresh；POST /auth/logout；POST /auth/logout-all。
+POST /auth/password-reset/request {email}；POST /auth/password-reset/confirm {token,password}。
+POST /auth/password/change {old_password,new_password}。
+GET /me；PATCH /me；GET /me/sessions；DELETE /me/sessions/:id。
+POST /me/export；DELETE /me（近期重新验证身份后执行删除流程）。
+
+9.3 画像与事项
+GET /fact-definitions；GET /me/facts；PUT /me/facts/:key；DELETE /me/facts/:key。
+GET/POST /cases；GET/PATCH/DELETE /cases/:id；POST /cases/:id/restore。
+PUT /cases/:id/facts/:key；DELETE /cases/:id/facts/:key。
+GET /cases/:id/questions；POST /cases/:id/evaluations → 指定规则版本与事实快照的结果。
+GET /cases/:id/rules；GET /cases/:id/evaluations/:evaluation_id。
+POST /cases/:id/rule-corrections → 用户修订候选，创建新规则版本并留审计；不得修改官方原文。
+
+9.4 导入和分析
+POST /imports {case_id?,input_kind,client_import_id} → import_id。
+POST /imports/:id/text {redacted_text,redaction_manifest}。
+POST /imports/:id/url {url} → 仅获取所选页面并发现附件候选，尚不自动下载附件。
+POST /imports/:id/files multipart → 来源记录及服务器校验结果。
+GET /imports/:id；GET /imports/:id/attachments。
+POST /imports/:id/attachments/select {attachment_ids} → 处理用户选择的显式附件。
+POST /imports/:id/analyze {consent_id,mode} → 202 {job_id,status}。
+GET /jobs/:id；POST /jobs/:id/cancel；POST /jobs/:id/retry。
+GET /imports/:id/result → 带覆盖度的候选 CaseBundle。
+POST /imports/:id/commit {title,category,accepted_revision} → 事务性纳入 Case。
+POST /cases/:id/sources；POST /sources/:id/check-update（用户主动触发）。
+
+9.5 证据、材料、任务与同步
+GET /cases/:id/sources；GET /sources/:id/versions；GET /blocks/:id。
+GET /document-versions/:id/preview（鉴权、按需文件/页图）；GET /cases/:id/conflicts。
+POST /conflicts/:id/resolve {decision,reason,expected_version}。
+GET /cases/:id/materials；PATCH /case-materials/:id。
+GET/POST /assets；GET/PATCH/DELETE /assets/:id；POST /assets/:id/upload-consent。
+GET /cases/:id/plan；POST /cases/:id/plan/rebuild → 差异预览；POST /cases/:id/plan/apply。
+GET /tasks?case_id&status&from&to；PATCH /tasks/:id/progress；PUT /tasks/:id/reminder。
+GET /inbox；PATCH /inbox/:id；POST /exports {case_id,format,scope}；GET /exports/:id。
+POST /sync/push {device_id,operations[]}；GET /sync/pull?cursor=...。
+GET /demo/catalog（公共、无用户数据）；GET /demo/:scenario_id/bundle。
+GET /health/live；GET /health/ready（ready 检查数据库与必需资源，不泄露配置）。
+
+9.6 CaseBundle 必需结构
+{schema_version,id,title,category,case_status,source_versions,coverage,
+ relevance,eligibility,review_state,questions,material_requirements,
+ plan,conflicts,evidence_refs,evaluation_version,updated_at}
+relevance 与 eligibility 为独立 TruthResult；review_state 是独立质量状态，禁止合并成一枚误导标签。
+返回示例：relevance=TRUE、eligibility=UNKNOWN、review_state=ready，用户文案“这与你相关；还需确认排名才能判断申请资格”。
+
+十、真实导入与多文档分析管线
+
+10.1 来源
+文字、公开 URL、PNG/JPG、PDF、DOCX、XLSX、TXT 必做；历史附件包含 XLS，因此补充只读 XLS 解析；旧 DOC 使用隔离转换器转为可读格式，失败则明确提示另存 DOCX/PDF。
+文件选择页显示支持范围，密码文件要求解密后重新导入；不执行 Office 宏、外部链接或电子表格公式。
+截图中完整 URL 可 OCR 后让用户确认；二维码可解码；只有“点击这里”的截图无法恢复隐藏链接，提供复制原链接入口。
+
+10.2 流水线
+received → privacy_pending → sources_confirmed → queued → extracting → normalizing → extracting_rules → validating → evaluating → planning → review_ready → committed。
+异常状态：partial_failure、failed、cancelled；任何阶段都有 request_id、阶段耗时、错误码及可重试标记。
+每个文件先变成 DocumentFacts，再由 CaseAggregator 合并，防止一次把全部附件塞给模型。
+长文按标题/页/表格切分，保持 block_id 与少量上下文重叠；按 block_id 去重，不因重叠生成两条相同规则。
+
+10.3 解析策略
+HTML 保留正文结构、表格、链接与下载附件；保存快照时间与原 URL。
+PDF 先抽文本与坐标，扫描页才 OCR；页旋转、图像方向、坐标系要规范。
+DOCX 按段落和表格顺序，不假造原始页码；XLS/XLSX 保留工作表、单元格、合并区域与公式缓存值来源。
+图片 OCR 保存原图尺寸、方向、bbox、文本及识别置信信息；用户修正文案保留原识别记录。
+所有解析器返回统一 Block，而非自定义散乱数组。
+
+10.4 外链与资源限制（可配置产品默认值）
+单文件 20 MiB、单次 10 文件、累计 100 MiB；网页响应 5 MiB；重定向最多 3；连接 8 秒、读取 15 秒。
+接收流期间限制大小，不能读完整文件后才限制；压缩格式限制解压总量/条目数；转换与 OCR 在隔离进程内有 CPU/内存/时间预算。
+URL 仅 http/https；DNS 解析全部 A/AAAA 地址检查公网属性，每次重定向重验；防 DNS rebinding，实际连接 IP 与校验 IP 绑定并保持正确 Host/TLS 校验；同时以部署网络出站限制兜底。
+拒绝 localhost、回环、私网、链路本地、云元数据、IPv4 映射 IPv6 等特殊地址。401/403/验证码返回人工上传提示。
+附件只来自当前已确认页面的显式链接；跨域附件展示域名供用户确认，不递归爬全站。
+
+10.5 LLM 接入
+统一 LLMProvider 接口、服务端密钥、超时/限额/退避；MockProvider 只用于样例和测试，UI/API 必须返回 mode=demo。
+模型负责文本理解、候选规则、材料/任务提取、文档关系；程序负责最终求值、排序、日期运算、DAG 和冲突门控。
+模型收到的文档是数据，不是指令；禁止因文档中的“忽略规则/发送秘密”等文字调用工具或改变服务配置。
+输出按 Schema 校验、字段类型校验、引用存在性与引用文本支持性检查；引用存在不等于规则正确，含糊/冲突/未覆盖文本进入复核。
+保存 model_id、prompt_version、parser_version、脱敏快照 hash 与成本摘要；不在普通日志留原文。
+数值置信度不能当作可靠概率展示，默认显示“已核对/需复核/OCR识别”及实际原因。
+
+10.6 持久化工作执行
+完整版本用数据库 analysis_jobs + 独立 worker；不把长任务仅挂在 FastAPI 进程内 BackgroundTasks 或全局 dict。
+worker 领取任务带租约与心跳；超时回收；各阶段结果按 (job_id,stage,input_hash) 幂等保存；取消合作式停止。
+PostgreSQL 上用事务领取避免两个 worker 同做一任务；SQLite 开发只开单 worker。
+前端按 2→5→10 秒退避轮询，切后台暂停非必要轮询，恢复前台查状态；实际失败不能无限转圈。
+
+十一、Rule AST v2：通用事实、三值与可解释求值
+
+11.1 事实字典
+事实不能全部写成 Profile 固定列。通过 fact_definitions 定义 key/label/type/unit/enum/valid_period，再保存用户事实值。
+基础字段例如 profile.role、profile.education_level、profile.enrollment_year、profile.graduation_year、profile.school、profile.major。
+时效字段例如 academic.rank_percent、academic.failed_courses_count、academic.period；事项字段例如 case.team_size、case.has_supervisor、case.certificate_level。
+事实状态：known / unknown / not_provided / declined / expired；仅 known 且在有效期内可以参与确定比较。
+同一字段在不同学年不得覆盖错用；事项事实优先于对应时间范围的画像事实。两条同优先级已知事实冲突时返回 UNKNOWN 并提问。
+“不确定”“拒绝回答”不等于数值 0 或布尔 false；[] 是已知空集合，null 表示未知，不得混同。
+把“排名是否前30%”的布尔回答保存为受约束的 predicate assertion，不能伪造成 rank_percent=30；需要精确数值时另问。
+
+11.2 AST 统一格式
+共享 shared/schemas/rule-ast-v2.schema.json。节点用 discriminated union，additionalProperties=false；所有节点有 node_id。
+逻辑节点：{node_id,op:"and"|"or",args:[Node,...]}；至少两个子节点。
+取反：{node_id,op:"not",args:[Node]}；恰好一个。
+比较：{node_id,op:"eq"|"neq"|"gt"|"gte"|"lt"|"lte"|"in"|"not_in"|"contains"|"before"|"after",field,value,evidence_ids}。
+exists：{node_id,op:"exists",field,evidence_ids}，不接 value；known 且非 null → TRUE，已知空字符串/空集合 → FALSE，未知/拒绝/过期 → UNKNOWN。
+本规范下 exists 表示有可用业务值，不能用它代替“用户回答过”；需判断已明确没有项目时比较 [] 或专门 boolean 字段。
+常量 {node_id,op:"literal",value:true|false,evidence_ids} 仅用于原文明示的无条件规则；禁止给无约束候选自动补 true。
+限制树深度 20、总节点 500、in 数组 200 项；数值字段类型由字典强校验，不做 JS 隐式转换。
+日期比较使用规范化时间/日期类型；时区/精度不确定且影响结论时返回 UNKNOWN。
+不实现任意表达式字符串、eval、动态代码；复杂公式另用受限 CalculationSpec，并有独立单位/精度测试，不把综测分值计算塞成万能脚本。
+
+11.3 规则外壳
+Rule = {rule_id,rule_key,schema_version,purpose,target_ref,ast,review_state,evidence_ids,source_version_ids}。
+purpose：applicability（人群相关）、eligibility（申请资格）、material_required、task_gate、advisory。
+同一事项可以有多套规则；按目的和适用分支聚合，禁止按数组下标推定哪条是资格。
+例：奖学金申请资格，以下为模拟规则，不代表任何学校真实标准：
+{
+  "rule_id":"scholarship-eligibility-v1",
+  "rule_key":"eligibility",
+  "schema_version":"2.0",
+  "purpose":"eligibility",
+  "review_state":"validated",
+  "ast":{
+    "node_id":"root","op":"and","args":[
+      {"node_id":"n1","op":"eq","field":"profile.education_level","value":"undergraduate","evidence_ids":["b-sch-01"]},
+      {"node_id":"n2","op":"lte","field":"academic.rank_percent","value":30,"evidence_ids":["b-sch-02"]},
+      {"node_id":"n3","op":"eq","field":"academic.failed_courses_count","value":0,"evidence_ids":["b-sch-02"]}
+    ]
+  },
+  "evidence_ids":["b-sch-01","b-sch-02"],
+  "source_version_ids":["sch-source-v1"]
+}
+rank_percent 的单位定义为 0–100，值越小排名越靠前；不同百分比表达不许混为 0–1。
+
+11.4 三值真值表
+AND | T | F | U       OR | T | F | U
+T   | T | F | U       T  | T | T | T
+F   | F | F | F       F  | T | F | U
+U   | U | F | U       U  | T | U | U
+NOT：T→F，F→T，U→U。
+比较任一必要操作数不可用 → U。非法 AST/不支持 op 是 validation_error，不得作为正常业务 FALSE，也不能吞成已成功分析。
+不依据遍历顺序改变结果；为解释收集完整 trace，允许计算短路但保留未求值原因。
+
+11.5 求值结果
+{value,reason_codes,missing_fields,failed_conditions,evidence_ids,trace,engine_version,fact_snapshot_hash,rule_set_id,as_of}。
+trace 为树，节点记录 expected、actual（显示时脱敏）、source_fact_ref、value、evidence_ids、reason。
+failed_conditions 收集所有实际导致失败的叶子；missing_fields 可含完整集合，另输出 blocking_questions 只问能改变当前结论的问题。
+例如 AND 已有确定 FALSE，另一字段缺失不应强迫补填后才能显示失败；OR 已有 TRUE，不应为另一分支追问所有字段。
+“不满足资格”必须显示具体条件；“满足已知条件”不是“已获奖/已录取”。
+
+11.6 抽取质量与逻辑状态分离
+rule_engine 只对已验证输入做确定性求值。另设 review_state=ready/needs_review/conflict/incomplete。
+必要文件漏解析、原文例外条款未结构化、条件含糊、版本冲突未解决时，禁止 UI 显示不带限定的“资格已满足”；展示“已解析条件满足，仍有条款待核对”。
+模型自报高置信度不能覆盖这个门控。
+针对“普通规则 + 特例”可显式建 OR/NOT 子树；只有原文支持时使用。跨文档优先级必须有生效日期/废止说明/明确来源关系，不按文件上传先后擅自决定。
+
+11.7 本地与服务端
+TS/Python/ArkTS 用 shared/test-vectors 同测；线上服务端重算以确保一致，但私人事实可选择仅本机求值，此时不发送事实原值。
+重新判断必须记录 profile/fact 版本与规则版本，结果旧时标记“资料已变更，待重算”，防止看见过期结论。
+旧 AST v1 通过纯函数转换到 v2（稳定生成 node_id、映射字段名），不能直接把旧语义当新语义；不兼容节点保留并标待复核。
+
+十二、证据追溯与原文版本
+
+12.1 EvidenceRef
+{id,case_id,source_id,document_version_id,block_id,locator,quote,quote_hash,relation}。
+locator 是联合类型：
+PDF：page_index（内部 0 起）、bbox_normalized、rotation；UI 页码显示 index+1。
+图片：width/height/rotation、bbox_normalized。
+DOCX：paragraph_index 或 table_index/row/column；只有生成固定预览版后才可标该预览版页码。
+XLS/XLSX：sheet_name、cell_range；明确缓存公式值与原公式区别。
+HTML：snapshot_id、block ordinal、DOM locator、original_url、captured_at；原网页变化不破坏快照引用。
+TXT：line_start/line_end、encoding。
+
+12.2 UI 行为
+点结论看到所用规则与个人事实；点规则定位原文高亮并可看前后文；点来源可看全部内容。
+PDF 放大/缩放/旋转后高亮位置不偏；XLSX 展示只读网格；DOCX 展示语义段落表格，不能伪造 Word 原始分页。
+定位失败时退化到引文+版本+上下文并标记“暂无法定位”，不得跳到别的段落假装成功。
+用户自己的事实与官方条款证据分开呈现，避免将用户填写值画成官方证明。
+
+12.3 数据版本
+Block 内容在同一 document_version 内不可变；重新 OCR/修正创建新版本，并记录修订关系。
+展示历史结果时使用当时证据版本。删除原件后可按用户选择保留脱敏引用快照；全部删除则解释为证据已删除，不制造替代引文。
+结论引用至少一个支持依据；人工任务允许 provenance=user_entered，系统建议允许 provenance=system_suggestion + rationale，不强行为每个用户自建待办编造官方证据。
+
+十三、Task DAG、日期与跨事项计划
+
+13.1 数据与门控
+TaskNode = stable_key,title,description,action_type,gate_rule_key,material_refs,duration_minutes,deadline,provenance。
+TaskEdge = predecessor → successor；默认 finish_to_start；只存同一事项内边。跨事项资源冲突是计划提示，不自动连成一个巨大图。
+资格 F：展示不能继续申请的原因；仍允许用户添加“咨询确认”任务，系统不将提交节点视为可执行。
+资格 U：补信息/咨询是可执行节点；后续受条件影响的材料和提交标“等待确认”。
+材料的 required_when T/F/U 分别表示必需/当前不需/待确认。
+
+13.2 状态分离
+availability = ready / blocked_by_dependency / blocked_by_rule。
+progress = todo / in_progress / done / skipped / cancelled。
+上游 skipped 不默认等于 done；需要用户明确满足替代条件或确认解除依赖并记录理由。
+用户越过前置标完成时显示依赖提醒并记录人工覆盖；不得误认为外部机构已经审核。
+
+13.3 算法
+保存前检测自环、重复边、悬空节点、跨事项边和环；Kahn O(V+E) 输出拓扑顺序，存在环返回具体环路径供修订。
+有耗时和锚点的 DAG 计算 ES/EF：ES(v)=max(EF(pred))，EF(v)=ES(v)+duration(v)。
+给终点硬截止后倒推 LF/LS：LF(v)=min(LS(successor),本节点已确定硬截止)，LS(v)=LF(v)-duration(v)。
+slack=LS-ES；slack=0 为该模型的关键路径节点，负值代表按当前估时有延期风险。无法确定耗时/硬截止时不输出假精确关键路径日期。
+多个终点分别处理；当前时间、已完成节点、手动计划时间作为计算输入，写入 plan_version。
+默认耗时由模板建议或用户填写，并显示“估计”。工作日模式必须配置工作日历；未配置时只按连续时长，不自称已扣除节假日。
+
+13.4 Deadline 类型
+{kind:exact|date_only|range|relative|unknown,raw_text,date?,at?,start?,end?,timezone,anchor_ref?,confidence_state,evidence_ids}。
+“9月25日前”只确定日期时保留 date_only 与边界歧义；“明天下午”依赖可信发布时刻，截图缺消息日期时询问，不能用上传日擅自替代。
+学校所在时区作为通知时间语义，出差后显示设备时区换算但保留原时区。
+建议开始时间是推导值，显示算法来源和耗时假设，不加“官方截止”标签。
+冲突日期未解决时可推荐按更早时间暂排，但必须标“保守建议”且保留冲突，不能改写为权威时间。
+
+13.5 跨事项日历与提醒
+列表排序：逾期未完成 → 临近硬截止 → 可执行且低余量 → 其余，规则固定可解释，不用 LLM 给神秘优先分。
+明确时段相交提示时间冲突；估计耗时超过用户可用时间提示负载风险；用户确认后才调整计划。
+基础版本每端实现本地通知；不强制接入 APNs/Huawei Push/厂商推送，云端站内信可在下次同步看到。
+权限被拒绝仍有应用内计划；不承诺系统杀进程后每次精准送达。任务修改/完成/删除/账号退出时撤销旧通知。
+提醒唯一键 user_id/task_key/schedule_revision/channel，去重；跨设备提醒默认只在用户指定主提醒设备，其他端可单独开启。
+ICS 导出使用稳定 UID、DTSTAMP、时区或 UTC；全天日期与有时刻事件区分；文件文字转义/换行规范，导出前预览避免带出私人备注。
+
+十四、材料管理与安全导出
+
+通知附件属于“官方模板/规则文件”，个人成绩单/证书/填写表属于“我的材料”。
+材料要求包括类型、文件格式、大小、份数、签字/盖章要求、有效期、提交渠道、依据。
+个人文件可重用到多个事项；只改变关联状态，不复制一堆无法同步的副本。
+应用可以核对扩展名/大小/缺件与用户声明的有效期，不宣称自动鉴真印章和证书。
+导出支持：可阅读执行方案 HTML/PDF、材料清单 CSV/TXT、任务 ICS、脱敏证据节选；导出格式任选时 UI 只显示已完成的格式。
+最终完整版本至少交付 PDF/TXT 执行方案和 ICS，PDF 通过后端受控渲染或本地打印能力实现，保留 Unicode 字体。
+导出前选择包含字段、是否包含个人信息、原文引用；系统分享只打开预览与系统面板，用户决定收件对象。
+打包资料只包含用户选定文件，不能把本地 token、日志、隐藏缓存加入 ZIP。
+
+十五、隐私前置脱敏：实施边界必须真实
+
+15.1 两个独立信任边界
+边界 A：手机 → 自己部署的后端。
+边界 B：后端 → 第三方 LLM/OCR 服务。
+只在后端做脱敏只能称“发给模型前脱敏”，不能声称“原件没有离开手机”。UI 必须准确展示本次路径。
+
+15.2 默认严格模式（必做）
+文本：本地识别手机号/证件/学号/姓名候选/邮箱，替换为 [PHONE_1] 等不透明占位符；用户校正后，仅发送脱敏 Blocks。
+图片/扫描 PDF：本地 OCR 得到文本与坐标；若需要上传图像，必须真正清除像素与元数据，而不是给前端加黑色覆盖层。
+文本 PDF/DOCX/XLSX：本地尽可能抽成语义文本与结构后脱敏；不把原始压缩包或 PDF 文本层跟着上传。
+本地不支持或扫描 OCR 不可用时停止在隐私选择页，提供“手动选择/遮盖”“复制文字”“允许服务器处理原件”三种明确路径；不得静默上传原件。
+本地 OCR 通过 NativePort 独立实现，模型资源优先随包或明确下载；离线不可用时显示真实限制。不能用云 OCR 冒充本地 OCR。
+三端严格模式至少完成文字、图片的本地处理；文档格式的本地能力矩阵在验收中逐项列出，无法本地抽取的格式按上述显式回退完成产品流程。
+
+15.3 服务器辅助模式
+用户明确选择上传原件后，记录处理目的、文件范围、保留时长、可选模型提供方；后端解析，再在进入 LLM 前二次脱敏。
+默认原件临时保留 24 小时（产品设置，非法律保证），清理任务包含失败重试与可查询状态；用户云备份另行选择长期保存。
+个人材料库默认仅本机；云备份与智能分析是不同开关，不能一次同意永久授权所有材料上传。
+
+15.4 占位符与求值
+原值映射仅本机加密保存，不同步给第三方；同一次事项分析一致映射。
+资格事实优先在端侧参与求值，模型只抽规则。必须云端求值时单独选择传所需最小事实，不上传整份画像。
+对学校/专业等可能影响规则语义的字段不能无脑遮盖；在预览展示“必要字段保留”及用途。
+正则识别只是候选，无法保证所有敏感项都检测到；展示可编辑预览，不能写“绝无隐私风险”。
+
+15.5 本机保护与清除
+私有数据库与材料文件加密密钥由系统安全存储管理；不把密钥硬编码在 JS 或 APK。
+登出默认移除访问凭据和本机私人缓存，若用户选择保留离线数据则需本机解锁；切账号严格切换数据分区。
+删除账户立即撤销会话，停止任务/同步/提醒，进入可追踪清理流程；定义对象存储、数据库与备份保留期限，文案与实际部署一致。
+通知锁屏默认只显示“知事有一项待处理”，敏感标题由用户主动开启。
+
+十六、离线、跨端同步与旧数据迁移
+
+16.1 离线范围
+可用：样例、缓存原文/证据、已下发规则本地重算、手动事项、任务更新、草稿、已下载材料、本地提醒。
+不可保证：新公开网页抓取、未缓存附件、云 LLM 新分析、账号注册/重置邮件。网络恢复后可继续。
+首次无网络也能开内置样例；登录过的账号不因短时离线立刻抹掉本地数据。
+
+16.2 同步模型
+本地写操作先事务性更新 DB 与 outbox；operation_id(UUID)、entity_id、base_version、patch、device_id。
+push 返回 applied/duplicate/conflict/rejected，每项独立结果；pull 返回 server_seq 单调游标、change 列表、next_cursor。
+只有应用成功本地事务后才推进 cursor；重试去重；断网中断可恢复。
+普通任务状态基于版本比较；双方同时改则展示冲突，不能用客户端时间盲目最后写入胜出。
+不可变来源/规则版本追加合并；画像同时改同字段需用户选；删除与修改冲突保留 tombstone 不自动复活。
+图片/文件独立上传状态，元数据成功不等于文件已上传；其他设备缺本地原件时显示“原件仅在另一设备”，仍可查看获授权的脱敏证据快照。
+
+16.3 迁移现有 Demo
+迁移前检测 zhishi-profile、zhishi-tasks，读取后验证 JSON/字段类型；损坏则保留备份并提示重置。
+旧任务状态键加入 scenario_id/case_id/user_namespace，避免多个事项任务 id 相同导致串状态。
+旧数据进入 demo 分区，原有用户填写的画像在登录时可选择导入；不能自动当成已注册用户。
+新数据库迁移成功标记 migration_version，再移除旧键；中途失败可再次运行，不重复生成事项。
+后端现有全局内存样例不当作真实用户数据库迁移。
+
+十七、样例库与真实测试资料
+
+17.1 目的
+样例既用于离线体验，也作为规则与 UI 回归固定集。多场景不是在代码中写六个 if，而是六份同结构数据。
+每套均包含 source fixtures、source_manifest、Blocks、RuleSet、Fact profiles、expected evaluations、材料、DAG、异常用例。
+公共原文需记录 URL/取得日期/授权或使用条件；模拟正文醒目标“模拟资料”。不把历史对话中的日期和内容当作已核实的新公文。
+
+17.2 六套场景与期望
+S01 综合测评：保留旧 assessment_2024 作为回归；2024/2022 画像产生不同适用性；加分项目 unknown 与已知 [] 有区别；不得仅凭入学年份断言整个综测与你无关。
+S02 奖学金（模拟）：本科、排名≤30%、无挂科；排名未知 → 资格 U；排名20且挂科0 → T；排名40 → F；完整材料与辅导员签字依赖。
+S03 程序设计竞赛（模拟）：在校生、队伍人数1–3、学院推荐；人数4 → F；推荐未知 → U；报名/作品/展示文件分阶段；两份通知截止冲突。
+S04 考试报名（模拟）：某级别需前置证书；资格、报名、缴费、准考证、考试五步；用户未确认缴费不能自动标完成。
+S05 项目申报（模拟）：导师确认、2–5人团队、申报书；材料可并行、审核后提交；给定明确时间与耗时以测试关键路径。
+S06 实习招聘（模拟）：毕业年份范围、技能项、申请表、面试时段；匹配是自报条件满足，不保证录取；与考试时段冲突。
+另外提供一条普通班会通知和一份未知类别长文，验证简单路径及“其他”通用路径。
+
+17.3 样例时间
+自动化固定 clock，源文与预期固定。展示可以保留“历史样例”或生成相对演示日的模拟正文；必须同时生成来源文本/规则/任务，不能只把首页日期换成未来。
+显式提供时间冲突、漏附件、低清 OCR、过期事实、无权限来源、不支持格式、网络中断等测试资料。
+
+17.4 新输入验收
+至少 3 份开发时未加入样例索引的文档（不同业务、不同格式）经真实解析管线产生新 source/block/rule/job 记录。
+人工检查关键日期、适用对象、必交材料与引用；记录正确/错误/未知，不能以模型自己评分宣称准确率。
+如做节时评估，用相同文档比较人工找条件与使用系统的实际操作耗时，记录样本量，不虚构节省百分比。
+
+十八、测试计划与发布门槛
+
+18.1 通用与后端
+Rule AST：完整三值真值表、非法节点/空 args/not 多参数、不支持 op、单位错误、未知/空集合、事实有效期、异常输入大小、trace 和引用不变性。
+三端求值：同一组向量 Python/TS/ArkTS 返回相同 value/reason；跨引擎版本不一致显示升级提示而非静默覆盖。
+DAG：分叉汇合、多终点、环、未知耗时、跳过依赖、重算保留完成进度、临界截止与时区。
+auth：注册验证、错误密码、重置、refresh 轮换复用、注销；A 用户对 B 的 Case/证据/文件/导出/任务/同步一律不能访问。
+ingestion：真实 PDF/DOCX/XLS/XLSX/图片、解析失败、超大流/压缩炸弹限制、私网/IPv6/DNS/重定向 SSRF。
+worker：进程中止后恢复、租约过期、重复请求、取消、局部失败；数据库重启不丢进度。
+sync：重复 push、断线续传、同字段冲突、删除墓碑、账号切换、缓存文件缺失、旧 localStorage 迁移。
+
+18.2 客户端 E2E
+① 注册验证登录 → 导入一份真实新通知 → 审核结果 → 补事实 → 材料关联 → 生成任务 → 提醒 → 完成 → 导出。
+② 匿名收分享 → 保存本地草稿 → 登录 → 回到草稿 → 用户选择迁入。
+③ 同账号 Android 完成任务 → iOS/HarmonyOS 同步；同时修改产生明确冲突；不同账号无数据串漏。
+④ 关闭网络 → 样例可用/缓存证据可看/任务可改 → 恢复网络后同步。
+⑤ 更换通知版本 → 出现日期变更与冲突 → 老证据仍可打开 → 计划差异确认后提醒更新。
+⑥ 隐私严格模式抓取测试网络请求，确认发出的正文/图片不含样例敏感原值；辅助模式确认页准确说明原件上传。
+⑦ 退出/删账户 → 凭据失效、缓存按选择清理、通知取消、同步不再复活记录。
+
+18.3 三端原生矩阵
+Android：冷/热启动 SEND、SEND_MULTIPLE、浏览器 URL、相册图、文件 PDF/DOCX/XLSX；通知拒绝；后台恢复；硬件返回。
+iOS：Share Extension 与主 App 共用队列、App 被杀/扩展取消/扩展资源限制；Keychain、文件选择、键盘、侧滑。
+HarmonyOS：目标版本真机/模拟器安装、Want 收分享、URI 生命周期、文件选择、关系型存储、系统通知、返回导航。
+三端均测 320–430 逻辑宽度、字体200%放大、深色模式、横屏/安全区；图表提供可读列表替代。
+浏览器 Playwright 通过只能证明 Web 流程，不替代系统分享/安全存储/真机安装验收。
+
+18.4 性能预算（目标，必须实测记录）
+正常设备本地首页在2秒左右可交互；百事项列表滚动无明显卡顿；500节点上限 AST 不阻塞 UI。
+大文档异步处理，立即反馈已接收；分析时间取决于 OCR/网络/模型，不承诺十几秒包办所有文件。
+错误率、解析耗时、worker 队列龄、模型成本设监控；不记录个人正文。
+
+18.5 不可冒充完成
+“已建 iOS 目录”≠“iOS 已适配”；“浏览器可开”≠“鸿蒙原生已完成”；“Web 构建成功”≠“APK 可安装”；“按钮可点”≠“真实后端闭环”。
+验收表每项填 implemented / verified / blocked，附测试证据与产物；缺设备/证书写具体阻塞，继续完成不受阻工作。
+
+十九、部署、环境与运营支持
+
+19.1 部署形态
+移动端原生包 + HTTPS FastAPI 服务 + PostgreSQL + 独立 worker + 文件存储 + SMTP 邮件服务。
+小规模可在一台服务器部署，Docker Compose 为可选可复现方案；没有 Docker 时提供等价虚拟环境/服务进程启动说明。
+暂不需要 Redis/Kafka/向量数据库；数据库任务队列满足当前目标，并设置并发与资源上限。
+文件存储可用服务器私有卷或 S3 兼容服务；不公开挂载 uploads 目录。
+
+19.2 环境变量示例（只放变量名与示例占位值）
+APP_ENV、PUBLIC_BASE_URL、DATABASE_URL、CORS_ORIGINS、JWT_SIGNING_KEY、REFRESH_TOKEN_PEPPER。
+SMTP_HOST/PORT/USER/PASSWORD/FROM、MAIL_LINK_BASE_URL。
+LLM_BASE_URL/API_KEY/MODEL、LLM_TIMEOUT、LLM_DAILY_BUDGET。
+STORAGE_BACKEND、STORAGE_ROOT、S3_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY。
+UPLOAD_MAX_BYTES、WORKER_CONCURRENCY、RAW_RETENTION_HOURS、LOG_LEVEL。
+前端只有公开 API 地址和能力开关；凭据/私钥/SMTP/LLM Key 不进入 bundle。
+
+19.3 发布与运维
+Alembic 升级前备份；支持从零建库与 v1/v2 升级；记录版本和回滚步骤，回滚代码不盲目 downgrade 丢新字段。
+数据库与对象存储一致备份，定期恢复测试；磁盘满、SMTP故障、模型额度耗尽、OCR缺模型均有健康状态与用户可理解错误。
+基础运维通过受控 CLI：创建运维账号、重试失败任务、查看匿名统计、执行清理。个人产品无需另做教师审批后台。
+需要运营页面时另建受限 /ops，仅显示工作状态与脱敏摘要，默认不可查看用户原件；权限与操作审计完整。
+服务端提供请求限流、TLS、结构化错误、worker 指标和保留期限清理；不得用 permissive CORS 代替登录鉴权。
+
+二十、打包与交付形态
+
+20.1 Android
+核验选定 Capacitor 对应的 JDK/Gradle/Android SDK 兼容组合，记录 build-matrix.json，不沿用“JDK17永远够用”等无版本限定假设。
+Web build → cap sync android → 原生构建 → debug APK 安装测试 → release 签名 APK；上架需求可另产 AAB。
+native 配置与插件源必须被版本控制，不在每次 sync 后人工补丢失的文件。
+输出 dist/android/Zhishi-RuleFlow-<version>-release.apk、SHA256、build-info.json。
+debug 与 release 清晰区分；无签名资料可交 debug 供测试，但不能命名为已签名发行版。
+
+20.2 iOS
+Windows 可写共享代码和工程；原生编译/Archive/签名必须有 macOS + Xcode 及匹配依赖工具链。
+主 App 与 Share Extension 的 Bundle ID、App Group、entitlements、provisioning profiles 要一致配置。
+先 simulator build 与流程测试，再实体设备签名与 Archive；IPA 分发受所用签名方式/设备授权约束，不是任意 iPhone 都能直接安装。
+交付 Xcode 工程、构建说明、Archive/合法导出的 IPA 或 TestFlight 版本信息、验证设备记录。无 Mac/证书时明确“待原生构建验收”，不能算三端完成。
+
+20.3 HarmonyOS
+使用 DevEco Studio/对应 SDK、目标 API 和应用签名；原生 entry 工程可构建调试 HAP，发布按目标工具链输出签名包/App Pack。
+通过目标设备实际安装和运行，校验身份签名与设备限制；不把 APK 改后缀当 HAP。
+输出 dist/harmony/ 下的实际签名安装产物与构建记录；商店上传包和测试安装包分别标注用途。
+
+20.4 交付目录
+dist/android/、dist/ios/、dist/harmony/：各端已真实生成的产物及哈希。
+docs/README-安装与使用.md、docs/系统设计说明书.md、docs/API.md、docs/测试报告.md。
+docs/三端验收矩阵.md、docs/隐私数据流.md、docs/迁移与回滚.md、docs/已知限制.md。
+shared/demo 与 test-vectors；源代码压缩包（排除密钥、个人数据、node_modules、SDK 和构建缓存）。
+比赛 PPT/视频可以基于真实完成项制作；是否需提交各端包按实际比赛要求另核验，本文三端目标来自用户本次要求。
+
+二十一、开发阶段与逐阶段验收
+
+完整版本是以下阶段全部完成后的结果。“先做”不等于“其他模块不做”。
+
+P0 基线盘点与迁移设计
+读取 README/AGENTS/现有改动；验证 Web 当前可运行；记录现有错误与测试基线；确定依赖/平台 SDK 矩阵。
+提交现状清单、v1→v2映射、接口Schema、路由表、数据模型、三端能力表。核验 Mac/Android/DevEco 可用性，尽早暴露构建条件。
+验收：原 Demo 保留、无用户修改被覆盖、模型和环境版本记录可复现。
+
+P1 产品基础壳 + 真实账号 + 持久化
+拆 App.vue、加入 router/store/repository；实现登录/注册/验证/找回/退出/设备会话；SQLAlchemy/Alembic；用户数据隔离。
+本机模式、样例分区、账号迁入、工作台/事项列表/我的可真实操作。
+验收：两个用户互不访问；后端重启数据不丢；密码重置与退出会话生效。
+
+P2 通用领域引擎与多场景
+实现 v2 facts/AST/evidence/任务协议、三值 trace、材料条件、DAG/date；迁移综测数据并增加另五类场景。
+验收：所有样例走相同引擎；不依赖固定 id/下标/标题；完整 shared vectors 通过。
+
+P3 真实导入、隐私与分析
+导入队列/来源页、URL与附件、各格式解析、后台任务、模型适配、Schema校验、覆盖度与冲突复核。
+先做完整“文字 → 真规则 → 证据 → 计划”竖切，再逐格式接入；同时实现本地脱敏与服务器辅助模式。
+验收：至少3份未预置文档成功入库；失败/重试/取消有效；网络断开不丢导入。
+
+P4 事项执行完整闭环
+动态补问、材料库与模板、日历、任务详情、截止反推、更新差异、PDF/TXT/ICS导出、消息与提醒。
+验收：从导入到用户标记提交、归档、导出完整可走；日期和人工状态来源清晰。
+
+P5 离线与跨端同步
+本地 SQLite/IndexedDB、outbox/pull、冲突界面、文件可用性、缓存加密、账号切换与删除、旧数据迁移。
+验收：两设备双向同步；离线修改恢复；删除不复活；真实数据与样例不混。
+
+P6 Android 与 iOS 原生整合
+分享插件、NativePort、安全存储、文件/通知权限、设备 UI 适配；Android 安装包与 iOS Share Extension。
+验收：各端原生专项矩阵通过。Mac/证书缺失则 iOS 明确阻塞，但继续可在本机完成的功能。
+
+P7 鸿蒙原生对齐
+实现 ArkUI 页面、认证、存储、Want接收分享、提醒、通用规则求值和 API/同步；尽量按此前冻结契约开发。
+验收：同一账号与样例跨三端结果一致，原生 HAP 安装，分享→分析→计划闭环；不是仅一个 Web 容器说明文档。
+
+P8 稳定性与交付
+真实资料复核、性能、安装/升级/回滚、跨端长链路、线上部署、产物签名/哈希、用户手册和测试报告。
+验收：文档“已完成”与实际一致；没有 placeholders/mock 混入生产路径；三个平台分别给证据。
+
+建议每阶段用小步提交，单次实现一条可验收路径；不用未经依据的固定天数承诺。三端尤其 iOS 签名与鸿蒙原生开发有独立工作量。
+
+二十二、AGENTS.md 目标约束（合并到现有文件，不盲目覆盖）
+
+# 知事 RuleFlow 完整版工程约束
+1. 本仓库目标是完整的多场景个人事务应用，综测是回归样例之一；禁止生产逻辑固定 scenario id、规则下标、材料名或期限。
+2. 在已有 mobile/server/shared 上增量改造，新增 harmony；先检查现有改动，不覆盖无关工作。保留可运行回归路径。
+3. 使用 shared/schemas 和 test-vectors 作为协议与语义来源。TS/Python/ArkTS 分别实现必须通过同一测试向量。
+4. 相关性、申请资格、抽取质量三个状态独立；UNKNOWN 不能当 FALSE，抽取不完整不能给无条件确定结论。
+5. LLM 输出是候选数据；所有 AST 和引用严格验证，禁止执行模型代码/任意表达式。文档中的指令不改变系统行为。
+6. 官方结论必须有可追溯证据；用户输入和系统建议标真实来源。不得伪造证据、页码、置信百分比或官方审核结果。
+7. 原始证据版本不可覆盖；重算保留旧结果与任务完成记录；DAG 必须无环。
+8. 账号是真实后端认证；每个私人对象执行 owner 检查；生产禁止进程级全局 profile、任务字典或万能验证码。
+9. 密码哈希、刷新令牌轮换、设备撤销、安全存储必做；Key/证书/真实个人材料不得入库或打包前端。
+10. 上传手机原件与发送模型是两个同意边界；本地未脱敏就不能宣称原件未出端。严格模式不支持时明确回退。
+11. Android/iOS/鸿蒙使用各自系统分享接收与 NativePort；PWA 不作为原生鸿蒙验收替代。目录存在不是打包完成。
+12. 样例、本机、账户模式数据隔离；mock 只用于显式样例/测试；线上智能分析不可暗中返回静态 Demo。
+13. 长任务持久化、可取消、可重试；同步幂等、版本冲突可见；不得因刷新界面丢进度。
+14. 新依赖先核验支持的平台、维护状态、许可证和工具链；锁定版本，不为绕过构建关闭证书验证或安全校验。
+15. 修改后执行相关类型检查/单测/集成检查；原生能力用对应平台验证，不能以 Web 截图代替。
+16. 缺平台环境/签名时写清阻塞和未验证项，继续不依赖该条件的工作；不得输出不存在的 APK/IPA/HAP 路径作为已交付。
+17. 实施代理阶段汇报：已完成路径、验证结果、未完成项、下一阶段；完整目标以本文各阶段和验收矩阵为准。
+18. 本文不授权上架商店、购买服务或公开用户数据；源码与本地构建是实施范围，正式发布按用户实际部署授权执行。
+
+二十三、交给实施 Codex 的开工指令
+
+请先只读检查 E:\ZhiShi 的现有工程与用户改动，生成当前实现与本规格的差异表。随后按 P0→P8 持续增量实现，不重建一个单场景静态 Demo。
+先完成“账号隔离 + 多事项列表 + 通用规则和材料模型”的基座，再接真实导入；Android/iOS 复用现有 Vue/Ionic，鸿蒙独立 ArkUI 客户端共用协议与后端。
+每阶段把验收写成能执行的检查项。凡有 SDK/设备/签名等外部条件，明确记录，但继续完成其他不受影响的代码和验证。
+最终提供可复现源码、数据、部署方法以及确实构建出的三端产物；未构建/未真机验证的端必须如实注明，不能总结为“全部适配完成”。
+
+二十四、最终完成定义
+
+完整产品完成须同时满足：
+□ 注册、验证、登录、找回、退出、设备管理和删账户闭环可用。
+□ 六类场景共用模型，任意新通知可进入真实解析/分析，不依赖预置样例命中。
+□ 相关性/资格/待核对状态准确区分，缺字段动态补问，跨文件矛盾可复核。
+□ 结论→规则→原文可以核验，文档更新保留版本。
+□ 材料库、条件清单、DAG、日期反推、提醒、日历、导出、归档形成执行闭环。
+□ 隐私数据流真实可见，账户数据隔离，本地与跨端同步的冲突/删除均通过测试。
+□ Android APK 可安装；iOS 工程在 Mac 完成构建和签名设备验证；鸿蒙原生 HAP 完成目标设备安装验证。
+□ 所有“已完成”的说法有测试/构建/设备记录；依赖外部条件未完成时不能称完整版已交付。
+
+二十五、技术核验来源与适用说明
+
+本次查阅日期：2026-09-18。以下官方来源用于确认跨平台路线与原生能力边界；具体 SDK、商店目标版本和签名要求在实施/发布时再核验，不把搜索结果日期当作工程已验证版本。
+[1] Capacitor 文档：iOS/Android/Web 运行时与原生接口。
+https://capacitorjs.com/docs
+[2] Apple App Groups：主 App 与扩展共享容器配置。
+https://developer.apple.com/documentation/Xcode/configuring-app-groups
+[3] Apple Shared Data：沙箱和扩展共享数据边界。
+https://developer.apple.com/documentation/technologyoverviews/shared-data
+[4] Huawei HarmonyOS 开发平台：ArkTS、ArkUI、DevEco。
+https://developer.huawei.com/consumer/en/harmonyos/develop/
+[5] Huawei HarmonyOS 文档中心：按选定 SDK 查 UIAbility、分享接收、文件、数据库和通知。
+https://developer.huawei.com/consumer/cn/doc/
+[6] Huawei 分享详情能力文档：其中涉及 Want 分享匹配；实现时区分接收场景、UIExtension 与普通 UIAbility。
+https://developer.huawei.com/consumer/en/doc/harmonyos-guides/share-sec-panel
+[7] Capacitor iOS 入门与原生工具链。
+https://capacitorjs.com/docs/ios
+[8] Google ML Kit Android 文字识别：包含 bundled 与动态下载集成路径，实施选型须区分。
+https://developers.google.com/ml-kit/vision/text-recognition/v2/android
+[9] Apple Vision 图片文字识别。
+https://developer.apple.com/documentation/vision/recognizing-text-in-images
+[10] Huawei Core Vision Kit 通用文字识别。
+https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/core-vision-text-recognition
+
+本文没有重新核实比赛报名分类或提交时间，不把早期对话里的赛事论断写成当前官方要求。
+本规格的新产品决策：真实账号、六类业务、材料库、同步、Android/iOS 共享现有前端、鸿蒙独立原生客户端，以及上述完整发布门槛。

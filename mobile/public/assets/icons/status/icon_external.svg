@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink" baseProfile="full" height="128" version="1.1" viewBox="0 0 128 128" width="128">
+  <defs/>
+  <path d="M55 31 H34 Q27 31 27 38 V95 Q27 102 34 102 H91 Q98 102 98 95 V74" fill="none" stroke="#465966" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
+  <line stroke="#465966" stroke-linecap="round" stroke-width="8" x1="65" x2="102" y1="63" y2="26"/>
+  <polyline fill="none" points="78,25 103,25 103,50" stroke="#465966" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
+</svg>

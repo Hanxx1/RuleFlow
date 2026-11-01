@@ -1,0 +1,29 @@
+{
+  "timezone": "Asia/Shanghai",
+  "items": [
+    {
+      "key": "course-data-structures",
+      "title": "数据结构课程",
+      "kind": "course",
+      "day_offset": 0,
+      "starts_at": "09:00",
+      "ends_at": "10:30"
+    },
+    {
+      "key": "busy-team-meeting",
+      "title": "班级事务会议",
+      "kind": "busy",
+      "day_offset": 0,
+      "starts_at": "14:00",
+      "ends_at": "15:00"
+    },
+    {
+      "key": "course-writing",
+      "title": "学术写作课程",
+      "kind": "course",
+      "day_offset": 1,
+      "starts_at": "10:00",
+      "ends_at": "11:30"
+    }
+  ]
+}

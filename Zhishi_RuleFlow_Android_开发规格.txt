@@ -1,0 +1,318 @@
+# 知事 RuleFlow Android 应用开发规格
+
+版本：v1.0（MVP 可参赛、可离线演示、可打包 APK）
+读者：Codex 实现代理 / 开发者
+编码：UTF-8（无 BOM）
+
+## 0. 一句话与交付目标
+
+知事 RuleFlow 是一个 Android 应用：用户将通知链接、文档、截图或文字分享/上传到应用，系统把复杂通知转换为“这件事是否与我相关、依据是什么、我还需确认什么、下一步如何完成”的可追溯执行方案。
+
+本项目交付：Android 可安装 APK、移动端源码、FastAPI 后端源码、离线演示数据、系统设计说明书素材、接口文档、自动化测试与一段可演示的真实通知案例。MVP 必须能在无网络、无 LLM Key 的情况下，用内置 Demo 数据完成完整演示；在线解析与 LLM 规则抽取是增强能力，不得成为演示唯一依赖。
+
+## 1. 产品边界
+
+### 1.1 要解决的问题
+
+学校、学院、企业/组织通知常含网页正文、多个附件、表格和例外条款。普通摘要只能“缩短内容”，不能回答个体真正需要的四件事：
+
+1. 这是否适用于我？
+2. 系统凭什么得出这个结论？
+3. 还缺少哪些个人信息，哪些结论暂时无法确定？
+4. 我该以什么顺序准备什么材料、何时完成？
+
+### 1.2 MVP 必做
+
+- 输入：粘贴文本、URL、PDF、DOCX、XLSX、PNG/JPG；Android 系统分享接收文字、链接、图片和文档。
+- 解析后的通知工作区：相关性结论、待确认项、材料清单、步骤计划、原文证据。
+- 用户画像：年级、学历/身份、学院、专业、班级、已知项目等可编辑字段。
+- 规则：JSON Rule AST、三值推理（真/假/未知）、规则解释与证据链接。
+- 任务：DAG 依赖关系、截止日期、状态、可拓扑排序。
+- 隐私：上传/发送前的敏感字段识别、遮盖与明确确认。
+- 本地数据库、离线内置“综测通知”样例，以及在线后端模式。
+
+### 1.3 明确不做（MVP）
+
+- 不替用户自动提交学校系统、自动填写/伪造材料或替代人工审核。
+- 不把 LLM 输出直接作为无证据、不可复核的最终事实；规则必须经过 JSON Schema 校验。
+- 不承诺对扫描件/OCR、网页抓取、复杂表格百分百准确。低置信度必须提示复核。
+- 不做用户社交、即时通信、支付、跨组织权限体系和多租户 SaaS 管理后台。
+- 不存储原始身份证号、银行卡号、精确住址等非必要个人信息。
+
+## 2. 推荐工程与技术栈
+
+采用单仓库（monorepo），优先保证 Android 端可运行。不要一开始引入微服务、Kafka、Redis 或 PostgreSQL；SQLite + 单体 FastAPI 足够参赛与本地部署。
+
+```text
+zhishi-ruleflow/
+  mobile/                 # Ionic Vue Android 客户端
+  server/                 # FastAPI 后端
+  shared/                 # Rule AST JSON Schema、Demo JSON、API 示例
+  docs/                   # 架构图、接口文档、比赛材料
+  scripts/                # 初始化 Demo、构建、检查脚本
+  AGENTS.md
+  README.md
+```
+
+### 2.1 移动端
+
+- Vue 3 + TypeScript + Vite
+- Ionic Vue（移动组件、导航、手势）
+- Capacitor Android（生成原生 Android 项目、分享 Intent、文件选择、相机/相册）
+- Pinia（状态）、Vue Router、Axios
+- @capacitor/preferences（轻量设置）、@capacitor/filesystem（本地文件）
+- SQLite：优先 `@capacitor-community/sqlite`；若原生插件调试受阻，先实现浏览器 IndexedDB 适配层，但 APK 前必须切回 SQLite。
+- PDF 预览：pdfjs-dist；图像使用原生/WebView 预览。
+- UI：Ionic 原生优先，少量 Tailwind CSS 辅助；不要堆砌桌面端表格。
+
+### 2.2 后端
+
+- Python 3.11+、FastAPI、Uvicorn、Pydantic v2、SQLAlchemy 2、Alembic
+- 开发/演示数据库 SQLite；生产建议 PostgreSQL（仅通过 `DATABASE_URL` 切换）。
+- 文档解析：httpx + BeautifulSoup4（网页）、PyMuPDF（PDF 文本与页码）、python-docx（DOCX）、openpyxl（XLSX）、Pillow。
+- OCR：PaddleOCR 或可替换 `OcrProvider` 接口；默认 Demo 不依赖下载模型。
+- LLM：`LLMProvider` 抽象；可接 OpenAI-compatible API。必须有 `MockLLMProvider` 和规则人工编辑回退。
+- 文件：开发使用本地 `server/data/uploads`；生产可接 S3 兼容对象存储。不要把大文件直接塞进数据库。
+- 鉴权：MVP 可匿名本机 `device_id`；若启用账户，使用 JWT access token。不要在 APK 内硬编码 API key。
+
+## 3. Android 信息架构与页面
+
+底部四栏：主页、事项、计划、我的。首次打开走 3 步画像向导，但允许“稍后填写”。
+
+1. 主页：大入口“粘贴链接 / 上传文件 / 粘贴文字”；最近事项。
+2. 导入确认：列出待分析来源、检测到的附件、隐私脱敏预览，按钮“分析”。
+3. 事项概览：醒目展示“与你相关 / 当前不相关 / 需要补充信息”；适用条件、待确认问题、关键截止日期。
+4. 事项详情页分 Tab：结论、材料、流程、规则、原文证据。
+5. 计划：任务 DAG 简图 + 可执行列表；允许完成/跳过/设提醒，不能修改系统证据。
+6. 我的：画像字段、隐私设置、离线/服务端模式、数据导出与清除本机数据。
+
+状态文案必须区分：
+
+```text
+相关：已知信息满足适用规则
+不相关：已知信息违反适用规则
+待确认：规则依赖的个人字段或原文信息缺失
+需复核：OCR/模型置信度低或规则冲突
+```
+
+## 4. Android 系统分享入口
+
+必须支持从微信、QQ、浏览器、文件管理器、相册等“分享至 知事”。Capacitor 负责 Web 层；需要一个小型 Android 原生插件/Activity 接收 Intent，再将内容写入 Capacitor bridge 或持久化 pending import。
+
+AndroidManifest.xml 至少声明：
+
+```xml
+<intent-filter>
+  <action android:name="android.intent.action.SEND" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <data android:mimeType="text/plain" />
+</intent-filter>
+<intent-filter>
+  <action android:name="android.intent.action.SEND" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <data android:mimeType="application/pdf" />
+</intent-filter>
+<intent-filter>
+  <action android:name="android.intent.action.SEND" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <data android:mimeType="image/*" />
+</intent-filter>
+```
+
+实现要求：处理 `Intent.EXTRA_TEXT`、`Intent.EXTRA_STREAM`、`ClipData`；通过 `ContentResolver` 复制 URI 内容到 app-private cache（不可假设 file path）；限制单文件 20MB、单次最多 10 个文件；识别 MIME 和扩展名；收到分享时打开导入确认页，绝不静默上传。冷启动和已运行两种情形都要测试。
+
+## 5. 前后端架构与运行模式
+
+```text
+Android App
+  ├─ 本地 SQLite：画像、事项摘要、任务、脱敏后的缓存、pending share
+  ├─ OfflineDemoRepository：内置综测样例 JSON，保证离线可演示
+  └─ ApiRepository ─ HTTPS ─ FastAPI
+                              ├─ Source/Ingestion：网页、文件、OCR
+                              ├─ Normalizer：统一 Block + 来源定位
+                              ├─ Rule Extractor：LLM/人工规则 → Schema 校验
+                              ├─ Rule Engine：三值计算 + explanation
+                              ├─ Planner：Task DAG + deadline
+                              └─ Evidence Store：block/page/bbox/quote
+```
+
+导入流水线：Source → 提取文本/表格 → 标准化 Blocks → 规则候选 → Schema 校验 → 人工/用户确认 → Rule Engine（带 profile）→ 任务图 → Result Bundle。每一步可失败、可重试、可查看状态；不应因为一个附件解析失败而丢掉其他附件结果。
+
+## 6. 数据模型
+
+核心实体应同时有 Pydantic DTO 和数据库 ORM 模型；JSON 字段保留原始 AST 和解释，便于版本升级。
+
+```text
+users(id, device_id, created_at)
+profiles(id, user_id, version, fields_json, updated_at)
+notices(id, title, status, deadline, created_at, updated_at)
+sources(id, notice_id, kind, uri_or_path, mime, sha256, parse_status, redacted, created_at)
+document_blocks(id, source_id, block_type, text, page, bbox_json, ordinal, confidence)
+rules(id, notice_id, rule_key, ast_json, source_block_ids_json, confidence, version, enabled)
+evaluations(id, notice_id, profile_version, result, explanation_json, evaluated_at)
+tasks(id, notice_id, task_key, title, description, deadline, status, evidence_block_ids_json)
+task_dependencies(id, task_id, depends_on_task_id)
+materials(id, notice_id, name, required_when_ast_json, evidence_block_ids_json)
+imports(id, input_type, state, progress, error_code, created_at)
+audit_events(id, notice_id, action, payload_json, created_at)
+```
+
+`document_blocks` 是证据系统的最小单位。PDF block 必有 page，必要时 bbox=[x0,y0,x1,y1]；DOCX/XLSX 要保留段落/工作表/单元格定位；网页保留 URL、CSS selector 或 DOM path。引用展示不得只给“AI 认为”。
+
+## 7. API（/api/v1）
+
+使用 OpenAPI 自动文档，所有响应采用：`{ "data": ..., "request_id": "..." }`；错误采用 `{ "error": { "code": "...", "message": "...", "details": ... } }`。
+
+```text
+POST   /imports/text                 创建文字导入
+POST   /imports/url                  创建 URL 导入
+POST   /imports/files                上传一个或多个文件
+GET    /imports/{id}                 获取解析/分析进度
+POST   /imports/{id}/analyze         开始或重试分析
+
+GET    /notices                      事项列表
+GET    /notices/{id}                 事项详情 Result Bundle
+GET    /notices/{id}/evidence/{block_id}  获取证据定位及原文片段
+PATCH  /notices/{id}/rules/{rule_key}     人工编辑/启停规则（开发或管理员）
+
+GET    /profile
+PUT    /profile                      更新可选画像字段
+POST   /notices/{id}/evaluate        使用当前画像重新计算
+
+GET    /notices/{id}/tasks
+PATCH  /tasks/{id}                   更新用户任务状态
+GET    /demo/notices/assessment      返回内置综测完整样例
+GET    /health
+```
+
+文件上传必须服务器端再校验 MIME、扩展名、大小、SHA-256；URL 仅允许 http/https，抓取器需禁止内网 IP、localhost、私有网段和重定向绕过（SSRF 防护）。
+
+## 8. Rule AST 与三值推理
+
+规则由声明式 JSON 表示，禁止在数据库或模型输出中执行任意 Python/JavaScript 字符串。共享 `shared/rule_ast.schema.json`，前后端同一套 TypeScript/Python 类型。
+
+节点类型：
+
+```json
+{
+  "op": "and | or | not | eq | in | gte | lte | exists | contains | before | after",
+  "args": [],
+  "field": "profile.enrollment_year",
+  "value": 2024,
+  "evidence": ["block:doc1:p2:14"]
+}
+```
+
+允许原子例子：
+
+```json
+{
+  "op": "and",
+  "args": [
+    {"op":"in", "field":"profile.student_type", "value":["undergraduate"], "evidence":["block:notice:3"]},
+    {"op":"gte", "field":"profile.enrollment_year", "value":2023, "evidence":["block:rules:22"]}
+  ]
+}
+```
+
+三值为 `TRUE`、`FALSE`、`UNKNOWN`。字段缺失、无法解析、值不可信时返回 UNKNOWN，不得强行当 FALSE。
+
+Kleene 语义：NOT(T)=F, NOT(F)=T, NOT(U)=U；AND 中任一 F→F、全部 T→T、其他→U；OR 中任一 T→T、全部 F→F、其他→U。比较运算只要操作数未知即 U。每次求值应返回：
+
+```json
+{
+  "value":"UNKNOWN",
+  "missing_fields":["profile.moral_bonus_items"],
+  "failed_conditions":[],
+  "supporting_evidence":["block:rules:22"],
+  "trace":[{"node":"...","value":"UNKNOWN","reason":"field_missing"}]
+}
+```
+
+规则抽取流程：LLM 输出“候选 AST + 原文 block ids + 置信度”→ JSON Schema 校验 → 字段白名单校验 → evidence ids 存在性校验 → 规则冲突检测 → 保存。任一步失败，标为 `needs_review`，前端不可显示成确定结论。
+
+## 9. Evidence 证据追溯
+
+每一条用户可见的结论、材料、任务、截止日期至少附一个 EvidenceRef。点击后跳转到“原文证据”并高亮页码/段落/表格单元格，显示短引文、来源名与定位。
+
+EvidenceRef：`{block_id, source_id, source_name, page?, bbox?, locator?, quote, confidence}`。引文默认最多 240 字，保留原文可展开。若证据来自 OCR 或 LLM 推断，明确标记“识别结果，建议核对原件”。不得伪造页码、文件名、链接或引用。
+
+## 10. Task DAG 事务规划
+
+任务不是自由文本列表。结构：TaskNode（id/title/description/deadline/status/evidence）与 TaskEdge（from→to，表示 to 依赖 from）。生成例子：确认是否有加分项目 → 准备证明材料 → 填写申请表 → 班级审核 → 结果公示。
+
+规则：图必须无环；保存前用 Kahn/DFS 检测环；显示按拓扑排序、同层再按 deadline 排序；未知截止日期显示“待确认”，不能排序成过期；用户可更新 `todo/in_progress/done/skipped`，但系统生成任务与证据保留版本。前端 MVP 可用分层流程卡片代替完整拖拽图，仍需保存真实边关系。
+
+## 11. 隐私前置脱敏
+
+在“分析/上传”前运行本地 Privacy Guard，对粘贴文本和可提取文本识别：身份证号、手机号、银行卡号、邮箱、精确地址、学号。默认策略：身份证/银行卡全部遮盖；手机号中间四位遮盖；邮箱和学号提示用户选择；普通姓名不自动删但提示。
+
+预览界面显示“将发送的数据”和“已遮盖字段数”。用户可：仅离线分析、确认发送脱敏副本、返回编辑。原文件默认只在本地临时区；服务器仅在用户确认后接收且可设置 24 小时自动删除。日志不得打印原文、token、上传文件内容和个人字段。上传走 HTTPS；客户端不嵌入任何密钥。
+
+## 12. 内置离线 Demo 数据
+
+目录：`shared/demo/assessment_2024/`。必须提供：
+
+- `notice.json`：模拟“综合测评通知”，含 6 个附件索引。
+- `blocks.json`：正文与附件块，至少含“2023 级及以后实施细则”“2023/2024/2025 级计算样表”“德育/加减分/体育申请表”等 evidence ids。
+- `rules.json`：适用 2023 级及以后本科生的 AST；加分项目未知时返回 UNKNOWN。
+- `tasks.json`：5 个节点与依赖边。
+- `profiles/undergraduate_2024.json`：2024 级本科生，演示“相关 + 待确认加分”。
+- `profiles/undergraduate_2022.json`：演示“不适用新细则”。
+
+Demo 资料必须注明为“模拟/脱敏示例”，不得捏造真实学校公文或上传含敏感信息的真实表单。截图演示的每个结论必须能由这组数据重放。
+
+## 13. 测试与验收
+
+后端：pytest 覆盖 Rule AST schema、三值真值表、缺失字段、规则冲突、DAG 无环、EvidenceRef 存在性、SSRF 拦截、文件类型/大小校验、Demo API。移动端：Vitest 覆盖 store/repository/状态文案；Playwright 或 Capacitor E2E 覆盖导入 Demo、画像切换、证据跳转、任务状态更新。
+
+Android 人工验收（真机或模拟器）：
+
+1. 冷启动后可打开内置 Demo，2024 级画像显示“相关”和加分待确认。
+2. 换成 2022 级画像，显示“不适用新细则”并能看到依据。
+3. 点击任意结论/任务可查看准确来源、页码或定位。
+4. 从浏览器分享 URL、从文件管理器分享 PDF、从相册分享截图，均进入导入确认页。
+5. 关闭网络后，Demo、画像、事项、任务和证据仍可使用。
+6. 手机号/身份证样例在上传预览中被遮盖，服务器日志不含原文敏感信息。
+7. 任务依赖不允许形成环，完成状态重启后仍存在。
+
+## 14. 打包、部署与配置
+
+Android：Node LTS + JDK 17 + Android Studio/SDK；执行移动端构建、`npx cap sync android`，用 Gradle 生成 debug APK；发布时以环境变量或 `keystore.properties`（不提交）签名 release APK。交付前实际安装到 Android 设备/模拟器验证。将 APK 输出为 `dist/Zhishi-RuleFlow-release.apk`，不要提交 keystore 或签名密码。
+
+后端：Dockerfile + docker-compose（api + 可选 postgres）；开发默认 `uvicorn app.main:app --reload`。通过 `.env.example` 提供 `DATABASE_URL`、`LLM_BASE_URL`、`LLM_API_KEY`、`STORAGE_DIR`、`CORS_ORIGINS`，实际 `.env` 不入库。生产部署使用 HTTPS 反向代理，限制上传大小和 worker 超时，定期清理过期上传。
+
+README 必须写清：零配置离线 Demo 启动方式、在线模式配置、Android 打包命令、测试命令、APK 位置、已知限制。CI 至少运行 lint、类型检查、前后端单元测试与 Rule Schema 校验；如环境有 Android SDK，再加 assembleDebug。
+
+## 15. 分阶段实施顺序
+
+阶段 0：初始化 monorepo、README、AGENTS.md、共享 schema、Demo JSON、lint/test 基线。
+阶段 1：实现纯前端 OfflineDemoRepository、画像、事项概览、证据页、任务列表，先让 APK 可离线完整演示。
+阶段 2：实现 FastAPI、SQLite、Demo API、Rule Engine、Planner、OpenAPI 与 pytest。
+阶段 3：接入文本/文件导入与解析；先 TXT/PDF，再 DOCX/XLSX/图片 OCR；每项有明确失败状态。
+阶段 4：实现 Android 分享 Intent、Privacy Guard、上传确认与 ApiRepository。
+阶段 5：接入可选 LLM 抽取、人工规则编辑、冲突提示；保留 Mock 模式。
+阶段 6：E2E、真机测试、release APK、演示脚本、比赛文档与视频素材。
+
+每阶段结束都应保持主分支可运行、Demo 不退化。不要先写“智能抽取”再补证据、离线模式和基础体验。
+
+## 16. 根目录 AGENTS.md 约束（请原样建立并遵守）
+
+```md
+# 知事 RuleFlow 工程约束
+
+1. 先保持 Offline Demo 可运行；任何在线/LLM 功能失败不得影响 Demo。
+2. 禁止把 API Key、keystore、真实个人资料、真实上传文件或 .env 提交到 Git。
+3. 所有用户可见结论、任务、材料、deadline 必须附有效 EvidenceRef；没有证据就显示“待核对”，不得编造。
+4. Rule AST 只能使用 shared/rule_ast.schema.json 定义的操作符和画像字段；禁止 eval、动态执行代码、SQL 拼接或模型输出直接执行。
+5. 三值逻辑 UNKNOWN 不能降级为 FALSE；缺字段必须明确提示用户补充什么。
+6. 每次修改 Rule Engine、DAG、解析器或分享入口时，必须运行相关单测；修改 UI 状态时补充移动端测试。
+7. Android 分享的 content URI 必须通过 ContentResolver 读取，不能假设真实文件路径；不可静默上传。
+8. 上传前必须走 Privacy Guard，并由用户明确确认；日志和错误上报不得含原始敏感内容。
+9. 新增依赖须说明必要性，优先官方/成熟库，避免未维护原生插件；不得为便利关闭 TLS/SSRF/文件校验。
+10. 改动前检查工作区现有修改；不要覆盖无关文件。完成后汇报改动、测试、已知限制与 APK 产物路径。
+```
+
+## 17. 完成定义
+
+满足以下条件才算“可提交版本”：从干净环境按 README 能启动；离线 Demo 完整工作；Android APK 可安装；分享入口至少可接收文字/URL/PDF/图片；规则结论可三值解释并追溯证据；任务图无环；隐私遮盖和上传确认可见；自动化测试通过；没有密钥/真实敏感数据进入仓库；源代码、APK、文档与演示数据目录清楚可交付。

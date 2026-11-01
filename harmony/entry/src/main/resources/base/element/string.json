@@ -1,0 +1,5 @@
+{ "string": [
+  { "name": "module_desc", "value": "知事 RuleFlow：复杂通知理解与个性化执行" },
+  { "name": "EntryAbility_desc", "value": "知事 RuleFlow" },
+  { "name": "EntryAbility_label", "value": "知事" }
+] }

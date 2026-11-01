@@ -1,0 +1,10 @@
+[
+  {"id":"block:notice:1","source_id":"notice","source_name":"综合测评工作通知（模拟）","text":"现启动2025—2026学年学生综合测评工作，请各班按时完成材料提交。","page":1,"locator":"正文第1段","confidence":1},
+  {"id":"block:rules:22","source_id":"rules","source_name":"综合测评实施细则（模拟附件）","text":"本实施细则适用于2023级及以后入学的全日制本科生。2022级及以前仍按原办法执行。","page":2,"locator":"第二章第3条","confidence":1},
+  {"id":"block:rules:23","source_id":"rules","source_name":"综合测评实施细则（模拟附件）","text":"德育加分项目须由学生提交获奖或志愿服务等证明材料，经班级审核后计入。","page":3,"locator":"第三章第8条","confidence":1},
+  {"id":"block:deadline:4","source_id":"notice","source_name":"综合测评工作通知（模拟）","text":"学生应于2026年9月30日前将申请表及证明材料交班级审核。","page":1,"locator":"正文第4段","confidence":1},
+  {"id":"block:form:5","source_id":"moral-form","source_name":"德育加分申请表（模拟附件）","text":"德育加分申请表：填写项目名称、时间、证明材料编号。","page":1,"locator":"表单说明","confidence":1},
+  {"id":"block:schedule:course","source_id":"demo-course-table","source_name":"示例课程表（模拟）","text":"本周二08:30—10:00为数据结构课程，本周四10:00—12:00为软件工程课程。","page":1,"locator":"第4教学周","confidence":1},
+  {"id":"block:schedule:busy","source_id":"demo-personal-calendar","source_name":"个人忙碌时间（模拟）","text":"本周三10:30—11:30已安排小组课程讨论。","page":1,"locator":"本周日历","confidence":1},
+  {"id":"block:schedule:plan","source_id":"demo-arrangement-preview","source_name":"知事排程预览（离线演示）","text":"建议在本周二14:00核对德育加分项目，本周三16:00整理证明材料，本周五15:00填写并检查申请表。以上仅为演示预览，未保存。","page":1,"locator":"演示排程预览","confidence":1}
+]

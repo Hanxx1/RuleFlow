@@ -1,0 +1,70 @@
+{
+  "instances": 200,
+  "initial": {
+    "validated": 174,
+    "failed": 26
+  },
+  "final": {
+    "validated": 192,
+    "failed": 8
+  },
+  "formats": {
+    "text": {
+      "validated": 60
+    },
+    "image": {
+      "validated": 48,
+      "failed": 2
+    },
+    "pdf": {
+      "validated": 44,
+      "failed": 6
+    },
+    "docx": {
+      "validated": 20
+    },
+    "xlsx": {
+      "validated": 20
+    }
+  },
+  "reserved_40": {
+    "validated": 38,
+    "failed": 2
+  },
+  "reference_discrepancy_cases": 2,
+  "calendar_cases": 40,
+  "calendar_overlaps": 0,
+  "attachment_reference_cases_original": 110,
+  "reference_kind": "program-derived original text plus targeted manual date checks; not full independent manual gold",
+  "original_attachment_attempts": [
+    {
+      "url": "https://xsc.sicau.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=2003977550&wbfileid=AA77B06A59071B2ACFF2219C07421367",
+      "title": "四川农业大学国家助学金评定工作实施细则（学发〔2026〕5号）.pdf",
+      "parent": "https://xsc.sicau.edu.cn/info/1013/15272.htm",
+      "provenance": "original official PDF attachment, not generated",
+      "received_mime": "text/html",
+      "status": "failed",
+      "error_type": "ValueError"
+    },
+    {
+      "url": "https://xsc.sicau.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=2003977550&wbfileid=63A083C6D6D1EB016CDB8DF4BBD405EA",
+      "title": "四川农业大学学生资助资金管理办法（校学发〔2024〕1号）.pdf",
+      "parent": "https://xsc.sicau.edu.cn/info/1013/15272.htm",
+      "provenance": "original official PDF attachment, not generated",
+      "received_mime": "text/html",
+      "status": "failed",
+      "error_type": "ValueError"
+    },
+    {
+      "url": "https://xsc.sicau.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=2003977550&wbfileid=E8A596641CDF5F535FDDB19F404BC511",
+      "title": "四川农业大学本专科生国家奖助学金评审办法（学发〔2026〕3号）.pdf",
+      "parent": "https://xsc.sicau.edu.cn/info/1013/15272.htm",
+      "provenance": "original official PDF attachment, not generated",
+      "received_mime": "text/html",
+      "status": "failed",
+      "error_type": "ValueError"
+    }
+  ],
+  "semantic_accuracy": "not_measured",
+  "provenance": "200 distinct official notice bodies rendered to controlled formats, not 200 original attachments"
+}

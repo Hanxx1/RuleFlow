@@ -1,0 +1,4 @@
+allprojects {
+    def safeName = project.path.replace(':', '_')
+    buildDir = file("E:/DevTools/ZhiShiBuild/gradle/${safeName}")
+}

@@ -1,0 +1,5 @@
+[
+  {"id":"fact-student-type","key":"学生类型","value":"全日制本科生（演示）","source":"离线演示画像"},
+  {"id":"fact-enrollment-year","key":"入学年份","value":"2024（演示）","source":"离线演示画像"},
+  {"id":"fact-major","key":"专业","value":"计算机科学与技术（演示）","source":"离线演示画像"}
+]

@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RuleFlow explicit profile facts v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "student_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "undergraduate",
+        "graduate",
+        "teacher",
+        "other",
+        null
+      ]
+    },
+    "enrollment_year": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1990,
+      "maximum": 2100
+    },
+    "graduation_year": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1990,
+      "maximum": 2100
+    },
+    "college": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    },
+    "major": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    },
+    "class_name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    },
+    "role": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    },
+    "rank_percent": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "team_size": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "certificate_level": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "moral_bonus_items": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "maxItems": 30,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      }
+    },
+    "moral_score": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "advisor_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "participation_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "disciplinary_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "clear",
+        "recorded",
+        null
+      ]
+    },
+    "coursework_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "passed",
+        "failed",
+        null
+      ]
+    },
+    "fitness_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "passed",
+        "failed",
+        null
+      ]
+    },
+    "school": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    }
+  }
+}

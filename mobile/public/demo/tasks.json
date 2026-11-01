@@ -1,0 +1,10 @@
+{
+  "nodes": [
+    {"id":"confirm-bonus","title":"确认是否有德育加分项目","description":"核对获奖、志愿服务等项目。","status":"todo","evidence":["block:rules:23"]},
+    {"id":"prepare-proof","title":"准备证明材料","description":"整理可核验的获奖或服务证明。","status":"todo","evidence":["block:rules:23"]},
+    {"id":"fill-form","title":"填写综合测评申请表","description":"如有加分项目，一并填写申请表。","deadline":"2026-09-30","status":"todo","evidence":["block:form:5","block:deadline:4"]},
+    {"id":"class-review","title":"提交班级审核","description":"向班级提交申请表和材料。","deadline":"2026-09-30","status":"todo","evidence":["block:deadline:4"]},
+    {"id":"check-result","title":"查看结果公示","description":"公示后核对测评结果。","status":"todo","evidence":["block:notice:1"]}
+  ],
+  "edges": [["confirm-bonus","prepare-proof"],["prepare-proof","fill-form"],["fill-form","class-review"],["class-review","check-result"]]
+}

@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "key": "moral-bonus-form",
+      "file": "德育加分申请表.txt",
+      "name": "德育加分申请表.txt",
+      "category": "form",
+      "mime": "text/plain",
+      "case_link": true,
+      "task_keys": ["fill-form"]
+    },
+    {
+      "key": "volunteer-proof-sample",
+      "file": "志愿服务证明样例.txt",
+      "name": "志愿服务证明样例.txt",
+      "category": "proof",
+      "mime": "text/plain",
+      "case_link": true,
+      "task_keys": ["prepare-proof"]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink" baseProfile="full" height="128" version="1.1" viewBox="0 0 128 128" width="128">
+  <defs/>
+  <rect fill="none" height="59" rx="8" stroke="#344b59" stroke-linecap="round" stroke-linejoin="round" stroke-width="7" width="56" x="36" y="43"/>
+  <line stroke="#344b59" stroke-linecap="round" stroke-width="8" x1="31" x2="97" y1="43" y2="43"/>
+  <path d="M49 43 V29 Q49 23 56 23 H72 Q79 23 79 29 V43" fill="none" stroke="#344b59" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
+  <line stroke="#ff6258" stroke-linecap="round" stroke-width="8" x1="55" x2="55" y1="58" y2="87"/>
+  <line stroke="#ff6258" stroke-linecap="round" stroke-width="8" x1="73" x2="73" y1="58" y2="87"/>
+</svg>

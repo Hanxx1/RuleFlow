@@ -1,0 +1,28 @@
+{
+  "document_id": "student-assessment-regulations",
+  "version": "2026.1",
+  "title": "学生综合素质测评办法（脱敏示例）",
+  "publisher": "示例大学学生工作处",
+  "effective_date": "2026-09-01",
+  "url": "https://example.edu/policies/student-assessment",
+  "sections": [
+    {
+      "id": "chapter-2-article-3",
+      "title": "第二章 第三条 适用范围",
+      "text": "本办法适用于全日制本科生的综合素质测评，学院可在本办法范围内制定实施细则。",
+      "keywords": ["本科生", "综合测评", "学院", "实施细则"]
+    },
+    {
+      "id": "chapter-3-article-8",
+      "title": "第三章 第八条 德育加分材料",
+      "text": "申请德育加分的学生，应提交获奖证书或志愿服务证明等可核验材料，并由班级完成初审。",
+      "keywords": ["德育", "加分", "证明材料", "班级审核"]
+    },
+    {
+      "id": "chapter-5-article-16",
+      "title": "第五章 第十六条 结果公示",
+      "text": "综合测评结果应在班级范围内公示，学生对结果有异议的，可以在公示期内申请复核。",
+      "keywords": ["综合测评", "结果", "公示", "复核"]
+    }
+  ]
+}

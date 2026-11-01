@@ -1,0 +1,26 @@
+{
+  "distinct_documents": 200,
+  "baseline": {
+    "validated": 177,
+    "failed": 23
+  },
+  "after_budget_retry": {
+    "validated": 190,
+    "failed": 10
+  },
+  "final": {
+    "validated": 197,
+    "failed": 3
+  },
+  "http_model_requests": 304,
+  "total_tokens": 1903720,
+  "tasks": 631,
+  "quarantined_rules": 766,
+  "sources": {
+    "xsc.sicau.edu.cn": 196,
+    "jcsyzx.ntu.edu.cn": 1,
+    "cxcy.cczu.edu.cn": 3
+  },
+  "semantic_accuracy": "not_measured",
+  "model_weights_trained": false
+}

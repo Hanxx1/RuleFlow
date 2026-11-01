@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink" baseProfile="full" height="128" version="1.1" viewBox="0 0 128 128" width="128">
+  <defs/>
+  <path d="M25 57 L64 25 L103 57 V100 Q103 108 95 108 H33 Q25 108 25 100 Z" fill="none" stroke="#465966" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
+  <line stroke="#465966" stroke-linecap="round" stroke-width="8" x1="64" x2="64" y1="76" y2="95"/>
+</svg>

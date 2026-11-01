@@ -1,0 +1,1 @@
+{ "name": "zhishi-ruleflow", "version": "1.0.0", "description": "知事 RuleFlow HarmonyOS NEXT", "dependencies": {}, "devDependencies": { "@ohos/hvigor-ohos-plugin": "5.0.0" } }

@@ -1,0 +1,4 @@
+[
+  {"rule_key":"new_assessment_scope","title":"是否适用新综合测评细则","ast":{"op":"and","args":[{"op":"in","field":"profile.student_type","value":["undergraduate"],"evidence":["block:rules:22"]},{"op":"gte","field":"profile.enrollment_year","value":2023,"evidence":["block:rules:22"]}]},"confidence":1},
+  {"rule_key":"moral_bonus","title":"是否需准备德育加分材料","ast":{"op":"exists","field":"profile.moral_bonus_items","evidence":["block:rules:23"]},"confidence":1}
+]

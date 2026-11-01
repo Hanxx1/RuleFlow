@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DATABASE_PATH: /data/ruleflow.db
+      VAULT_UPLOAD_ROOT: /data/vault_uploads
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?set a random production secret}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.example.invalid}
+    volumes:
+      - ruleflow-data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  ruleflow-data:
