@@ -1,5 +1,5 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {loadDemo,loadPublicDemos} from './demo';
+import {loadDemo,loadPublicDemos} from './data';
 
 const fixtures:Record<string,unknown>={
  'notice.json':{id:'demo',title:'离线示例',deadline:'2026-09-30'},

@@ -1,19 +1,14 @@
+import {demoPlan} from '../../demo/plan';
+import {accountApi} from '../account/request';
 import {defineStore} from 'pinia';
-import {api,hasSession} from '../services/api';
-import {loadDemo,loadPublicDemos} from '../services/demo';
-import {loadWorkspace} from '../services/clientWorkspace';
-import {matchLocal} from '../services/localMatching';
-import {useAccountStore} from './account';
+import {hasSession} from '../../core/http';
+import {loadDemo,loadPublicDemos} from '../../demo/data';
+import {loadWorkspace} from '../../services/clientWorkspace';
+import {matchLocal} from '../../services/localMatching';
+import {useAccountStore} from '../../stores/account';
 
-async function accountApi(path:string,init:RequestInit={}){const owner=useAccountStore().user?.id||'offline';const value=await api(path,init);if(owner!==(useAccountStore().user?.id||'offline'))throw Error('身份已变化，请重新读取事项');return value}
+
 const profile={student_type:'undergraduate',enrollment_year:2024,college:'示例学院',major:'示例专业'};
-function demoPlan(tasks:any[],edgePairs:string[][]){
-  const edges=edgePairs.map(x=>({before_task_id:x[0],after_task_id:x[1]}));
-  const by=Object.fromEntries(tasks.map(task=>[task.id,task]));
-  const enriched=tasks.map(task=>({...task,duration_minutes:task.duration_minutes??null,materials:task.materials||[],files:[],is_actionable:['todo','in_progress'].includes(task.status)&&edges.filter(edge=>edge.after_task_id===task.id).every(edge=>['done','skipped'].includes(by[edge.before_task_id]?.status))}));
-  const completed=enriched.filter(task=>task.status==='done').length;
-  return {ordered_tasks:enriched,edges,overall_progress:enriched.length?Math.round(completed*100/enriched.length):0,current_tasks:enriched.filter(task=>task.is_actionable),completed_tasks:completed,pending_tasks:enriched.filter(task=>['todo','in_progress'].includes(task.status)).length};
-}
 export const useCasesStore=defineStore('cases',{state:()=>({items:[] as any[],selected:null as any,plan:null as any,resources:null as any,demo:null as any,publicDemos:null as any[]|null,loading:false,error:''}),actions:{
   async applyLocalRelevance(items:any[]){const workspace=await loadWorkspace(useAccountStore().user?.id||'offline');for(let i=0;i<items.length;i+=4)await Promise.all(items.slice(i,i+4).map(async item=>{try{let r:any;if(item.id.startsWith('demo-public-')){const b=await this.publicBundle(item.id);r={rules:b.rules,evidence:b.blocks}}else if(item.id==='demo-assessment'){const b=await this.ensureDemo();r={rules:b.rules.map((x:any,index:number)=>({...x,kind:index?'action_trigger':'scope',evidence_ids:x.ast.args?.flatMap((a:any)=>a.evidence||[])||x.ast.evidence||[]})),evidence:b.blocks}}else r=await accountApi('/api/v1/cases/'+item.id+'/resources');item.relevance=matchLocal(r,workspace,item.id).relevance}catch{item.relevance='UNKNOWN'}}));return items},
   async applySelectionRelevance(id:string){const owner=useAccountStore().user?.id||'offline',workspace=await loadWorkspace(owner);if(owner!==(useAccountStore().user?.id||'offline')||this.selected?.id!==id)return;const result=matchLocal(this.resources||{},workspace,id);this.selected.relevance=result.relevance;this.resources.local_evaluation=result;this.resources.client_profile_revision=workspace.revision},

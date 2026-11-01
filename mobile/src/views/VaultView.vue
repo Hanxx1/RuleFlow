@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,ref} from 'vue';
 import {useRoute} from 'vue-router';
-import {api,apiBlob} from '../services/api';
+import {api,apiBlob} from '../core/http';
 import {useAccountStore} from '../stores/account';
 import AppHeader from '../components/AppHeader.vue';
 import AppState from '../components/AppState.vue';

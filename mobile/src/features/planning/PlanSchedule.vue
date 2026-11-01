@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import {computed,ref,watch} from 'vue';
-import {api} from '../services/api';
-import {useCasesStore} from '../stores/cases';
-import {useAccountStore} from '../stores/account';
-import AppBottomSheet from './AppBottomSheet.vue';
-import AppState from './AppState.vue';
-import ClientCalendarPanel from './ClientCalendarPanel.vue';
-import {loadWorkspace} from '../services/clientWorkspace';
-import {expandCourses} from '../services/timetable';
+import {api} from '../../core/http';
+import {useCasesStore} from '../cases/store';
+import {useAccountStore} from '../../stores/account';
+import AppBottomSheet from '../../components/AppBottomSheet.vue';
+import AppState from '../../components/AppState.vue';
+import ClientCalendarPanel from '../../components/ClientCalendarPanel.vue';
+import {loadWorkspace} from '../../services/clientWorkspace';
+import {expandCourses} from '../../services/timetable';
 
 const props=defineProps<{caseId:string;tasks:any[]}>();
 const account=useAccountStore();

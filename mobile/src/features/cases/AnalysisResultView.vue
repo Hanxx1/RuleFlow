@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import {computed,onMounted,ref,watch} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
-import AppHeader from '../components/AppHeader.vue';
-import GuideLink from '../components/GuideLink.vue';
-import AppState from '../components/AppState.vue';
-import CaseContextHeader from '../components/CaseContextHeader.vue';
-import LocalMatchPanel from '../components/LocalMatchPanel.vue';
-import AnalysisSection from '../components/AnalysisSection.vue';
-import EvidenceLink from '../components/EvidenceLink.vue';
-import EvidenceBottomSheet from '../components/EvidenceBottomSheet.vue';
-import MaterialRequirementList from '../components/MaterialRequirementList.vue';
-import AnalysisReviewPanel from '../components/AnalysisReviewPanel.vue';
-import AnalysisHistoryPanel from '../components/AnalysisHistoryPanel.vue';
-import AttachmentPanel from '../components/AttachmentPanel.vue';
-import {useCasesStore} from '../stores/cases';
-import {useAccountStore} from '../stores/account';
-import analysisHero from '../assets/illustrations/hero_structured_analysis.webp';
+import AppHeader from '../../components/AppHeader.vue';
+import GuideLink from '../../components/GuideLink.vue';
+import AppState from '../../components/AppState.vue';
+import CaseContextHeader from '../../components/CaseContextHeader.vue';
+import LocalMatchPanel from '../../components/LocalMatchPanel.vue';
+import AnalysisSection from '../../components/AnalysisSection.vue';
+import EvidenceLink from '../../components/EvidenceLink.vue';
+import EvidenceBottomSheet from '../../components/EvidenceBottomSheet.vue';
+import MaterialRequirementList from '../../components/MaterialRequirementList.vue';
+import AnalysisReviewPanel from '../../components/AnalysisReviewPanel.vue';
+import AnalysisHistoryPanel from '../../components/AnalysisHistoryPanel.vue';
+import AttachmentPanel from '../../components/AttachmentPanel.vue';
+import {useCasesStore} from './store';
+import {useAccountStore} from '../../stores/account';
+import analysisHero from '../../assets/illustrations/hero_structured_analysis.webp';
 
 const route=useRoute(),router=useRouter(),cases=useCasesStore(),account=useAccountStore();
 const pageError=ref(''),pageMessage=ref(''),evidenceOpen=ref(false),activeEvidence=ref<any|null>(null),editing=ref(false),saving=ref(false);

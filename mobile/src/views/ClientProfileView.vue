@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import {computed,onMounted,ref,watch} from 'vue';
-import {useCasesStore} from '../stores/cases';
+import {useCasesStore} from '../features/cases/store';
 import {useRoute} from 'vue-router';
 import AppHeader from '../components/AppHeader.vue';
 import GuideLink from '../components/GuideLink.vue';
 import {useAccountStore} from '../stores/account';
 import schema from '../../../shared/profile.schema.json';
 import {profilePayload} from '../services/profileFacts';
-import {api} from '../services/api';
+import {api} from '../core/http';
 import {emptyWorkspace,loadWorkspace,saveWorkspace,formAssertions,parseSupplement,resolvedFacts,indexedWorkspace,exportWorkspace,importWorkspace,type Assertion} from '../services/clientWorkspace';
 const account=useAccountStore(),owner=computed(()=>account.user?.id||'offline');
 const data=ref(emptyWorkspace(owner.value)),error=ref(''),message=ref(''),busy=ref(false),scope=ref(''),until=ref('');

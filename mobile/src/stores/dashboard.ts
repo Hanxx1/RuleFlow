@@ -1,6 +1,6 @@
 import {defineStore} from 'pinia';
-import {api,hasSession} from '../services/api';
-import {useCasesStore} from './cases';
+import {api,hasSession} from '../core/http';
+import {useCasesStore} from '../features/cases/store';
 
 export type DashboardData={
   date:string;

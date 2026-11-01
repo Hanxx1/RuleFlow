@@ -1,0 +1,20 @@
+{
+  "services/api.ts": "core/http.ts",
+  "services/api.test.ts": "core/http.test.ts",
+  "services/share.ts": "core/native/share.ts",
+  "services/share.test.ts": "core/native/share.test.ts",
+  "services/demo.ts": "demo/data.ts",
+  "services/demo.test.ts": "demo/data.test.ts",
+  "views/ImportView.vue": "features/imports/ImportView.vue",
+  "views/ImportSourcesView.vue": "features/imports/ImportSourcesView.vue",
+  "views/ImportProgressView.vue": "features/imports/ImportProgressView.vue",
+  "components/ImportSourceCard.vue": "features/imports/ImportSourceCard.vue",
+  "components/ImportSourceList.vue": "features/imports/ImportSourceList.vue",
+  "stores/importBatch.ts": "features/imports/batchStore.ts",
+  "stores/importBatch.test.ts": "features/imports/batchStore.test.ts",
+  "stores/importDraft.ts": "features/imports/draftStore.ts",
+  "stores/cases.ts": "features/cases/store.ts",
+  "views/AnalysisResultView.vue": "features/cases/AnalysisResultView.vue",
+  "views/PlanView.vue": "features/planning/PlanView.vue",
+  "components/PlanSchedule.vue": "features/planning/PlanSchedule.vue"
+}

@@ -1,6 +1,6 @@
 import {computed,ref} from 'vue';
 import {defineStore} from 'pinia';
-import type {ImportDraftSource} from '../types/product';
+import type {ImportDraftSource} from '../../types/product';
 
 export const useImportDraftStore=defineStore('import-draft',()=>{
   const title=ref('');

@@ -1,4 +1,4 @@
-import {api} from './api';
+import {api} from '../core/http';
 
 export type PrivacyPreview={redacted:string,count:number,types:string[]}
 export type PrivacyFinding={id:string;type:'id_card'|'phone'|'bank_card'|'email'|'student_id'|'name'|'address';label:string;start:number;end:number;original:string;redacted:string}

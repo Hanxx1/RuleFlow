@@ -1,6 +1,6 @@
 import {defineStore} from 'pinia';
-import {api} from '../services/api';
-import type {ImportBatch} from '../types/product';
+import {api} from '../../core/http';
+import type {ImportBatch} from '../../types/product';
 
 const activeKey='zhishi-active-import-batch';
 function savedBatch(){return typeof localStorage==='undefined'?'':localStorage.getItem(activeKey)||''}

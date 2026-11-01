@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type {ImportSourceListItem} from '../types/product';
+import type {ImportSourceListItem} from '../../types/product';
 withDefaults(defineProps<{sources:ImportSourceListItem[];removable?:boolean}>(),{removable:true});
 defineEmits<{remove:[id:string]}>();
 function icon(kind:string){return kind==='url'?'/assets/icons/files/file_link.svg':kind==='file'?'/assets/icons/actions/icon_attach.svg':'/assets/icons/status/icon_info.svg'}

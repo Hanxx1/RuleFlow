@@ -1,8 +1,8 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {createPinia,setActivePinia} from 'pinia';
-import {clearSession,setSession} from '../services/api';
+import {clearSession,setSession} from '../core/http';
 import {useDashboardStore} from './dashboard';
-vi.mock('./cases',()=>({useCasesStore:()=>({applyLocalRelevance:async(items:any[])=>{items.forEach(item=>item.relevance='UNKNOWN');return items}})}));
+vi.mock('../features/cases/store',()=>({useCasesStore:()=>({applyLocalRelevance:async(items:any[])=>{items.forEach(item=>item.relevance='UNKNOWN');return items}})}));
 
 const payload={date:'2026-09-22',timezone:'Asia/Shanghai',total_cases:3,in_progress_cases:1,due_soon_cases:1,completed_cases:2,recent_cases:[{id:'case-1'}],today_tasks:[{id:'task-1',status:'todo'}]};
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {onMounted,onBeforeUnmount,ref} from 'vue';
 import {useRoute} from 'vue-router';
-import {api,apiBlob} from '../services/api';
+import {api,apiBlob} from '../core/http';
 import AppHeader from '../components/AppHeader.vue';
 import EvidenceViewer from '../components/EvidenceViewer.vue';
 const route=useRoute(),id=String(route.params.id),document=ref<any>(null),scan=ref<any>(null),selected=ref<string[]>([]),consent=ref(false),busy=ref(false),error=ref(''),copy=ref<any>(null),copyUrl=ref('');

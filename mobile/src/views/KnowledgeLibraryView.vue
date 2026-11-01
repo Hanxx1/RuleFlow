@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {onMounted,ref} from 'vue';
-import {api} from '../services/api';
+import {api} from '../core/http';
 import {useAccountStore} from '../stores/account';
 import AppHeader from '../components/AppHeader.vue';
 import GuideLink from '../components/GuideLink.vue';

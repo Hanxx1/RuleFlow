@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {onMounted,ref,computed} from 'vue';
 import {useAccountStore} from '../stores/account';
-import {useCasesStore} from '../stores/cases';
+import {useCasesStore} from '../features/cases/store';
 import {loadWorkspace,emptyWorkspace} from '../services/clientWorkspace';
 import {expandCourses,localSchedule} from '../services/timetable';
 const props=defineProps<{tasks:any[]}>(),account=useAccountStore(),cases=useCasesStore(),data=ref(emptyWorkspace(account.user?.id||'offline')),from=ref(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date())),duration=ref<Record<string,number>>({}),preview=ref<any>(null),error=ref('');

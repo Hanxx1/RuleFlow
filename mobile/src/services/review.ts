@@ -1,4 +1,4 @@
-import {api} from './api';
+import {api} from '../core/http';
 
 export interface ReviewAction {id:string;title:string;origin?:'document'|'suggestion'|'previous';evidence_ids:string[];evidence_quotes:Record<string,string>;proposed_deadline?:string|null}
 export interface ReviewDate {id:string;raw:string;value:string|null;role:string;quote:string;evidence_ids:string[];review_reasons:string[]}

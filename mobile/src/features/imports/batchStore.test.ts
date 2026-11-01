@@ -1,7 +1,7 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {createPinia,setActivePinia} from 'pinia';
-import {clearSession,setSession} from '../services/api';
-import {useImportBatchStore} from './importBatch';
+import {clearSession,setSession} from '../../core/http';
+import {useImportBatchStore} from './batchStore';
 
 const batch={id:'batch-1',title:'混合通知',state:'draft',revision:2,created_at:'now',updated_at:'now',started_at:null,processing_at:null,completed_at:null,source_count:2,successful_source_count:0,failed_source_count:0,sources:[],can_add_sources:true,case_id:null,result:null};
 

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import {computed,onBeforeUnmount,onMounted,ref} from 'vue';
 import {useRoute} from 'vue-router';
-import AppHeader from '../components/AppHeader.vue';
-import AppState from '../components/AppState.vue';
-import ImportSourceList from '../components/ImportSourceList.vue';
-import {useImportBatchStore} from '../stores/importBatch';
+import AppHeader from '../../components/AppHeader.vue';
+import AppState from '../../components/AppState.vue';
+import ImportSourceList from './ImportSourceList.vue';
+import {useImportBatchStore} from './batchStore';
 
 const route=useRoute(),batches=useImportBatchStore(),error=ref('');
 const batchId=String(route.params.id||'');let timer:number|undefined;

@@ -1,3 +1,3 @@
-import {defineStore} from 'pinia'; import {loadDemo, type Profile} from '../services/demo';
+import {defineStore} from 'pinia'; import {loadDemo, type Profile} from '../demo/data';
 const key='zhishi-profile'; const defaultProfile:Profile={student_type:'undergraduate',enrollment_year:2024,college:'示例学院',major:'示例专业'};
 export const useAppStore=defineStore('app',{state:()=>({profile:JSON.parse(localStorage.getItem(key)||JSON.stringify(defaultProfile)) as Profile,demo:null as any,taskStates:JSON.parse(localStorage.getItem('zhishi-tasks')||'{}') as Record<string,string>}),actions:{async refresh(){this.demo=await loadDemo(this.profile)},saveProfile(){localStorage.setItem(key,JSON.stringify(this.profile));this.refresh()},setTask(id:string,status:string){this.taskStates[id]=status;localStorage.setItem('zhishi-tasks',JSON.stringify(this.taskStates))}}});

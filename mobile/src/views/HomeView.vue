@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed,onMounted,ref} from 'vue';
 import {useAccountStore} from '../stores/account';
-import {useCasesStore} from '../stores/cases';
+import {useCasesStore} from '../features/cases/store';
 import {useDashboardStore} from '../stores/dashboard';
 import AppHeader from '../components/AppHeader.vue';
 import AppState from '../components/AppState.vue';

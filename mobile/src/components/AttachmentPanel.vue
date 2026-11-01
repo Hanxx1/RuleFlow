@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {ref} from 'vue';
-import {api} from '../services/api';
+import {api} from '../core/http';
 import {requirePrivacyReview} from '../services/privacyGuard';
 import {useAccountStore} from '../stores/account';
 const props=defineProps<{caseId:string;inventory:any}>(),emit=defineEmits<{changed:[]}>(),account=useAccountStore(),file=ref<File|null>(null),consent=ref(false),error=ref(''),message=ref(''),busy=ref(false);

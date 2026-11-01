@@ -2,10 +2,10 @@
 import {computed,onMounted,onBeforeUnmount,watch} from 'vue';
 import {RouterView,useRoute,useRouter} from 'vue-router';
 import {useAccountStore} from './stores/account';
-import {useCasesStore} from './stores/cases';
+import {useCasesStore} from './features/cases/store';
 import {useDashboardStore} from './stores/dashboard';
 import BottomNav from './components/BottomNav.vue';
-import {readShared,subscribeShared} from './services/share';
+import {readShared,subscribeShared} from './core/native/share';
 
 const account=useAccountStore(),cases=useCasesStore(),dashboard=useDashboardStore();watch(()=>account.user?.id,()=>{cases.$reset();dashboard.$reset()});
 const route=useRoute();

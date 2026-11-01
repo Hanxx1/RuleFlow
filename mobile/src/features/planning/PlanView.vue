@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import {computed,onMounted,ref,watch} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
-import {useAccountStore} from '../stores/account';
-import {useCasesStore} from '../stores/cases';
-import AppHeader from '../components/AppHeader.vue';
-import GuideLink from '../components/GuideLink.vue';
-import AppState from '../components/AppState.vue';
-import StatusBadge from '../components/StatusBadge.vue';
-import TaskTimeline from '../components/TaskTimeline.vue';
-import AppBottomSheet from '../components/AppBottomSheet.vue';
-import PlanSchedule from '../components/PlanSchedule.vue';
+import {useAccountStore} from '../../stores/account';
+import {useCasesStore} from '../cases/store';
+import AppHeader from '../../components/AppHeader.vue';
+import GuideLink from '../../components/GuideLink.vue';
+import AppState from '../../components/AppState.vue';
+import StatusBadge from '../../components/StatusBadge.vue';
+import TaskTimeline from '../../components/TaskTimeline.vue';
+import AppBottomSheet from '../../components/AppBottomSheet.vue';
+import PlanSchedule from './PlanSchedule.vue';
 
 const route=useRoute(),router=useRouter(),account=useAccountStore(),cases=useCasesStore();
 const selectedId=ref(''),planLoading=ref(false),pageError=ref(''),pickerOpen=ref(false);

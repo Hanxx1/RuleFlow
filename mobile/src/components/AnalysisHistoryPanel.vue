@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {ref,watch} from 'vue';
-import {api} from '../services/api';
+import {api} from '../core/http';
 const props=defineProps<{caseId:string}>();
 const emit=defineEmits<{changed:[]}>();
 const versions=ref<any[]>([]),inputs=ref<any[]>([]),busy=ref(false),error=ref(''),consent=ref(false),message=ref('');

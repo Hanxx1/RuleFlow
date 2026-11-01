@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {computed,onMounted,ref} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
-import {api} from '../services/api';
+import {api} from '../core/http';
 import {useAccountStore} from '../stores/account';
-import {useCasesStore} from '../stores/cases';
+import {useCasesStore} from '../features/cases/store';
 import AppHeader from '../components/AppHeader.vue';
 import AppState from '../components/AppState.vue';
 import CaseContextHeader from '../components/CaseContextHeader.vue';

@@ -5,7 +5,7 @@ import AppHeader from '../components/AppHeader.vue';
 import AppState from '../components/AppState.vue';
 import CaseContextHeader from '../components/CaseContextHeader.vue';
 import LocalMatchPanel from '../components/LocalMatchPanel.vue';
-import {useCasesStore} from '../stores/cases';
+import {useCasesStore} from '../features/cases/store';
 import relevanceHero from '../assets/illustrations/hero_profile_relevance.webp';
 const route=useRoute(),router=useRouter(),cases=useCasesStore(),error=ref('');
 const id=computed(()=>String(route.params.id));

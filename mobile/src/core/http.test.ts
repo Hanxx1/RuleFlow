@@ -1,5 +1,5 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {api,apiBlob,ApiError,checkApiHealth} from './api';
+import {api,apiBlob,ApiError,checkApiHealth} from './http';
 
 describe('API connectivity diagnostics',()=>{
  afterEach(()=>vi.unstubAllGlobals());

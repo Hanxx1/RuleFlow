@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {computed,onMounted,ref} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
-import AppHeader from '../components/AppHeader.vue';
-import AppState from '../components/AppState.vue';
-import ImportSourceList from '../components/ImportSourceList.vue';
-import {useImportBatchStore} from '../stores/importBatch';
-import {api} from '../services/api';
+import AppHeader from '../../components/AppHeader.vue';
+import AppState from '../../components/AppState.vue';
+import ImportSourceList from './ImportSourceList.vue';
+import {useImportBatchStore} from './batchStore';
+import {api} from '../../core/http';
 
 const route=useRoute(),router=useRouter(),batches=useImportBatchStore();
 const error=ref(''),busy=ref(false);

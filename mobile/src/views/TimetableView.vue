@@ -5,7 +5,7 @@ import GuideLink from '../components/GuideLink.vue';
 import {useAccountStore} from '../stores/account';
 import {loadWorkspace,saveWorkspace,emptyWorkspace,type Course} from '../services/clientWorkspace';
 import {parseTimetableText,syntheticCourses,validateCourse,courseConflicts} from '../services/timetable';
-import {api} from '../services/api';
+import {api} from '../core/http';
 import {requirePrivacyReview} from '../services/privacyGuard';
 const account=useAccountStore(),owner=computed(()=>account.user?.id||'offline'),data=ref(emptyWorkspace(owner.value)),error=ref(''),message=ref('');
 const semesterStart=ref('2026-09-07'),semesterEnd=ref('2027-01-10'),text=ref(''),candidates=ref<Course[]>([]),unparsed=ref<string[]>([]),consent=ref(false),file=ref<File|null>(null);

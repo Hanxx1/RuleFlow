@@ -1,4 +1,4 @@
-import {apiBlob} from './api';
+import {apiBlob} from '../core/http';
 export function boundingBox(evidence:any){
  const box=evidence?.bbox,width=Number(evidence?.page_width),height=Number(evidence?.page_height);
  if(!Array.isArray(box)||!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return null;

@@ -2,17 +2,17 @@
 import {computed,nextTick,onMounted,ref,watch} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
 import {Capacitor} from '@capacitor/core';
-import AppHeader from '../components/AppHeader.vue';
-import GuideLink from '../components/GuideLink.vue';
-import ImportSourceCard from '../components/ImportSourceCard.vue';
-import ImportSourceList from '../components/ImportSourceList.vue';
-import {useImportDraftStore} from '../stores/importDraft';
-import {useImportBatchStore} from '../stores/importBatch';
-import {useAccountStore} from '../stores/account';
-import {readShared,takeSharedFiles,clearShared} from '../services/share';
-import {redact} from '../services/privacy';
-import {requirePrivacyReview} from '../services/privacyGuard';
-import importHero from '../assets/illustrations/hero_multi_source_import.webp';
+import AppHeader from '../../components/AppHeader.vue';
+import GuideLink from '../../components/GuideLink.vue';
+import ImportSourceCard from './ImportSourceCard.vue';
+import ImportSourceList from './ImportSourceList.vue';
+import {useImportDraftStore} from './draftStore';
+import {useImportBatchStore} from './batchStore';
+import {useAccountStore} from '../../stores/account';
+import {readShared,takeSharedFiles,clearShared} from '../../core/native/share';
+import {redact} from '../../services/privacy';
+import {requirePrivacyReview} from '../../services/privacyGuard';
+import importHero from '../../assets/illustrations/hero_multi_source_import.webp';
 
 const route=useRoute(),router=useRouter(),draft=useImportDraftStore(),batches=useImportBatchStore(),account=useAccountStore();
 const fileInput=ref<HTMLInputElement|null>(null),textArea=ref<HTMLTextAreaElement|null>(null),urlInput=ref<HTMLInputElement|null>(null);
