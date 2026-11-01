@@ -1,5 +1,5 @@
 from app.services.link_candidates import attachments
-from test_api import client, account, head
+from helpers import client, account, head
 
 
 def test_link_discovery_is_bounded_and_does_not_fetch():

@@ -1,4 +1,4 @@
-from test_api import client,account,head,confirm_import
+from helpers import client,account,head,confirm_import
 
 def test_calendar_consent_avoiding_courses_and_stale_draft():
     a=account('client-calendar@example.com');h=head(a)

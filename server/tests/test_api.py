@@ -5,27 +5,16 @@ import httpx
 import pytest
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
-os.environ['DATABASE_PATH']=':memory:'
-os.environ['DEMO_MODE']='false'
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app.main import app
 from app.main import fetch_public,parse_url_blocks
-client=TestClient(app)
+from helpers import client, account, head, confirm_import
 
 def test_health_endpoint():
  r=client.get('/health')
  assert r.status_code==200 and r.json()['data']['status']=='ok'
 
-def account(email):
- r=client.post('/api/v1/auth/register',json={'email':email,'password':'correct horse battery staple'}).json()['data']
- assert client.post('/api/v1/auth/verify',json={'token':r['development_verification_token']}).status_code==200
- return client.post('/api/v1/auth/login',json={'email':email,'password':'correct horse battery staple'}).json()['data']
-def head(a): return {'Authorization':'Bearer '+a['access_token']}
-def confirm_import(a,case_id):
- review=client.get('/api/v1/cases/'+case_id+'/reviews',headers=head(a)).json()['data']
- response=client.post('/api/v1/cases/'+case_id+'/confirm',headers=head(a),json={'revision':review['revision'],'action_ids':[item['id'] for item in review['candidate']['actions']],'no_deadline':True,'consent':True})
- assert response.status_code==200,response.text
 def complete_batch(batch_id):
  from app.auth import conn
  with conn() as connection:connection.execute("UPDATE import_batches SET demo_processing_at='2000-01-01T00:00:00+00:00',demo_completed_at='2000-01-01T00:00:01+00:00' WHERE id=?",(batch_id,))

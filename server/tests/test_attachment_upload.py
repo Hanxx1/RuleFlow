@@ -1,4 +1,4 @@
-from test_api import client,account,head,confirm_import
+from helpers import client,account,head,confirm_import
 
 def test_attachment_upload_is_owner_scoped_and_invalidates_old_review():
     a=account('case-attachment-a@example.com');b=account('case-attachment-b@example.com');h=head(a)

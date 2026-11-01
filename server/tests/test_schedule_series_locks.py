@@ -1,4 +1,4 @@
-from test_api import client,account,head
+from helpers import client,account,head
 
 
 def test_weekly_series_is_atomic_and_owner_scoped():

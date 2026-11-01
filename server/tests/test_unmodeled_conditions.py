@@ -1,4 +1,4 @@
-from test_api import client,account,head
+from helpers import client,account,head
 
 
 def test_supported_rule_cannot_prove_all_original_conditions():

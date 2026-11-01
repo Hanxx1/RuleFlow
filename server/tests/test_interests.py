@@ -1,4 +1,4 @@
-from test_api import client,account,head
+from helpers import client,account,head
 
 
 def test_interest_is_private_cited_and_cannot_upgrade_false_or_unknown():

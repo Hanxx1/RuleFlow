@@ -1,6 +1,6 @@
 from datetime import datetime
 from app.services.schedule import preview_schedule
-from test_api import client,account,head
+from helpers import client,account,head
 from test_schedule_drafts import setup_case
 
 
