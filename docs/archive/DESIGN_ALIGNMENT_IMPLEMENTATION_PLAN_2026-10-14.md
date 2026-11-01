@@ -235,11 +235,11 @@ main.py 留启动/路由注册，逐步抽 api/imports.py、cases.py、schedule.
 - 当前已有 APK：`E:/ZhiShi/deliverables/Zhishi-RuleFlow-debug.apk`，9,901,220字节，文件时间2026年9月25日。它是历史调试产物，不证明与2026年10月14日当前源码一致；后续功能完成需重新构建并记录 commit、构建参数和 SHA-256。
 - Harmony 为 ArkTS/ArkUI 工程基线；当前没有本轮 SDK/设备/签名验收。iOS没有本轮 macOS/Xcode/签名验收，不以源码存在代替IPA/HAP完成。
 
-开发完成后更新 docs/API.md、docs/FRONTEND_CAPABILITY_MAP.md、docs/已知限制.md 与三端验收矩阵，把“代码存在”“Mock”“已接真实服务”“实机通过”分别记录。
+开发完成后更新 docs/architecture/API.md、docs/product/FRONTEND_CAPABILITY_MAP.md、docs/product/已知限制.md 与三端验收矩阵，把“代码存在”“Mock”“已接真实服务”“实机通过”分别记录。
 
 ## 9 第一批代码实施进展
 
-按用户要求边实现边更新文档。完整功能已拆为22个独立验收项，见 `SMART_RECOGNITION_SUBFUNCTIONS.md`。本轮优先实现日期/行动候选、版本化Review、确认后最小任务编译、旧分析主动核对、任务/日程门禁及移动确认面板。实际migration006为analysis_review_gate，文档原设想的Document迁移后续单独实施。
+按用户要求边实现边更新文档。完整功能已拆为22个独立验收项，见 `docs/product/SMART_RECOGNITION_SUBFUNCTIONS.md`。本轮优先实现日期/行动候选、版本化Review、确认后最小任务编译、旧分析主动核对、任务/日程门禁及移动确认面板。实际migration006为analysis_review_gate，文档原设想的Document迁移后续单独实施。
 
 候选不直接变任务，UNKNOWN不变FALSE/TRUE；日期精度仅到日，具体时刻和缺年继续待核对；不按数组顺序编造DAG。未实现原件/行级坐标、图片高亮、真实RAG、完整排程草案与图像/PDF脱敏。每个子功能先独立测试，再验证API和移动连接，保留Offline Demo与工作区原有改动。
 

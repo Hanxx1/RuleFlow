@@ -1,6 +1,6 @@
 # 知事 RuleFlow
 
-现有通知理解、证据追溯、资料与任务计划软件的保守工程整理版本。采用 Vue 3 / TypeScript / Pinia / Capacitor、FastAPI 和 SQLite。不是重新开发的产品；来源见 [PROVENANCE.md](PROVENANCE.md)。
+现有通知理解、证据追溯、资料与任务计划软件的保守工程整理版本。采用 Vue 3 / TypeScript / Pinia / Capacitor、FastAPI 和 SQLite。不是重新开发的产品；来源见 [docs/development/PROVENANCE.md](docs/development/PROVENANCE.md)。
 
 ## 当前边界
 
@@ -43,6 +43,7 @@ npm.cmd --prefix mobile run dev -- --host 127.0.0.1
 & server/.venv/Scripts/python.exe scripts/check-api-contract.py
 & server/.venv/Scripts/python.exe scripts/smoke-startup.py
 python scripts/check-paths.py
+python scripts/check-docs.py
 node scripts/check-demo.mjs
 npm.cmd --prefix mobile test
 npm.cmd --prefix mobile run build
@@ -72,7 +73,9 @@ node scripts/test-harmony-rules.mjs
 - server/app/services、providers：现有业务与适配实现；SQLite 连接生命周期保持原样。
 - shared：规则/画像 schema、跨端向量与去标识样例。
 - scripts：从自身位置定位工程的构建/验收工具。可选语料脚本使用 ZHISHI_TEST_FONT 指定中文字体。
-- docs/development：本次有效工程记录；旧 docs 和根目录历史规划保留为历史资料，不代表所有功能已经验收。
+- docs：按 architecture / development / product / testing / archive 分类，统一入口见 [文档导航](docs/README.md)。历史资料不代表本轮已验收状态。
 - desktop、harmony、mobile/ios：原平台工程。android-plugin 是未接入的旧模板，实际 Android 实现在 mobile/android。
 
-[协作规则](CONTRIBUTING.md) · [原始基线](docs/development/BASELINE.md) · [整理验收报告](docs/development/REFACTOR_REPORT.md)
+[协作规则](docs/development/CONTRIBUTING.md) · [原始基线](docs/testing/BASELINE.md) · [整理验收报告](docs/testing/REFACTOR_REPORT.md)
+
+完整文档索引：[docs/README.md](docs/README.md)。

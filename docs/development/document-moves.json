@@ -1,0 +1,224 @@
+[
+  {
+    "old": "CONTRIBUTING.md",
+    "new": "docs/development/CONTRIBUTING.md",
+    "before_sha256": "c498772398a0a46073004dbfe005e9edc9e24f17ce0c5575396437ebc19f3ac1",
+    "after_sha256": "c498772398a0a46073004dbfe005e9edc9e24f17ce0c5575396437ebc19f3ac1"
+  },
+  {
+    "old": "PROVENANCE.md",
+    "new": "docs/development/PROVENANCE.md",
+    "before_sha256": "9b579001faa7b000756fd9dc1b67e0867a515afee7cb8ce9a2dfa9b480c354f1",
+    "after_sha256": "9b579001faa7b000756fd9dc1b67e0867a515afee7cb8ce9a2dfa9b480c354f1"
+  },
+  {
+    "old": "UI_TODO.md",
+    "new": "docs/archive/UI_TODO.md",
+    "before_sha256": "c616648b9b8c39f742f7182755db6be154586044f35c96253be4ce2cc00730c8",
+    "after_sha256": "a4a4a7939f999d40a6c3bd2d7d55832125477c017fd90223de47f2d1d245fc7c"
+  },
+  {
+    "old": "Zhishi_RuleFlow_Android_开发规格.txt",
+    "new": "docs/archive/specifications/Zhishi_RuleFlow_Android_开发规格.txt",
+    "before_sha256": "35f86db08b695f963d20ba2fde2eca2a0f877f5280a64649105d17910c5e36da",
+    "after_sha256": "35f86db08b695f963d20ba2fde2eca2a0f877f5280a64649105d17910c5e36da"
+  },
+  {
+    "old": "知事RuleFlow_完整产品开发规格_v2_三端版.txt",
+    "new": "docs/archive/specifications/root/知事RuleFlow_完整产品开发规格_v2_三端版.txt",
+    "before_sha256": "82dc4090f7a27bb63ef825416d9899cee53d2cac27d39056557db6b8509d8739",
+    "after_sha256": "9bf0d4dc826870d38581033b10291a0fff630dfd9adcf128093706846ae2cb3a"
+  },
+  {
+    "old": "mobile/知事RuleFlow_完整产品开发规格_v2_三端版.txt",
+    "new": "docs/archive/specifications/mobile/知事RuleFlow_完整产品开发规格_v2_三端版.txt",
+    "before_sha256": "82dc4090f7a27bb63ef825416d9899cee53d2cac27d39056557db6b8509d8739",
+    "after_sha256": "9bf0d4dc826870d38581033b10291a0fff630dfd9adcf128093706846ae2cb3a"
+  },
+  {
+    "old": "android-plugin/README.md",
+    "new": "docs/archive/ANDROID_SHARE_TEMPLATE.md",
+    "before_sha256": "9f53ae436711d46352ab66bcc4f32b01338165dca7b13bf5fe79fcb1a550967e",
+    "after_sha256": "c0f0b8212052a81d5898a6e5c255b3f21dd91a53459ceb2580d793eae04225e6"
+  },
+  {
+    "old": "deliverables/README.md",
+    "new": "docs/archive/DELIVERABLES_2026-10-14.md",
+    "before_sha256": "11412dfca98d90c03f6d4e23668d8e83b8a3bc97fc59f07cee836d193ad4f2a9",
+    "after_sha256": "3a706637b291c29351c8dcc39053617369d35dd0d57feb26e4fc04c9d6d7bead"
+  },
+  {
+    "old": "harmony/README.md",
+    "new": "docs/development/HARMONY.md",
+    "before_sha256": "42e6d8f4f6ba77065f09e56359bf56edc4b9ea980e0c7416c488d98a93a9ae17",
+    "after_sha256": "57b42ebde7dd27dcf7e9494e7fe5b50589e11a87392d8032daddb3c00f66df05"
+  },
+  {
+    "old": "mobile/ios/ShareExtension/README.md",
+    "new": "docs/development/IOS_SHARE_EXTENSION.md",
+    "before_sha256": "929b24b2aa6c2ff9c5585ccbc3d43fc9c180cb7c455823a984bd36ce97f52381",
+    "after_sha256": "e5e3af1396485fcfd17022e8d6cd5f2cf8ab5325fd82cfd72145bba3b41ec98c"
+  },
+  {
+    "old": "docs/API.md",
+    "new": "docs/architecture/API.md",
+    "before_sha256": "e557231022e79de7f063c2f4898b85107189d74bf50d8e78e78a511b945e737d",
+    "after_sha256": "e557231022e79de7f063c2f4898b85107189d74bf50d8e78e78a511b945e737d"
+  },
+  {
+    "old": "docs/system-design.md",
+    "new": "docs/architecture/system-design.md",
+    "before_sha256": "7fd5e689724ee3149e0f0bdb31a6271132aa9554ac78ee30c6549b91ccd0a06b",
+    "after_sha256": "7fd5e689724ee3149e0f0bdb31a6271132aa9554ac78ee30c6549b91ccd0a06b"
+  },
+  {
+    "old": "docs/platform-adaptation.md",
+    "new": "docs/architecture/platform-adaptation.md",
+    "before_sha256": "a16a9c254c226535ece491335cbfc0fb1392f89832fb96182fec0a7761dfcadd",
+    "after_sha256": "a16a9c254c226535ece491335cbfc0fb1392f89832fb96182fec0a7761dfcadd"
+  },
+  {
+    "old": "docs/隐私数据流.md",
+    "new": "docs/architecture/隐私数据流.md",
+    "before_sha256": "86b5728166590e5f60d1276ef5c037c2938bb5652adfca471522fca9f21e4984",
+    "after_sha256": "86b5728166590e5f60d1276ef5c037c2938bb5652adfca471522fca9f21e4984"
+  },
+  {
+    "old": "docs/deployment.md",
+    "new": "docs/development/deployment.md",
+    "before_sha256": "fbb44d0719f46572a7a656fc9f090400221b36710da0b8cfffe87f4b403c8340",
+    "after_sha256": "aea636bef44929cbde20bd4ed8c46d8971e7ef7aae726ee84be9238dcfdcb349"
+  },
+  {
+    "old": "docs/FRONTEND_CAPABILITY_MAP.md",
+    "new": "docs/product/FRONTEND_CAPABILITY_MAP.md",
+    "before_sha256": "041606987f3ba3bc9275e887336401bbf0ecbe757cbdf561b43f0f2733b06ab1",
+    "after_sha256": "4f0c5989fbb1d9ef9421d991a040fa5b244056de7dacac468edcf187b3fe2936"
+  },
+  {
+    "old": "docs/SMART_RECOGNITION_SUBFUNCTIONS.md",
+    "new": "docs/product/SMART_RECOGNITION_SUBFUNCTIONS.md",
+    "before_sha256": "83a153791b8f6d64d00a08b1b5952f3e97aa8e8d4b5fa69049144d4ca37100b0",
+    "after_sha256": "83a153791b8f6d64d00a08b1b5952f3e97aa8e8d4b5fa69049144d4ca37100b0"
+  },
+  {
+    "old": "docs/已知限制.md",
+    "new": "docs/product/已知限制.md",
+    "before_sha256": "83b3a1851d8cae26a3738aca8d7aa58076ceacb21cfa70f03cd8373524bcf767",
+    "after_sha256": "96e96271b190f0a1801c15e68629dbecd7019bb9ba1380c58c46ac893a7b6355"
+  },
+  {
+    "old": "docs/development/BASELINE.md",
+    "new": "docs/testing/BASELINE.md",
+    "before_sha256": "066ec27fba33fd467f4d4a24a7499c129a088bd40dda15c9e961847302ad2927",
+    "after_sha256": "066ec27fba33fd467f4d4a24a7499c129a088bd40dda15c9e961847302ad2927"
+  },
+  {
+    "old": "docs/development/api-contract.sha256",
+    "new": "docs/testing/api-contract.sha256",
+    "before_sha256": "bc5749b1c0ad901409b8a17ab7c89b5ccea429b9b4fcacee74b9eece30bf13e5",
+    "after_sha256": "bc5749b1c0ad901409b8a17ab7c89b5ccea429b9b4fcacee74b9eece30bf13e5"
+  },
+  {
+    "old": "docs/development/visual-comparison.json",
+    "new": "docs/testing/visual-comparison.json",
+    "before_sha256": "599547e21f5fb6362873344f71f44b05e33c36a1e62db95ba93287a2926229d6",
+    "after_sha256": "599547e21f5fb6362873344f71f44b05e33c36a1e62db95ba93287a2926229d6"
+  },
+  {
+    "old": "docs/development/frontend-path-map.json",
+    "new": "docs/architecture/frontend-path-map.json",
+    "before_sha256": "53cb79e5bab68dbe70d7c433832b19b6fc1746b72ed50667da3542126344518b",
+    "after_sha256": "53cb79e5bab68dbe70d7c433832b19b6fc1746b72ed50667da3542126344518b"
+  },
+  {
+    "old": "docs/BACKEND_IMPLEMENTATION_PLAN.md",
+    "new": "docs/archive/BACKEND_IMPLEMENTATION_PLAN.md",
+    "before_sha256": "e5ddd0ded4c597419acb6bd72cc1a14cba7e6b5b9f89b2efd04583b9c24b8a36",
+    "after_sha256": "c59ff33ce2c14383b1b1d60ad7ad90f431e66e1a3aab3927595011c45b5a443f"
+  },
+  {
+    "old": "docs/BACKEND_UPGRADE_2026-10-14.md",
+    "new": "docs/archive/BACKEND_UPGRADE_2026-10-14.md",
+    "before_sha256": "25b635ea35b374dcd315aececffd96b70aac1251ec725ebd2979c92460fe9954",
+    "after_sha256": "25b635ea35b374dcd315aececffd96b70aac1251ec725ebd2979c92460fe9954"
+  },
+  {
+    "old": "docs/CLIENT_WORKSPACE_FIVE_STAGES_2026-10-14.md",
+    "new": "docs/archive/CLIENT_WORKSPACE_FIVE_STAGES_2026-10-14.md",
+    "before_sha256": "3f45bbd174820d5a955b6b532142a67570e1e9905a4eda833ea607caa4927cee",
+    "after_sha256": "3f45bbd174820d5a955b6b532142a67570e1e9905a4eda833ea607caa4927cee"
+  },
+  {
+    "old": "docs/DEEPSEEK_PUBLIC_NOTICE_VALIDATION_2026-10-14.md",
+    "new": "docs/archive/DEEPSEEK_PUBLIC_NOTICE_VALIDATION_2026-10-14.md",
+    "before_sha256": "005c4abf47df3279654c6990a99cce018e21884be1714c7073a36d95fc2ac9b4",
+    "after_sha256": "005c4abf47df3279654c6990a99cce018e21884be1714c7073a36d95fc2ac9b4"
+  },
+  {
+    "old": "docs/DESIGN_ALIGNMENT_IMPLEMENTATION_PLAN_2026-10-14.md",
+    "new": "docs/archive/DESIGN_ALIGNMENT_IMPLEMENTATION_PLAN_2026-10-14.md",
+    "before_sha256": "e1425e24051fefd16382f6bbb5f92ada1ecf33f27b94555c0a5f58532d6ac1a1",
+    "after_sha256": "5074ecdc6c7b3ae0595db55318d560c837f4818b5e267d5ef42293635c24758d"
+  },
+  {
+    "old": "docs/FEATURE_AUDIT.md",
+    "new": "docs/archive/FEATURE_AUDIT.md",
+    "before_sha256": "b349199d1f95d0861649844827a9a5353239d3022e341bde03b8b93cdc55f368",
+    "after_sha256": "a9e1343406a416ea402fd1290231dd3773a5d7a2ce990e1615d5784eaec49f5c"
+  },
+  {
+    "old": "docs/P0-基线与迁移.md",
+    "new": "docs/archive/P0-基线与迁移.md",
+    "before_sha256": "0e779396aa6a0193dba63f929a4ebedcbc62367db285a59c0fd91f977c46f217",
+    "after_sha256": "0e779396aa6a0193dba63f929a4ebedcbc62367db285a59c0fd91f977c46f217"
+  },
+  {
+    "old": "docs/PUBLIC_CORPUS_200_VALIDATION_2026-10-14.md",
+    "new": "docs/archive/PUBLIC_CORPUS_200_VALIDATION_2026-10-14.md",
+    "before_sha256": "62d26a36dfb3ad01b97370f330c235b5c46fa2591c6c93a97b9a18700d4024a3",
+    "after_sha256": "62d26a36dfb3ad01b97370f330c235b5c46fa2591c6c93a97b9a18700d4024a3"
+  },
+  {
+    "old": "docs/三端验收矩阵.md",
+    "new": "docs/archive/三端验收矩阵.md",
+    "before_sha256": "2127f2a8db34b600666baf2d3660598c83846dc27a007c7ac3913a69f9566259",
+    "after_sha256": "2127f2a8db34b600666baf2d3660598c83846dc27a007c7ac3913a69f9566259"
+  },
+  {
+    "old": "docs/测试报告.md",
+    "new": "docs/archive/测试报告.md",
+    "before_sha256": "3332652eb97bbfee69020f3bb6f34bf37af9b10b061dadc2d07fdddf003d1f9b",
+    "after_sha256": "3332652eb97bbfee69020f3bb6f34bf37af9b10b061dadc2d07fdddf003d1f9b"
+  },
+  {
+    "old": "docs/迁移与回滚.md",
+    "new": "docs/archive/迁移与回滚.md",
+    "before_sha256": "16ddef4bdac5764be769e49509dd6d7d27270d185a8bcf115f91a98089ef21d6",
+    "after_sha256": "16ddef4bdac5764be769e49509dd6d7d27270d185a8bcf115f91a98089ef21d6"
+  },
+  {
+    "old": "docs/CLIENT_WORKSPACE_200_MANIFEST.json",
+    "new": "docs/archive/CLIENT_WORKSPACE_200_MANIFEST.json",
+    "before_sha256": "0bcb04c4f5a30bcaa91a42dc552258f5267f6f62395f8b615a6b537415166f1a",
+    "after_sha256": "0bcb04c4f5a30bcaa91a42dc552258f5267f6f62395f8b615a6b537415166f1a"
+  },
+  {
+    "old": "docs/CLIENT_WORKSPACE_200_METRICS.json",
+    "new": "docs/archive/CLIENT_WORKSPACE_200_METRICS.json",
+    "before_sha256": "7dfbc6ec299e2f68821f53d7ccbc784f2a910ebe10bf072a5f4a86478758232e",
+    "after_sha256": "7dfbc6ec299e2f68821f53d7ccbc784f2a910ebe10bf072a5f4a86478758232e"
+  },
+  {
+    "old": "docs/PUBLIC_CORPUS_200_MANIFEST.json",
+    "new": "docs/archive/PUBLIC_CORPUS_200_MANIFEST.json",
+    "before_sha256": "ba6663f4e1374f835c43bd4b2a9da439b7c4717bdeaf7d7af7431008eaa59859",
+    "after_sha256": "ba6663f4e1374f835c43bd4b2a9da439b7c4717bdeaf7d7af7431008eaa59859"
+  },
+  {
+    "old": "docs/PUBLIC_CORPUS_200_METRICS.json",
+    "new": "docs/archive/PUBLIC_CORPUS_200_METRICS.json",
+    "before_sha256": "fc9af02e3c0f57831e28b264ac8c7d612ae33ad9afd63cc1c77b92a9f433817b",
+    "after_sha256": "fc9af02e3c0f57831e28b264ac8c7d612ae33ad9afd63cc1c77b92a9f433817b"
+  }
+]

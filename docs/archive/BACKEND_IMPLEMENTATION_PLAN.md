@@ -3,7 +3,7 @@
 > 修订日期：2026-09-22
 >
 > 本轮目标：为比赛初赛提供“全功能可交互后端壳”，同时保持可逐步替换为真实后端的 API、Service、Repository 和 Provider 边界。
-> 事实基线：`docs/FEATURE_AUDIT.md`；前端现状：`docs/FRONTEND_CAPABILITY_MAP.md`。
+> 事实基线：`docs/archive/FEATURE_AUDIT.md`；前端现状：`docs/product/FRONTEND_CAPABILITY_MAP.md`。
 
 ## 1. 本轮边界
 

@@ -10,7 +10,7 @@ EvidenceBottomSheet新增EvidenceViewer，使用access header取documents/{id}/p
 
 > 更新时间：2026-09-22
 > 本文只描述当前代码的真实连通状态。`UI状态 = READY` 只表示页面结构可用，不代表后端能力已完成。
-> 后端开发顺序、建议接口和时间不足时的透明演示方案见 `docs/BACKEND_IMPLEMENTATION_PLAN.md`。
+> 后端开发顺序、建议接口和时间不足时的透明演示方案见 `docs/archive/BACKEND_IMPLEMENTATION_PLAN.md`。
 
 ## 状态定义
 
@@ -89,12 +89,12 @@ Plan 在同一一级页面内提供“行动步骤 / 日程安排”双 Tab。�
 2. **真实外部 Provider**：晋级后按需替换 Knowledge、Vault Content 与 Calendar Provider。
 3. **账户隐私设置**：同步范围、保留期限、数据导出与清除。
 
-以上是能力优先级，不是可直接编码的请求/响应合同。后端实现应以 `BACKEND_IMPLEMENTATION_PLAN.md` 的接口草案和验收条件为起点，再由前后端共同确认字段。
+以上是能力优先级，不是可直接编码的请求/响应合同。后端实现应以 `docs/archive/BACKEND_IMPLEMENTATION_PLAN.md` 的接口草案和验收条件为起点，再由前后端共同确认字段。
 ## 2026年10月14日增量确认能力
 
 `AnalysisReviewPanel.vue` 已接入 `GET cases/{id}/reviews`、`POST reviews/prepare`、`POST confirm`；允许选择动作、日期候选、人工日期或明确不设截止，同意前按钮禁用。过期版本显示错误并要求重读/重新同意。解析结果与执行计划空状态连接到确认入口。
 
-日期/行动候选、确认后最小编译及Task/日程门禁本轮已实现。360/390px Mock API浏览器交互通过；原图/PDF高亮、真实知识入库/检索、文件永久脱敏、完整排程草案仍未完成。详见 `SMART_RECOGNITION_SUBFUNCTIONS.md`，不将本节的确认能力扩大为完整智能识别完成。
+日期/行动候选、确认后最小编译及Task/日程门禁本轮已实现。360/390px Mock API浏览器交互通过；原图/PDF高亮、真实知识入库/检索、文件永久脱敏、完整排程草案仍未完成。详见 `docs/product/SMART_RECOGNITION_SUBFUNCTIONS.md`，不将本节的确认能力扩大为完整智能识别完成。
 
 
 ## 2026-10-14 最新实现（替代早期未完成条目）

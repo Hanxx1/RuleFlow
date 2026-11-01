@@ -13,7 +13,7 @@ with tempfile.TemporaryDirectory(prefix='ruleflow-contract-') as temporary:
     from app.main import app
     encoded = json.dumps(app.openapi(), sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
     actual = hashlib.sha256(encoded).hexdigest()
-    expected = (root / 'docs/development/api-contract.sha256').read_text().strip()
+    expected = (root / 'docs/testing/api-contract.sha256').read_text().strip()
     if actual != expected:
         raise SystemExit(f'API contract changed: {actual} != {expected}')
     print(f'PASS unchanged OpenAPI contract: {actual}')

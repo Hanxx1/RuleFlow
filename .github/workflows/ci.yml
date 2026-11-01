@@ -19,6 +19,7 @@ jobs:
       - run: python scripts/smoke-startup.py
       - run: python scripts/check-api-contract.py
       - run: python scripts/check-paths.py
+      - run: python scripts/check-docs.py
       - run: node scripts/check-demo.mjs
       - run: npm test --prefix mobile
       - run: npm run build --prefix mobile

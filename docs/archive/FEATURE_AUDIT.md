@@ -2,7 +2,7 @@
 
 > 后端基线审计：2026-09-20；前端基线复核：2026-09-22。
 > 本文保留 Phase 0 之前的扫描证据与当时缺口，不再作为 Phase 1–3 完成后的能力状态表。
-> 当前连通状态以 `FRONTEND_CAPABILITY_MAP.md`、`API.md` 和 `BACKEND_IMPLEMENTATION_PLAN.md` 为准。
+> 当前连通状态以 `docs/product/FRONTEND_CAPABILITY_MAP.md`、`docs/architecture/API.md` 和 `docs/archive/BACKEND_IMPLEMENTATION_PLAN.md` 为准。
 
 ## 1. 状态口径
 
@@ -274,7 +274,7 @@ User
 | 隐私保护 / 安全分享 | 🟡 | `/privacy` 可处理粘贴文字、TXT 或 Case Evidence | 无对应 API；浏览器本地规则 | 不持久化 | `SafeShareView.vue`; `privacy.ts` | 可靠遮盖范围有限；邮箱/疑似学号只提示，不能声称已安全脱敏 |
 | 隐私设置 | 🔵 | 菜单+路由和真实未接入状态 | 无设置 API | 无 | `/settings/privacy` | 本地隐私检测不等于账户隐私设置 |
 | 账户设置 | ❌ | 无 | 无 | 无 | 无路由/代码 | MISSING |
-| 数据清除/账户删除/导出 | ❌ | 无 | 无 | 无 | endpoint index; `docs/已知限制.md` | MISSING |
+| 数据清除/账户删除/导出 | ❌ | 无 | 无 | 无 | endpoint index; `docs/product/已知限制.md` | MISSING |
 | owner 数据隔离 | 🟡 | 账户 store 分流 | 主要查询按 `owner_id` | SQLite | `owned`; API tests | 核心查询有隔离，但仍有完整性/授权边界问题，见第 9 节 |
 
 ### H. 首页统计与列表所需数据
@@ -517,11 +517,11 @@ User
 
 ## 10. 文档与当前仓库的不一致
 
-1. `README.md`、`docs/测试报告.md`、`docs/三端验收矩阵.md` 记录过 APK 已生成，但当前 `deliverables/` 中没有 APK。
-2. `docs/platform-adaptation.md` 表述 iOS Share Extension 源码，这点属实；但 Xcode project 只有 App target，不能声称 iOS 分享端到端完成。
-3. `docs/system-design.md` 说“移动端本地画像与事项缓存”，但当前没有本场事项数据库/IndexedDB/repository；只有 Demo JSON 和少量 localStorage。
+1. `README.md`、`docs/archive/测试报告.md`、`docs/archive/三端验收矩阵.md` 记录过 APK 已生成，但当前 `deliverables/` 中没有 APK。
+2. `docs/architecture/platform-adaptation.md` 表述 iOS Share Extension 源码，这点属实；但 Xcode project 只有 App target，不能声称 iOS 分享端到端完成。
+3. `docs/architecture/system-design.md` 说“移动端本地画像与事项缓存”，但当前没有本场事项数据库/IndexedDB/repository；只有 Demo JSON 和少量 localStorage。
 4. 完整 v2 规格中描述的 PostgreSQL、SQLAlchemy/Alembic、worker、材料库、提醒、冲突复核、完整同步、数据删除/导出是目标架构，不是当前实现。
-5. `docs/API.md` 列出的端点基本与代码一致，但没有表达 retry 无 worker、sync 与业务表未接通这两个重要限制。
+5. `docs/architecture/API.md` 列出的端点基本与代码一致，但没有表达 retry 无 worker、sync 与业务表未接通这两个重要限制。
 
 ## 11. Pre-UI Implementation Backlog
 

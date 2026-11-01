@@ -28,7 +28,7 @@ server/app/main.py：FastAPI 示例接口；profile、task_status 是进程级�
 server/app/rules.py：已有部分三值运算，可作为重构起点，但需补严格类型、完整 trace、Schema 约束和一致性测试。
 mobile/android、mobile/ios：已有 Capacitor 工程目录；目录存在不代表已打包或真机验收。
 Android ShareReceiverActivity.java：能复制部分 URI，写 pending preferences；需完成消费 bridge、队列、多文件、失败反馈。
-docs/platform-adaptation.md：鸿蒙目前描述 PWA/未来容器方向；没有已核实的原生鸿蒙产品。
+docs/architecture/platform-adaptation.md：鸿蒙目前描述 PWA/未来容器方向；没有已核实的原生鸿蒙产品。
 历史开发记录称 Web 构建及两项前端脱敏测试通过；Python 测试、APK、IPA、HAP 不得据此宣称通过。
 
 1.3 首批需要改造的具体位置
@@ -700,8 +700,8 @@ Windows 可写共享代码和工程；原生编译/Archive/签名必须有 macOS
 
 20.4 交付目录
 dist/android/、dist/ios/、dist/harmony/：各端已真实生成的产物及哈希。
-docs/README-安装与使用.md、docs/系统设计说明书.md、docs/API.md、docs/测试报告.md。
-docs/三端验收矩阵.md、docs/隐私数据流.md、docs/迁移与回滚.md、docs/已知限制.md。
+docs/README-安装与使用.md、docs/系统设计说明书.md、docs/architecture/API.md、docs/archive/测试报告.md。
+docs/archive/三端验收矩阵.md、docs/architecture/隐私数据流.md、docs/archive/迁移与回滚.md、docs/product/已知限制.md。
 shared/demo 与 test-vectors；源代码压缩包（排除密钥、个人数据、node_modules、SDK 和构建缓存）。
 比赛 PPT/视频可以基于真实完成项制作；是否需提交各端包按实际比赛要求另核验，本文三端目标来自用户本次要求。
 
