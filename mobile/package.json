@@ -1,1 +1,33 @@
-{"name":"zhishi-ruleflow-mobile","private":true,"version":"1.0.0","scripts":{"dev":"vite","build":"vue-tsc --noEmit && vite build --outDir web-dist","test":"vitest run --cache=false","android:sync":"npm run build && npx cap sync android","ios:sync":"npm run build && npx cap sync ios"},"dependencies":{"@ionic/vue":"^8.4.0","@ionic/vue-router":"^8.4.0","@capacitor/core":"^6.1.2","@capacitor/preferences":"^6.0.2","axios":"^1.7.7","pinia":"^2.2.2","vue":"^3.5.0","vue-router":"^4.4.3"},"devDependencies":{"@capacitor/android":"^6.1.2","@capacitor/cli":"^6.1.2","@capacitor/ios":"^6.1.2","@vitejs/plugin-vue":"^5.1.4","typescript":"^5.6.2","vite":"^5.4.8","vitest":"^2.1.1","vue-tsc":"^2.1.6"}}
+{
+  "name": "zhishi-ruleflow-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build --outDir web-dist",
+    "test": "vitest run --cache=false",
+    "android:sync": "npm run build && npx cap sync android",
+    "ios:sync": "npm run build && npx cap sync ios",
+    "preview": "vite preview --outDir web-dist"
+  },
+  "dependencies": {
+    "@ionic/vue": "^8.4.0",
+    "@ionic/vue-router": "^8.4.0",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/preferences": "^6.0.2",
+    "axios": "^1.7.7",
+    "pinia": "^2.2.2",
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.1",
+    "vue-tsc": "^2.1.6"
+  }
+}

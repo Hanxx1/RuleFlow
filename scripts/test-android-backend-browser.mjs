@@ -7,7 +7,7 @@ const require=createRequire(import.meta.url);
 const {chromium}=require(path.join(process.env.ZHISHI_BROWSER_MODULE_ROOT,'playwright'));
 const origin=process.env.ZHISHI_UI_TEST_ORIGIN||'http://127.0.0.1:5193';
 const backend=process.env.ZHISHI_BACKEND_ORIGIN||'http://127.0.0.1:8000';
-const browser=await chromium.launch({headless:true,channel:'msedge'});
+const browser=await chromium.launch({headless:true,channel:process.env.ZHISHI_TEST_BROWSER_CHANNEL||'msedge'});
 try {
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true});
  const email='android-smoke-'+randomUUID()+'@example.com',password='Synthetic-'+randomUUID();
@@ -19,7 +19,8 @@ try {
  await page.getByRole('button',{name:'检查服务连接',exact:true}).click();await page.getByText('应用已成功连接后端。',{exact:true}).waitFor();
  await page.locator('input[type=email]').fill(email);await page.locator('input[type=password]').fill(password);await page.getByRole('button',{name:'提交',exact:true}).click();
  await page.waitForURL('**/home');await page.getByRole('link',{name:'导入并分析',exact:true}).click();
- await page.getByLabel('粘贴文字',{exact:true}).fill('请填写申请表。请上传作品。报名截止2026-10-25。');
+ const deadline=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+ await page.getByLabel('粘贴文字',{exact:true}).fill(`请填写申请表。请上传作品。报名截止${deadline}。`);
  await page.locator('.consent-row input').check();await page.getByRole('button',{name:'保存并核对来源',exact:true}).click();
  await page.getByRole('button',{name:'开始分析',exact:true}).click();
  const resourceResponse=page.waitForResponse(response=>response.url().endsWith('/resources')&&response.status()===200);

@@ -2,6 +2,10 @@ param([switch]$WithTests)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'environment.ps1')
 $MobileRoot = Join-Path $ProjectRoot 'mobile'
+if (!$env:ANDROID_HOME -and !$env:ANDROID_SDK_ROOT -and !(Test-Path -LiteralPath (Join-Path $MobileRoot 'android/local.properties'))) {
+  throw 'Android SDK is not configured. Set ANDROID_HOME/ANDROID_SDK_ROOT or mobile/android/local.properties; no SDK is installed automatically.'
+}
+
 $previousAssets = $env:ZHISHI_WEB_ASSETS
 try {
   $env:ZHISHI_WEB_ASSETS = $null
