@@ -1,3 +1,4 @@
+from font_config import corpus_font
 """Render already-captured public text into synthetic test files, then parse them."""
 import json,math,sys
 from pathlib import Path
@@ -9,7 +10,7 @@ from app.parsing import parse_bytes
 from app.services.date_candidates import extract_dates
 root=ROOT/'.runtime/public-notice-benchmark'
 text='\n'.join(line for line in (root/'multi_deadline.txt').read_text(encoding='utf-8').splitlines() if line.startswith('2026 '))
-font_path='C:/Windows/Fonts/msyh.ttc';font=ImageFont.truetype(font_path,24)
+font_path=corpus_font();font=ImageFont.truetype(font_path,24)
 width=math.ceil(max(font.getlength(line) for line in text.splitlines()))+60
 height=len(text.splitlines())*48+60
 assert width*height<20_000_000

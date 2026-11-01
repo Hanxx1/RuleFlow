@@ -1,4 +1,7 @@
+// Optional; normal builds use the project build directories.
+def externalRoot = System.getenv('ZHISHI_BUILD_ROOT')
+if (!externalRoot) throw new GradleException('Set ZHISHI_BUILD_ROOT for redirected builds')
 allprojects {
     def safeName = project.path.replace(':', '_')
-    buildDir = file("E:/DevTools/ZhiShiBuild/gradle/${safeName}")
+    buildDir = new File(externalRoot, "gradle/${safeName}")
 }

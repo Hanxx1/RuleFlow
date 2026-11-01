@@ -1,6 +1,7 @@
-﻿param([int]$Port=8000,[string]$PythonPath='E:\DevTools\PythonPortable\python.exe')
+﻿param([int]$Port=8000,[string]$PythonPath)
 $ErrorActionPreference='Stop'
-$ProjectRoot=Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'environment.ps1')
+$PythonPath=Resolve-ProjectPython $PythonPath
 $privatePath=Join-Path $ProjectRoot '.runtime\deepseek\private.json'
 if(!(Test-Path -LiteralPath $privatePath)){throw '缺少本机私有DeepSeek配置；不要把密钥提交Git。'}
 $settings=Get-Content -LiteralPath $privatePath -Raw | ConvertFrom-Json

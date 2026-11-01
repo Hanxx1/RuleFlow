@@ -1,3 +1,4 @@
+from font_config import corpus_font
 """200 distinct public notices, format conversion clearly labelled, real OCR/LLM."""
 import concurrent.futures as cf,hashlib,json,sys,time,textwrap
 from pathlib import Path
@@ -11,7 +12,7 @@ sp=spec_from_file_location('b',ROOT/'scripts/benchmark-public-notices.py');b=mod
 from app.parsing import parse_bytes
 from app.services.attachment_requirements import inventory
 OUT=ROOT/'.runtime/multiformat-200';OUT.mkdir(parents=True,exist_ok=True)
-FONT='C:/Windows/Fonts/msyh.ttc'
+FONT=corpus_font()
 
 def prepare():
  samples=json.loads((ROOT/'.runtime/public-corpus/corpus.json').read_text(encoding='utf-8'))[:200]

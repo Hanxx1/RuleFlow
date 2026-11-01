@@ -30,3 +30,23 @@ video-production/audio/
 video-production/output/
 .runtime/
 .idea/
+
+# Local settings and private runtime data
+.env.*
+!.env.example
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+server/data/
+harmony/**/build/
+harmony/.hvigor/
+test-results/
+playwright-report/
+coverage/

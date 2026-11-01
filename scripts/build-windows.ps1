@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'environment.ps1')
 $MobileRoot = Join-Path $ProjectRoot 'mobile'
 $DesktopProject = Join-Path $ProjectRoot 'desktop\Zhishi.RuleFlow.Desktop.csproj'
 $PublishRoot = Join-Path $ProjectRoot 'desktop\bin\publish'
@@ -11,12 +11,14 @@ $env:DOTNET_NOLOGO = '1'
 
 Push-Location $MobileRoot
 try {
-  npm exec vue-tsc -- --noEmit
-  npm exec vite -- build --outDir web-dist --emptyOutDir
+  npm.cmd run build
+  Assert-NativeSuccess 'Web build'
 } finally {
   Pop-Location
 }
 
 dotnet publish $DesktopProject -c Release -r win-x64 --self-contained true -o $PublishRoot
+Assert-NativeSuccess 'Desktop publish'
+New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot 'deliverables') | Out-Null
 Copy-Item (Join-Path $PublishRoot 'Zhishi-RuleFlow.exe') $ArtifactPath -Force
 Write-Output "Windows artifact: $ArtifactPath"

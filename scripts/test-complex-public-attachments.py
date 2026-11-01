@@ -1,3 +1,4 @@
+from font_config import corpus_font
 """Generated format stress cases using public text; not original attachments."""
 import json,sys
 from pathlib import Path
@@ -10,7 +11,7 @@ from app.services.date_candidates import extract_dates
 out=ROOT/'.runtime/complex-attachments';out.mkdir(parents=True,exist_ok=True)
 source=ROOT/'.runtime/public-notice-benchmark/multi_deadline.txt'
 lines=[s for s in source.read_text(encoding='utf-8').splitlines() if s.startswith('2026 ')][:4]
-font=ImageFont.truetype('C:/Windows/Fonts/msyh.ttc',32)
+font=ImageFont.truetype(corpus_font(),32)
 im=Image.new('RGB',(1600,400),'white');ImageDraw.Draw(im).multiline_text((30,30),'\n'.join(lines),font=font,fill='black',spacing=30)
 cases=[]
 for name,image in [('clear',im),('low-contrast',ImageEnhance.Contrast(im).enhance(.35)),('blur',im.filter(ImageFilter.GaussianBlur(1.1))),('skew',im.rotate(3,fillcolor='white')),('rotated',im.rotate(90,expand=True)),('small',im.resize((800,200)))]:

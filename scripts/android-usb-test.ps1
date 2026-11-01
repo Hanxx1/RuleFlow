@@ -1,11 +1,12 @@
 ﻿param(
   [ValidateSet('Prepare','Server','ServerOnline','Install','Check','ShareText','TestShares')][string]$Action='Check',
   [string]$Serial,
-  [string]$PythonPath='E:\DevTools\PythonPortable\python.exe'
+  [string]$PythonPath
 )
 $ErrorActionPreference='Stop'
-$ProjectRoot=Split-Path -Parent $PSScriptRoot
-$Adb='E:\DevTools\Android\Sdk\platform-tools\adb.exe'
+. (Join-Path $PSScriptRoot 'environment.ps1')
+$PythonPath=Resolve-ProjectPython $PythonPath
+$Adb=$null
 $Apk=Join-Path $ProjectRoot 'deliverables\Zhishi-RuleFlow-usb-debug.apk'
 
 function Invoke-Adb {
@@ -13,6 +14,7 @@ function Invoke-Adb {
   if($LASTEXITCODE -ne 0){throw 'ADB操作失败，请检查设备授权和连接。'}
 }
 function Select-Device {
+  $script:Adb=Resolve-Adb
   if(!(Test-Path -LiteralPath $Adb)){throw '未找到ADB，请配置已安装SDK路径。'}
   $devices=@(& $Adb devices | Select-String '^([^\s]+)\s+device$' | ForEach-Object {$_.Matches[0].Groups[1].Value})
   if($Serial){if($Serial -notin $devices){throw '指定设备未连接或未授权。'}}

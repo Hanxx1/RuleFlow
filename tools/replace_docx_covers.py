@@ -21,17 +21,6 @@ W = f"{{{W_NS}}}"
 R = f"{{{R_NS}}}"
 
 
-ROOT = Path(r"E:\ZhiShi")
-JOBS = [
-    (
-        Path(r"D:\xwechat_files\wxid_86jm8250g3d822_cc2a\msg\file\2026-09\软件界面设计书(1).docx"),
-        ROOT / "deliverables" / "知事RuleFlow_软件界面设计书_V1.0.docx",
-    ),
-    (
-        Path(r"D:\xwechat_files\wxid_86jm8250g3d822_cc2a\msg\file\2026-09\用户操作手册.docx"),
-        ROOT / "deliverables" / "知事RuleFlow_用户操作手册_V1.0.docx",
-    ),
-]
 
 
 def qn(ns: str, local: str) -> str:
@@ -404,7 +393,12 @@ def replace_cover(reference: Path, target: Path) -> dict[str, str]:
 
 
 def main() -> None:
-    for reference, target in JOBS:
+    import argparse
+    parser = argparse.ArgumentParser(description='Replace a DOCX cover; both paths are explicit.')
+    parser.add_argument('--reference', type=Path, required=True)
+    parser.add_argument('--target', type=Path, required=True)
+    args = parser.parse_args()
+    for reference, target in [(args.reference.resolve(), args.target.resolve())]:
         result = replace_cover(reference, target)
         print(f"OK: {target}")
         for key, value in result.items():
