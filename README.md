@@ -41,6 +41,7 @@ npm.cmd --prefix mobile run dev -- --host 127.0.0.1
 ```powershell
 & server/.venv/Scripts/python.exe -m pytest server/tests -q -p no:cacheprovider
 & server/.venv/Scripts/python.exe scripts/check-api-contract.py
+& server/.venv/Scripts/python.exe scripts/smoke-startup.py
 python scripts/check-paths.py
 node scripts/check-demo.mjs
 npm.cmd --prefix mobile test

@@ -8,7 +8,7 @@ paths = subprocess.check_output(['git', '-C', str(root), 'ls-files', '--cached',
 issues = []
 for name in sorted(set(paths)):
     path = root / name
-    if not name.startswith(('server/app/', 'server/tests/', 'mobile/src/', 'scripts/', 'tools/', 'desktop/', 'harmony/')):
+    if not name.startswith(('server/app/', 'server/tests/', 'mobile/', 'scripts/', 'tools/', 'desktop/', 'harmony/')):
         continue
     if path.suffix not in {'.py', '.ps1', '.mjs', '.ts', '.vue', '.gradle', '.cs', '.json5'} or not path.is_file():
         continue

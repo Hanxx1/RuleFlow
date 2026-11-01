@@ -16,6 +16,7 @@ jobs:
       - run: python -m pip install -r server/requirements.txt -c server/requirements.lock
       - run: npm ci --prefix mobile
       - run: python -m pytest server/tests -q -p no:cacheprovider
+      - run: python scripts/smoke-startup.py
       - run: python scripts/check-api-contract.py
       - run: python scripts/check-paths.py
       - run: node scripts/check-demo.mjs

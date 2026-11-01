@@ -1,0 +1,88 @@
+{
+  "viewport": [
+    390,
+    844
+  ],
+  "browser": "Edge headless",
+  "mode": "unauthenticated synthetic/demo",
+  "pages": [
+    {
+      "path": "/welcome",
+      "baseline_sha256": "73941c4106df03aa0478d15899bf3f28472c37628b7b01a1dcf7c65a736deb9f",
+      "after_sha256": "73941c4106df03aa0478d15899bf3f28472c37628b7b01a1dcf7c65a736deb9f",
+      "text_equal": true
+    },
+    {
+      "path": "/home",
+      "baseline_sha256": "d51c3da7cee7aa324be27e6b7e7512246966309d4ef44c5c9f7ea332541dd420",
+      "after_sha256": "d51c3da7cee7aa324be27e6b7e7512246966309d4ef44c5c9f7ea332541dd420",
+      "text_equal": true
+    },
+    {
+      "path": "/cases",
+      "baseline_sha256": "78356a182bb42140d071d48cc508f6b6583025fae509955ccc4e211874109126",
+      "after_sha256": "78356a182bb42140d071d48cc508f6b6583025fae509955ccc4e211874109126",
+      "text_equal": true
+    },
+    {
+      "path": "/plan",
+      "baseline_sha256": "ea3c273b22a5030cc6f5f66c4e0e18b1442299d12cff6bde82a7f8ba5688a65c",
+      "after_sha256": "ea3c273b22a5030cc6f5f66c4e0e18b1442299d12cff6bde82a7f8ba5688a65c",
+      "text_equal": true
+    },
+    {
+      "path": "/profile",
+      "baseline_sha256": "4cc4cee5082a3448728de396064e0347debaaa0ccbe3514a0137637017c7da21",
+      "after_sha256": "4cc4cee5082a3448728de396064e0347debaaa0ccbe3514a0137637017c7da21",
+      "text_equal": true
+    },
+    {
+      "path": "/imports/new",
+      "baseline_sha256": "0947f4e31942da664e8dc390261135547ac312b3e00582385686ce507223a68a",
+      "after_sha256": "4d34be161f017930bb88c7df9b24a0c24aabdaa652bb3aa3937ecbfefab6ba42",
+      "text_equal": true
+    },
+    {
+      "path": "/knowledge",
+      "baseline_sha256": "396224ac9b423f9cdcdfbbdf5f4d75d82cecc0e0505e0a2a634b722d0acc0374",
+      "after_sha256": "396224ac9b423f9cdcdfbbdf5f4d75d82cecc0e0505e0a2a634b722d0acc0374",
+      "text_equal": true
+    },
+    {
+      "path": "/vault",
+      "baseline_sha256": "1182179ae2b4e1290d0eea94327c36d62cd1b21f38dda814085b9ec32cbe9f12",
+      "after_sha256": "1182179ae2b4e1290d0eea94327c36d62cd1b21f38dda814085b9ec32cbe9f12",
+      "text_equal": true
+    },
+    {
+      "path": "/privacy",
+      "baseline_sha256": "844e9cbc4da8a5f3ab0996480dcf785ef0ec26eb43718e03fb98a1a3158d8be3",
+      "after_sha256": "6d6ad72dc1890d3ca361f8d1004ab1833f2e376b14a2eea2dcf93492a65ed6e4",
+      "text_equal": true
+    },
+    {
+      "path": "/guide",
+      "baseline_sha256": "2e72b1abb8c17a0f4a001ecfa5d563afe8b1393a1d6a135a3a905353870e1a98",
+      "after_sha256": "2e72b1abb8c17a0f4a001ecfa5d563afe8b1393a1d6a135a3a905353870e1a98",
+      "text_equal": true
+    },
+    {
+      "path": "/auth/login",
+      "baseline_sha256": "b75b14d7213675c59ce96301dcdf8852921bada84fef569e010baece8c39dbe0",
+      "after_sha256": "b75b14d7213675c59ce96301dcdf8852921bada84fef569e010baece8c39dbe0",
+      "text_equal": true
+    }
+  ],
+  "pixel_differences": {
+    "/imports/new": {
+      "pixels": 772,
+      "maximum_channel_delta": 1
+    },
+    "/privacy": {
+      "pixels": 710,
+      "maximum_channel_delta": 1
+    }
+  },
+  "page_errors": [],
+  "notes": "Strict screenshot comparator reports two differences; do not interpret this as 11 pixel-identical pages. Moved templates/styles and global CSS are unchanged."
+}
