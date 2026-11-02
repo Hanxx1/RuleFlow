@@ -29,8 +29,7 @@ async function logout(){try{await account.logout()}finally{router.push('/auth/lo
       <SettingsRow label="知识资料库" description="导入细则并检索可追溯条款" icon="/assets/icons/features/icon_材料库.svg" to="/knowledge"/>
     </SettingsGroup>
     <SettingsGroup title="工具与安全">
-      <SettingsRow label="隐私保护" description="检查身份证号、手机号和银行卡号并生成脱敏文本" icon="/assets/icons/features/icon_隐私设置.svg" to="/privacy"/>
-      <SettingsRow label="隐私设置" description="查看检测范围、数据处理和安全分享说明" icon="/assets/icons/features/icon_隐私设置.svg" to="/settings/privacy"/>
+      <SettingsRow label="隐私设置" description="查看导入确认与账户数据范围" icon="/assets/icons/features/icon_隐私设置.svg" to="/settings/privacy"/>
       <SettingsRow label="登录设备" :description="account.signedIn?'查看当前账户的有效会话':'登录后可查看'" icon="/assets/icons/features/icon_登录设备.svg" to="/settings/devices"/>
     </SettingsGroup>
     <SettingsGroup title="账户与支持">

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup
 from pydantic import BaseModel,Field,ValidationError
 from .auth import router as auth_router,conn,init,current_user,envelope
-from .privacy import analyze as analyze_privacy,redact
+from .privacy import redact
 from .rules import evaluate,status_for
 from .ai import AIAnalysis,AIInvalidOutput,AIUnavailable,configured_provider,validate_candidates,PROMPT_VERSION,PARSER_VERSION
 from .parsing import HostResolutionError,UnsafeHostError,local_proxy_for,parse_bytes,resolve_public_host
@@ -35,7 +35,7 @@ from .services.schedule_drafts import snapshot as schedule_snapshot,create_draft
 from .settings import SETTINGS
 from .bootstrap import database
 from .api.common import stamp, data, owned, schedule_item_json
-from .schemas import (CaseIn, CasePatch, FactIn, TaskIn, PatchTask, TextImport, UrlImport, ImportBatchIn, EdgeIn, MaterialIn, SyncChange, SyncPush, ProfileIn, PrivacyIn, AccountSettingsPatch, ScheduleItemIn, ScheduleItemPatch, SchedulePreferencesIn, CalendarBlockIn, SchedulePreviewIn, DraftCommitIn, AttachmentImportIn, TaskPlanningIn, ScheduleSeriesIn, ScheduleLockIn, ProfileInterestsIn, VaultPatch, ReviewConfirmation, KnowledgeTextIn, KnowledgeSearchIn, KnowledgeConsent, RedactIn)
+from .schemas import (CaseIn, CasePatch, FactIn, TaskIn, PatchTask, TextImport, UrlImport, ImportBatchIn, EdgeIn, MaterialIn, SyncChange, SyncPush, ProfileIn, AccountSettingsPatch, ScheduleItemIn, ScheduleItemPatch, SchedulePreferencesIn, CalendarBlockIn, SchedulePreviewIn, DraftCommitIn, AttachmentImportIn, TaskPlanningIn, ScheduleSeriesIn, ScheduleLockIn, ProfileInterestsIn, VaultPatch, ReviewConfirmation, KnowledgeTextIn, KnowledgeSearchIn, KnowledgeConsent, RedactIn)
 from .services.fact_history import normalize_validity,record_fact,expired
 from .services.interests import bind_interest,soft_relevance
 from .services.unsupported_conditions import extract_unsupported
@@ -294,9 +294,6 @@ def profile_completeness(user=Depends(current_user)):
  completed=[field for field in fields if values.get(field) not in (None,'',[]) and valid_value(field,values.get(field))]
  missing=[field for field in fields if field not in completed]
  return data({'score':round(len(completed)*100/len(fields)) if fields else 100,'completed_fields':completed,'missing_fields':missing,'required_fields':fields})
-@app.post('/api/v1/privacy/analyze')
-def privacy_analyze(body:PrivacyIn):
- return data(analyze_privacy(body.text))
 def account_settings_json(user):
  with conn() as c:settings=c.execute('SELECT * FROM account_settings WHERE owner_id=?',(user['id'],)).fetchone()
  return {'id':user['id'],'email':user['email'],'email_verified':bool(user['verified_at']),'display_name':settings['display_name'] if settings else None,'locale':settings['locale'] if settings else 'zh-CN','timezone':settings['timezone'] if settings else 'Asia/Shanghai','created_at':user['created_at'],'updated_at':settings['updated_at'] if settings else None}

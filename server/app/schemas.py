@@ -28,7 +28,6 @@ class SyncPush(BaseModel):operation_id:str=Field(min_length=8,max_length=128);ch
 
 class ProfileIn(BaseModel):facts:dict[str,object];valid_until:dict[str,str|None]=Field(default_factory=dict)
 
-class PrivacyIn(BaseModel):text:str=Field(min_length=1,max_length=200000)
 
 class AccountSettingsPatch(BaseModel):display_name:str|None=Field(default=None,max_length=100);locale:str|None=Field(default=None,min_length=2,max_length=16);timezone:str|None=Field(default=None,min_length=1,max_length=64)
 

@@ -243,9 +243,10 @@ def test_profile_completeness_is_computed_from_owner_profile():
  assert client.get('/api/v1/profile/completeness',headers=head(a)).json()['data']['score']==100
  assert client.get('/api/v1/profile/completeness',headers=head(b)).json()['data']['score']==0
 
-def test_privacy_analyze_returns_structured_non_overlapping_findings():
+def test_shared_privacy_analyze_returns_structured_non_overlapping_findings():
  text='身份证11010519491231002X 手机13812345678 银行卡6222020200088888888 邮箱a@example.com'
- result=client.post('/api/v1/privacy/analyze',json={'text':text}).json()['data']
+ from app.privacy import analyze
+ result=analyze(text)
  assert [item['type'] for item in result['findings']]==['id_card','phone','bank_card','email']
  assert '138****5678' in result['redacted_text'] and '11010519491231002X' not in result['redacted_text']
  assert result['unsupported_types']==[] and result['persisted'] is False

@@ -1,4 +1,4 @@
-export type GuideTopic = 'import'|'analysis'|'profile'|'plan'|'timetable'|'materials'|'knowledge'|'privacy';
+export type GuideTopic = 'import'|'analysis'|'profile'|'plan'|'timetable'|'materials'|'knowledge';
 export interface GuideStep {title:string;description:string}
 export interface GuideChapter {
   id:GuideTopic;title:string;summary:string;scene:string;icon:string;
@@ -120,19 +120,7 @@ export const guideChapters: GuideChapter[] = [
     notes:['本地检索不等于无需后端；账户知识资料的导入与查询仍需服务连接。','匹配分数不是资格结论，也不是正确率。删除索引不会自动删除原件或已关联的事项证据。'],
     action:{label:'打开知识资料库',to:'/knowledge'},keywords:['知识库','知识资料','规则','细则','检索','查询','来源','证据','索引'],
   },
-  {
-    id:'privacy',title:'检查隐私并安全分享',summary:'核对检测范围与脱敏结果，再选择是否分享。',
-    scene:'需要上传通知、分享文本，或处理文件中可能存在的个人信息。',icon:'/assets/icons/actions/icon_search.svg',
-    steps:[
-      {title:'选择待检查内容',description:'在“我的”进入“隐私保护”，粘贴文字或选择 TXT 文件；也可从事项的“安全分享”入口带入第一条原文依据，先确认它是否覆盖需要分享的内容。'},
-      {title:'开始检查',description:'点击“开始隐私检查”，查看身份证号、手机号、银行卡号等已支持格式的检测结果。姓名、地址、邮箱、学号及上下文仍需人工检查。'},
-      {title:'逐项核对安全版本',description:'对照原文与脱敏版本。未发现已支持格式不代表绝对安全；有尚不能可靠遮盖的类型时，应先手工处理再检查。'},
-      {title:'复制或分享',description:'生成可用安全版本后，使用页面中的复制或系统分享按钮。当前平台不支持系统分享时，可使用复制；接收对象由你在系统面板中选择。'},
-    ],
-    result:'仅在你操作后才复制或打开分享面板。隐私检测文本不写入个人画像、事项或检测历史；这与导入通知、上传材料的账户保存流程不同。',
-    notes:['导入页的本地隐私预览不代表所有来源都已扫描，也不代表保存的所有原文都已被替换为脱敏文本。','文件的“文件隐私与脱敏”页可检查支持的文件并生成脱敏副本；不支持的格式或类型仍需人工处理。'],
-    action:{label:'打开隐私保护',to:'/privacy'},keywords:['隐私','脱敏','敏感','安全','身份证','手机号','银行卡','分享','复制','TXT'],
-  },
+
 ];
 
 export const guideFaqs: GuideFaq[] = [
@@ -143,7 +131,7 @@ export const guideFaqs: GuideFaq[] = [
   {id:'dates',question:'为什么要自己确认日期和步骤？',answer:'通知中的日期可能是发布日期、活动时间或不同阶段的截止日期，提取出的行动也可能包含可取消的建议。确认前请对照原文选择；信息不明时可以暂不设置日期，系统不会因此保证按时完成。',topic:'analysis',keywords:['确认','日期','步骤','截止','候选']},
   {id:'ai',question:'每次分析都会调用 AI 吗？',answer:'不会。是否调用 AI 取决于后端配置及可用性；未配置或调用失败时会使用可用的本地规则并如实提示。请以页面实际分析方式、原文证据和待核对提示为准，不要仅凭“分析完成”判断信息已经完整。',topic:'analysis',keywords:['AI','模型','本地规则','回退','分析方式']},
   {id:'no-schedule',question:'步骤为什么没有排进日程？',answer:'先确认事项、行动步骤、预计耗时和排程所需信息，再查看“未安排”原因。前置依赖、截止日期、课程和忙碌时段、每日时长上限都会影响安排；调整后重新预览并确认草稿。',topic:'plan',keywords:['未安排','排程','耗时','依赖','日程']},
-  {id:'feedback',question:'还有问题，如何提供反馈？',answer:'记录出现问题的页面、操作步骤、预期结果与实际结果。在“帮助与反馈”点击“复制诊断信息”，连同问题描述自行提供给项目支持人员。分享截图前请遮盖个人信息；应用目前不会代你发送反馈。',topic:'privacy',keywords:['反馈','帮助','诊断','错误','截图']},
+  {id:'feedback',question:'还有问题，如何提供反馈？',answer:'记录出现问题的页面、操作步骤、预期结果与实际结果。在“帮助与反馈”点击“复制诊断信息”，连同问题描述自行提供给项目支持人员。分享截图前请遮盖个人信息；应用目前不会代你发送反馈。',topic:'import',keywords:['反馈','帮助','诊断','错误','截图']},
 ];
 
 function normalize(value:string){return value.normalize('NFKC').toLocaleLowerCase().trim()}

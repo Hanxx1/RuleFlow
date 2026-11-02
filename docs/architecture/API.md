@@ -91,7 +91,6 @@ Metadata 与文件内容分离保存。POST 使用 multipart，包含 `file`、`
 
 ## 隐私分析
 
-- `POST /api/v1/privacy/analyze`：返回身份证号、手机号、银行卡号的结构化 findings 与脱敏文本
 
 该接口不持久化原文或 findings，也不将敏感原文写入日志。
 

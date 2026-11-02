@@ -8,7 +8,7 @@ import GuideLink from '../components/GuideLink.vue';
 function makeRouter(){
   return createRouter({history:createMemoryHistory(),routes:[
     {path:'/guide',component:GuideView},
-    ...['/home','/me','/help','/imports/new','/cases','/profile','/plan','/timetable','/vault','/knowledge','/privacy','/cases/:id/analysis'].map(path=>({path,component:{render:()=>null}})),
+    ...['/home','/me','/help','/imports/new','/cases','/profile','/plan','/timetable','/vault','/knowledge','/cases/:id/analysis'].map(path=>({path,component:{render:()=>null}})),
   ]});
 }
 async function renderGuide(location:string){
@@ -26,7 +26,7 @@ describe('guide screen',()=>{
     expect(html).toContain('确认整份排程');
     expect(html).toContain('打开离线样例');
     expect(html).toContain('搜索指南');
-    expect(html.match(/class="guide-chapter"/g)).toHaveLength(8);
+    expect(html.match(/class="guide-chapter"/g)).toHaveLength(7);
     expect(returnAnchor(html)).toContain('href="/home"');
   });
   it('opens the requested chapter and preserves the original page and its query',async()=>{

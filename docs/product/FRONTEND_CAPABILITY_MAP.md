@@ -52,10 +52,6 @@ EvidenceBottomSheet新增EvidenceViewer，使用access header取documents/{id}/p
 | 外部依据 DTO | `types/product.ts`、`KnowledgeEvidenceView` | READY | 来源、版本、quote、reference、match metadata | CONNECTED | `confidence` 在无概率模型时保持 null |
 | 时间排程 / Schedule | `PlanView` + `PlanSchedule` `/plan?tab=schedule&case=:id` | READY | Schedule CRUD + deterministic preview + SQLite 持久化 | CONNECTED | 当前不同步第三方 Calendar |
 | Schedule DTO | `types/product.ts` | READY | busy/course/task time block 与 Case/Task 关联 | CONNECTED | 可后续替换 Calendar/Availability Provider |
-| 隐私检测与安全分享 | `SafeShareView` `/privacy`；可用 `?case=:id` 带入事项 | READY | `/api/v1/privacy/analyze`；用户输入、TXT 或 Evidence | CONNECTED | 姓名/邮箱/学号/地址等扩展规则 |
-| 脱敏前后预览 | `SafeShareView` | READY | 结构化 findings 与 `redacted_text` | CONNECTED | 可后续增加逐项接受/忽略 |
-| 复制安全版本 | `SafeShareView` | READY（有条件） | 只复制真实生成且无已知未遮盖类型的文本 | LOCAL_ONLY | 剪贴板失败提示的更多平台适配 |
-| 系统分享安全版本 | `SafeShareView` | READY（有条件） | Web Share API；只分享真实脱敏文本 | LOCAL_ONLY | Capacitor 原生 Share 适配（如需覆盖更多设备） |
 | 统一 Empty/Loading/Offline | `AppState` | READY | 页面当前真实状态 | LOCAL_ONLY | 可继续补充错误码到状态映射 |
 | 统一 Bottom Sheet | `AppBottomSheet` | READY | 前端组件；已用于 Case Selector 与 Evidence | LOCAL_ONLY | 焦点循环和更完整的无障碍弹窗管理 |
 | 登录、注册、验证、重置 | 旧 `Page` Auth routes | READY | 现有 Auth API | CONNECTED / PARTIAL | 生产邮件投递与更完整账户设置 |
@@ -78,10 +74,6 @@ EvidenceBottomSheet新增EvidenceViewer，使用access header取documents/{id}/p
 Plan 在同一一级页面内提供“行动步骤 / 日程安排”双 Tab。行动步骤读取 `/plan` API 并通过 Task PATCH 保存状态；日程安排读取持久化 time block，支持预览、确认、编辑与删除。旧 `/cases/:id/schedule` 会跳转到 `/plan?tab=schedule&case=:id`。
 
 `GET /api/v1/cases/{id}/export.ics` 仍保留为文件导出；Schedule API 独立管理课程、忙碌和任务 time block。当前不读取设备或第三方日历。
-
-### 安全分享
-
-当前是全局 `LOCAL_ONLY` 工具：身份证号、手机号、银行卡号可以被现有规则实际遮盖；邮箱和疑似学号只会提示，页面会禁用“安全版本”操作。具体事项可通过 `/privacy?case=:id` 自动带入第一条真实 Evidence，旧事项隐私 URL 会兼容跳转。
 
 ## 下一轮后端接口优先级
 

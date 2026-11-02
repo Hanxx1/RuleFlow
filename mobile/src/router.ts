@@ -28,7 +28,6 @@ const routes:RouteRecordRaw[]=[
   {path:'/vault',component:()=>import('./views/VaultView.vue'),meta:{title:'材料库'}},
   {path:'/knowledge',component:()=>import('./views/KnowledgeLibraryView.vue'),meta:{title:'知识资料库'}},
   {path:'/documents/:id/privacy',component:()=>import('./views/DocumentPrivacyView.vue'),meta:{title:'文件隐私与脱敏'}},
-  {path:'/privacy',component:()=>import('./views/SafeShareView.vue'),meta:{title:'隐私保护'}},
   {path:'/imports/new',component:()=>import('./features/imports/ImportView.vue'),meta:{title:'导入通知'}},
   {path:'/imports/sources',component:()=>import('./features/imports/ImportSourcesView.vue'),meta:{title:'确认导入来源'}},
   {path:'/imports/:id/sources',component:()=>import('./features/imports/ImportSourcesView.vue'),meta:{title:'确认导入来源'}},
@@ -38,7 +37,6 @@ const routes:RouteRecordRaw[]=[
   {path:'/cases/:id/knowledge',component:()=>import('./views/KnowledgeEvidenceView.vue'),meta:{title:'规则依据'}},
   {path:'/cases/:id/rules',component:()=>import('./views/KnowledgeEvidenceView.vue'),meta:{title:'规则依据'}},
   {path:'/cases/:id/schedule',redirect:to=>({path:'/plan',query:{tab:'schedule',case:String(to.params.id)}})},
-  {path:'/cases/:id/privacy',redirect:to=>({path:'/privacy',query:{case:String(to.params.id)}})},
   {path:'/cases/:id',component:()=>import('./features/cases/AnalysisResultView.vue'),meta:{title:'事项概览'}},
   ...utilityPages.map(([path,title])=>({path,component:Page,meta:{title}})),
 ];
