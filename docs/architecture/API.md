@@ -1,5 +1,11 @@
 # RuleFlow API
 
+## 2026年11月2日独立隐私工具移除
+
+提交 `b6c4984` 有意删除独立文字隐私工具的 `POST /api/v1/privacy/analyze` 及其专用请求模型 `PrivacyIn`。共享检测引擎、导入确认与文件隐私扫描/脱敏接口保留。
+
+当前 OpenAPI 基准为 80 个路径，SHA256 为 `aa40e470df16fa9b2143aa452c92dab9debaa18467e3b9a7694cbeb95df838ed`（UTF-8、排序、紧凑 JSON）。[契约基准](../testing/api-contract.sha256)已同步更新；CI 继续严格比较完整 OpenAPI，不跳过差异检查。此前 81 个路径的重构前快照保留于历史基线记录中。
+
 ## 2026年10月14日知识资料增量
 
 GET /api/v1/knowledge/documents列当前owner资料；POST /knowledge/text接受title/text/category/consent，POST /knowledge/documents接受file/title/consent。POST /knowledge/search、/knowledge/ask接受query/top_k/category，返回owner私有资料的真实片段/行定位。当前ask为extractive原文摘录，无命中RAG_NO_EVIDENCE，不调用模型记忆补答。

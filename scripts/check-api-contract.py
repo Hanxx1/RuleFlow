@@ -1,4 +1,4 @@
-"""Compare the full OpenAPI contract against the pre-refactor fingerprint."""
+"""Compare the full OpenAPI contract against the accepted baseline fingerprint."""
 import hashlib
 import json
 import os
@@ -16,4 +16,4 @@ with tempfile.TemporaryDirectory(prefix='ruleflow-contract-') as temporary:
     expected = (root / 'docs/testing/api-contract.sha256').read_text().strip()
     if actual != expected:
         raise SystemExit(f'API contract changed: {actual} != {expected}')
-    print(f'PASS unchanged OpenAPI contract: {actual}')
+    print(f'PASS OpenAPI contract matches accepted baseline: {actual}')
