@@ -14,6 +14,7 @@
 
 ## 环境、部署与协作
 
+- [知事 RuleFlow 后续功能开发指导](development/NEXT_PHASE_DEVELOPMENT_GUIDE.md)
 - [CONTRIBUTING.md](development/CONTRIBUTING.md)
 - [deployment.md](development/deployment.md)
 - [document-moves.json](development/document-moves.json)
