@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import {computed,ref} from 'vue'
+import {computed,onMounted,ref,watch} from 'vue'
 import {useAccountStore} from '../../stores/account'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
-import {exampleIdentity,exampleValues,isCompetitionNotice,leaveDays,proposedFilename,reviewForm,scenarioFields,scenarios,validateFilename,type FormValues,type Scenario} from './scenarios'
+import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile} from './demoProfile'
+import {exampleValues,isCompetitionNotice,leaveDays,proposedFilename,reviewForm,scenarioFields,scenarios,validateFilename,type FormValues,type Scenario} from './scenarios'
 
 const account = useAccountStore()
-const storeKey = 'campusweave:offline-form-demo:v1'
+const owner = ref<DemoOwner>('demo:forms')
+const profile = ref<DemoProfile>({revision:0,values:{},awards:[]})
+const ready = ref(false)
+const saving = ref(false)
+const completion = ref<string[]>([])
+const showAll = ref(false)
+let loadVersion = 0
 const scenario = ref(scenarios[0])
 const values = ref<FormValues>({})
-const remembered = ref<FormValues>({})
 const nameOverride = ref('')
 const photo = ref('')
 const photoInput = ref<File>()
@@ -22,27 +28,19 @@ const reveal = ref(false)
 const message = ref('')
 const problem = ref('')
 const imageVersion = ref(0)
-const archive = ref<DemoAward[]>([])
+const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
 const drafts = new Map<string,{values:FormValues;photo:string;name:string}>()
-const archiveKey = storeKey+':awards'
 
-const reusable = new Set(scenarios.flatMap(scenarioFields).filter(field=>field.reusable && !field.sensitive).map(field=>field.id))
-try {
-  const saved = JSON.parse(localStorage.getItem(storeKey) || '{}')
-  remembered.value = Object.fromEntries(Object.entries(saved).filter(([key,value])=>reusable.has(key) && typeof value==='string')) as FormValues
-  const savedAwards: unknown = JSON.parse(localStorage.getItem(archiveKey) || '[]')
-  if (Array.isArray(savedAwards)) {
-    archive.value = savedAwards.filter(item=>item && ['date','name','issuer'].every(key=>typeof item[key]==='string'))
-      .map(item=>readAward({awardDate1:item.date,awardName1:item.name,awardIssuer1:item.issuer},1))
-      .filter((award): award is DemoAward=>Boolean(award)).slice(0,12)
-  }
-} catch {
-  // The demo can still run in a browser with storage disabled.
-}
 
 const review = computed(()=>reviewForm(scenario.value,values.value,Boolean(photo.value)))
 const count = computed(()=>Object.keys(review.value.errors).length)
+const groups = computed(()=>scenario.value.groups.map(group=>({
+  ...group,fields:showAll.value?group.fields:group.fields.filter(field=>completion.value.includes(field.id)),
+})).filter(group=>group.fields.length))
+watch(review,result=>{
+  for (const id of Object.keys(result.errors)) if (!completion.value.includes(id)) completion.value.push(id)
+})
 const filename = computed(()=>nameOverride.value || proposedFilename(scenario.value,values.value))
 const filenameError = computed(()=>validateFilename(filename.value))
 const filenamePreview = computed(()=>(filename.value.startsWith('演示-')?'':'演示-')+filename.value+'.'+scenario.value.format)
@@ -59,9 +57,7 @@ function select(next: Scenario, saveCurrent = true) {
   if (saveCurrent) drafts.set(scenario.value.id,{values:{...values.value},photo:photo.value,name:nameOverride.value})
   scenario.value = next
   const draft = drafts.get(next.id)
-  const fields = scenarioFields(next).filter(field=>field.reusable)
-  const defaults = Object.fromEntries(fields.map(field=>[field.id,remembered.value[field.id] ?? exampleValues[next.id][field.id] ?? exampleIdentity[field.id] ?? '']))
-  values.value = draft ? {...draft.values} : defaults
+  values.value = draft ? {...draft.values} : resolveDemoProfile(next,profile.value)
   photo.value = draft?.photo || ''
   photoInput.value = undefined
   imageVersion.value++
@@ -71,9 +67,32 @@ function select(next: Scenario, saveCurrent = true) {
   reasonSuggestion.value = ''
   preview.value = false
   reveal.value = false
+  showAll.value = false
+  completion.value = Object.keys(review.value.errors)
   changed()
 }
-select(scenario.value,false)
+
+async function switchOwner(next: DemoOwner) {
+  const version = ++loadVersion
+  owner.value = next
+  ready.value = false
+  drafts.clear()
+  profile.value = {revision:0,values:{},awards:[]}
+  select(scenario.value,false)
+  try {
+    const loaded = await loadDemoProfile(next)
+    if (loadVersion!==version) return
+    profile.value = loaded
+    select(scenario.value,false)
+  } catch {
+    if (loadVersion!==version) return
+    select(scenario.value,false)
+    problem.value = '本机资料无法读取，可以继续填写当前表。'
+  } finally {
+    if (loadVersion===version) ready.value = true
+  }
+}
+onMounted(()=>void switchOwner(owner.value))
 
 function fillExamples() {
   for (const field of scenarioFields(scenario.value)) {
@@ -81,48 +100,67 @@ function fillExamples() {
       values.value[field.id] = exampleValues[scenario.value.id][field.id]
     }
   }
-  if (scenario.value.photo && !photo.value) photo.value = avatarUrl
+  if (scenario.value.photo==='embedded' && !photo.value) photo.value = avatarUrl
   changed()
 }
 
-function remember(field: string) {
-  if (!reusable.has(field) || !values.value[field]?.trim() || review.value.errors[field]) return
+async function saveProfile(edit: (previous: DemoProfile)=>DemoProfile, success: string) {
+  if (saving.value || !ready.value) return false
+  const identity = owner.value
+  saving.value = true
+  problem.value = ''
   try {
-    const next = {...remembered.value,[field]:values.value[field].trim()}
-    localStorage.setItem(storeKey,JSON.stringify(next))
-    remembered.value = next
-    message.value = '已保存到此设备的演示资料。'
-  } catch {
-    problem.value = '此设备暂时无法保存演示资料。'
+    profile.value = await updateDemoProfile(identity,profile.value.revision,edit)
+    message.value = success
+    return true
+  } catch (error) {
+    problem.value = error instanceof Error ? error.message : '本机资料保存失败。'
+    try { profile.value = await loadDemoProfile(identity) } catch { /* Keep the draft editable. */ }
+    return false
+  } finally {
+    saving.value = false
   }
 }
 
-function clearRemembered() {
-  try {
-    localStorage.removeItem(storeKey)
-    localStorage.removeItem(archiveKey)
-    remembered.value = {}
-    archive.value = []
-    drafts.clear()
-    select(scenario.value,false)
-    message.value = '本机演示资料已清除。'
-  } catch {
-    problem.value = '此设备暂时无法清除演示资料。'
+async function saveCompletion() {
+  if (count.value) return
+  const data = {...values.value}
+  const current = scenario.value
+  const additions: FormValues = {}
+  for (const field of scenarioFields(current)) {
+    const key = profileKey(current,field)
+    if (key && data[field.id]?.trim()) additions[key] = data[field.id].trim()
   }
+  const selected = current.id==='scholarship'
+    ? awardSlots.map(slot=>readAward(data,slot)).filter((award): award is DemoAward=>Boolean(award))
+    : []
+  const saved = await saveProfile(previous=>{
+    const awards = [...previous.awards]
+    for (const award of selected) {
+      if (!awards.some(item=>item.date===award.date && item.name===award.name && item.issuer===award.issuer)) awards.push(award)
+    }
+    return {...previous,values:{...previous.values,...additions},awards:awards.slice(-12)}
+  },'可复用资料已保存在本机。仅用于本次的内容保留在当前草稿。')
+  if (saved) {
+    completion.value = []
+    preview.value = true
+  }
+}
+
+async function clearRemembered() {
+  if (!await saveProfile(previous=>({...previous,values:{},awards:[]}),'本机演示资料已清除。')) return
+  drafts.clear()
+  select(scenario.value,false)
+  message.value = '本机演示资料已清除。'
 }
 
 function storeAward(slot: number) {
   const award = readAward(values.value,slot)
   if (!award) return
-  const exists = archive.value.some(item=>item.date===award.date && item.name===award.name && item.issuer===award.issuer)
-  try {
-    const next = exists ? archive.value : [...archive.value,award].slice(-12)
-    localStorage.setItem(archiveKey,JSON.stringify(next))
-    archive.value = next
-    message.value = '此获奖记录已保存到本机演示档案。'
-  } catch {
-    problem.value = '此设备暂时无法保存获奖记录。'
-  }
+  void saveProfile(previous=>{
+    const exists = previous.awards.some(item=>item.date===award.date && item.name===award.name && item.issuer===award.issuer)
+    return {...previous,awards:exists?previous.awards:[...previous.awards,award].slice(-12)}
+  },'此获奖记录已保存到本机演示档案。')
 }
 
 function applyAward(award: DemoAward) {
@@ -192,7 +230,7 @@ function useAvatar() {
 }
 
 function download() {
-  if (!confirmValues.value || account.signedIn) return
+  if (!confirmValues.value || !ready.value || saving.value || account.signedIn) return
   try {
     const result = buildForm(scenario.value,{...values.value},photo.value,filename.value)
     const url = URL.createObjectURL(result.blob)
@@ -201,7 +239,9 @@ function download() {
     link.download = result.filename
     link.click()
     window.setTimeout(()=>URL.revokeObjectURL(url),15_000)
-    message.value = '演示文件已生成，未向学校提交。'
+    message.value = scenario.value.photo==='physical'
+      ? '演示文件已生成。请打印后按校方要求贴照，再办理提交。'
+      : '演示文件已生成，未向学校提交。'
   } catch (error) {
     problem.value = error instanceof Error ? error.message : '导出失败，请重试。'
   }
@@ -226,8 +266,17 @@ function displayed(value: string, sensitive?: boolean) {
     </section>
 
     <template v-else>
+      <section class="panel">
+        <label class="field">演示资料身份
+          <select :value="owner" :disabled="saving || !ready" @change="switchOwner(($event.target as HTMLSelectElement).value as DemoOwner)">
+            <option value="demo:forms">本机演示身份</option>
+            <option value="demo:empty">独立空资料测试身份</option>
+          </select>
+        </label>
+        <p>按身份分开保存。合成样例需主动加载。</p>
+      </section>
       <nav class="scenarios" aria-label="演示场景">
-        <button v-for="item in scenarios" :key="item.id" type="button" :aria-pressed="scenario.id===item.id" @click="select(item)">
+        <button v-for="item in scenarios" :key="item.id" type="button" :aria-pressed="scenario.id===item.id" :disabled="!ready || saving" @click="select(item)">
           <strong>{{ item.title }}</strong><small>{{ item.format.toUpperCase() }}</small>
         </button>
       </nav>
@@ -238,8 +287,8 @@ function displayed(value: string, sensitive?: boolean) {
         <p>人工办理：{{ scenario.manual }}</p>
         <p v-if="scenario.printNote" class="warning">{{ scenario.printNote }}</p>
         <div class="actions">
-          <button type="button" @click="fillExamples">用合成资料补齐缺项</button>
-          <button type="button" @click="clearRemembered">清除本机演示资料</button>
+          <button type="button"  :disabled="!ready || saving" @click="fillExamples">用合成资料补齐缺项</button>
+          <button type="button"  :disabled="!ready || saving" @click="clearRemembered">清除本机演示资料</button>
         </div>
       </section>
 
@@ -254,10 +303,14 @@ function displayed(value: string, sensitive?: boolean) {
 
       <section class="panel" aria-label="填写表单">
         <div class="section-head">
-          <h2>填写与复核</h2>
+          <h2>{{ showAll ? '编辑整张表单' : '补录所需资料' }}</h2>
           <p aria-live="polite">{{ count ? count+' 项待补充或修正' : '申请人字段已齐全' }}</p>
         </div>
-        <fieldset v-for="group in scenario.groups" :key="group.title">
+        <div class="actions">
+          <button type="button" @click="showAll=!showAll">{{ showAll ? '只显示补录字段' : '显示并编辑整张表单' }}</button>
+        </div>
+        <p v-if="!groups.length">本次没有资料缺项。可预览，或打开整表修改。</p>
+        <fieldset v-for="group in groups" :key="group.title" :disabled="saving || !ready">
           <legend>{{ group.title }}</legend>
           <div class="fields">
             <div v-for="field in group.fields" :key="field.id" class="field" :class="{wide:field.type==='long'}">
@@ -269,8 +322,9 @@ function displayed(value: string, sensitive?: boolean) {
               <textarea v-else-if="field.type==='long'" :id="field.id" v-model="values[field.id]" rows="4" :aria-invalid="Boolean(review.errors[field.id])" @input="changed"></textarea>
               <input v-else :id="field.id" v-model="values[field.id]" :type="field.type==='date'?'date':field.sensitive&&!reveal?'password':'text'"
                 :inputmode="field.type==='number'?'numeric':undefined" :aria-invalid="Boolean(review.errors[field.id])" autocomplete="off" @input="changed">
+              <small v-if="field.hint">{{ field.hint }}</small>
               <small v-if="review.errors[field.id]" class="warning">{{ review.errors[field.id] }}</small>
-              <button v-if="field.reusable" type="button" class="text-button" :disabled="!values[field.id] || Boolean(review.errors[field.id])" @click="remember(field.id)">保存并下次复用</button>
+              <small>{{ profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>
         </fieldset>
@@ -292,9 +346,13 @@ function displayed(value: string, sensitive?: boolean) {
           </div>
         </section>
         <p v-if="scenario.id==='leave' && days>0">请假 {{ days }} 天，含起止当日。</p>
-        <ul v-if="review.reminders.length"><li v-for="reminder in review.reminders" :key="reminder">{{ reminder }}</li></ul>
+        <ul v-if="review.reminders.length"><li v-for="reminder in review.reminders" :key="reminder">{{ reminder }} <a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方依据</a></li></ul>
 
-        <fieldset v-if="scenario.photo">
+        <p v-if="scenario.photo==='physical'" class="warning">
+          {{ scenario.photoNote || '照片需打印后粘贴。导出保留照片框。' }}
+          <a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方依据</a>
+        </p>
+        <fieldset v-if="scenario.photo==='embedded'" :disabled="saving">
           <legend>演示照片</legend>
           <div class="photo-panel">
             <img v-if="photo" :src="photo" alt="将嵌入表格的演示照片">
@@ -316,7 +374,10 @@ function displayed(value: string, sensitive?: boolean) {
         </label>
         <p class="file-name">{{ filenamePreview }}</p>
         <p v-if="filenameError" class="warning">{{ filenameError }}</p>
-        <button type="button" @click="preview=!preview; confirmValues=false">{{ preview?'收起字段预览':'预览填写内容' }}</button>
+        <div class="actions">
+          <button type="button" class="primary" :disabled="Boolean(count) || saving || !ready" @click="saveCompletion">保存补录并预览</button>
+          <button type="button" :disabled="!ready || saving" @click="preview=!preview; confirmValues=false">{{ preview?'收起字段预览':'预览填写内容' }}</button>
+        </div>
       </section>
 
       <section v-if="preview" class="panel" aria-label="导出预览">
@@ -327,9 +388,10 @@ function displayed(value: string, sensitive?: boolean) {
             <dt>{{ field.label }}</dt><dd>{{ displayed(values[field.id],field.sensitive) }}</dd>
           </template>
         </dl>
-        <img v-if="scenario.photo && photo" class="preview-photo" :src="photo" alt="导出照片预览">
-        <label class="toggle"><input v-model="confirmValues" type="checkbox" :disabled="Boolean(count || filenameError)"> 我确认这份演示文件的填写值和文件名</label>
-        <button type="button" class="primary" :disabled="!confirmValues || Boolean(count || filenameError)" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
+        <p v-if="scenario.photo==='physical'">照片框留空。打印后请按<a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方说明</a>粘贴照片。</p>
+        <img v-if="scenario.photo==='embedded' && photo" class="preview-photo" :src="photo" alt="导出照片预览">
+        <label class="toggle"><input v-model="confirmValues" type="checkbox" :disabled="Boolean(count || filenameError) || !ready || saving"> 我确认这份演示文件的填写值和文件名</label>
+        <button type="button" class="primary" :disabled="!confirmValues || Boolean(count || filenameError) || !ready || saving" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
       </section>
       <p v-if="message" role="status" class="feedback">{{ message }}</p>
       <p v-if="problem" role="alert" class="feedback warning">{{ problem }}</p>

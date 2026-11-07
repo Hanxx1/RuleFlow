@@ -47,7 +47,7 @@ function fillWorksheet(xml: string, scenario: Scenario, values: FormValues) {
 }
 
 function fillDocument(xml: string, scenario: Scenario, values: FormValues) {
-  const replacements = new Map(scenarioFields(scenario).map(field=>[
+  const replacements = new Map(scenarioFields(scenario).filter(field=>field.export!==false).map(field=>[
     field.id, formatted(values[field.id]?.trim() || '',field.type==='date'),
   ]))
   if (scenario.id === 'leave') {
@@ -57,7 +57,26 @@ function fillDocument(xml: string, scenario: Scenario, values: FormValues) {
     replacements.set('awareNo',values.parentAware==='否'?'☑':'☐')
     replacements.set('days',String(leaveDays(values)))
   }
-  if (scenario.photo) {
+  if (scenario.id==='defer') {
+    replacements.delete('courseMode')
+    replacements.delete('halfDay')
+    replacements.set('mainMode',values.courseMode==='主修'?'☑':'☐')
+    replacements.set('retakeMode',values.courseMode==='重修'?'☑':'☐')
+    replacements.set('minorMode',values.courseMode==='双学位、辅修'?'☑':'☐')
+    replacements.set('morning',values.halfDay==='上午'?'☑':'☐')
+    replacements.set('afternoon',values.halfDay==='下午'?'☑':'☐')
+  }
+  if (scenario.id==='exemption') {
+    replacements.delete('exemptionKind')
+    replacements.set('yearChange',values.exemptionKind==='年级异动'?'☑':'☐')
+    replacements.set('majorChange',values.exemptionKind==='专业异动'?'☑':'☐')
+    replacements.set('illness',values.exemptionKind==='因病'?'☑':'☐')
+    if (values.exemptionKind!=='其他') replacements.set('otherReason','')
+    if (values.studyBasis==='自学') {
+      for (const field of ['completedCourse','completedCode','completedCredits','completedTeacher','completedGrade']) replacements.set(field,'')
+    }
+  }
+  if (scenario.id==='photo') {
     replacements.delete('previousReplacement')
     replacements.set('previousYes',values.previousReplacement==='是'?'☑':'☐')
     replacements.set('previousNo',values.previousReplacement==='否'?'☑':'☐')
@@ -87,7 +106,7 @@ export function buildForm(scenario: Scenario, values: FormValues, photo: string,
     parts[worksheet] = strToU8(fillWorksheet(strFromU8(parts[worksheet]),scenario,values))
   } else {
     parts[document] = strToU8(fillDocument(strFromU8(parts[document]),scenario,values))
-    if (scenario.photo) {
+    if (scenario.photo==='embedded') {
       if (!photo.startsWith('data:image/png;base64,') || !parts[portrait]) throw Error('演示照片或模板槽位无效')
       parts[portrait] = fromDataUrl(photo)
     }

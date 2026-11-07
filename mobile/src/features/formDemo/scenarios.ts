@@ -1,3 +1,5 @@
+import {additionalExamples,additionalScenarios} from './additionalScenarios'
+
 export type Field = {
   id: string
   label: string
@@ -9,12 +11,15 @@ export type Field = {
   min?: number
   max?: number
   cell?: string
+  hint?: string
+  export?: false
 }
 export type FormValues = Record<string, string>
 export type Scenario = {
   id: string
   title: string
   school: string
+  institution?: string
   source: string
   asset: string
   format: 'xlsx' | 'docx'
@@ -22,7 +27,8 @@ export type Scenario = {
   groups: {title: string; fields: Field[]}[]
   manual: string
   printNote?: string
-  photo?: boolean
+  photo?: 'physical' | 'embedded'
+  photoNote?: string
 }
 
 const name: Field = {id:'name',label:'姓名',reusable:true,max:12}
@@ -109,7 +115,8 @@ export const scenarios: Scenario[] = [
     source:'https://osa.sustech.edu.cn/affairs/283.html',
     asset:'photo.docx',format:'docx',provenance:'校方本科生补办 DOCX 原模板 · 一寸照片槽',
     manual:'申请人手签、辅导员签字和线下交件由对应人员办理。',
-    photo:true,
+    photo:'physical',
+    photoNote:'打印后将照片轻贴在原框内，按校方要求办理补证。',
     groups:[
       {title:'学生资料',fields:[name,studentId,gender,{id:'ethnicity',label:'民族',max:12},phone,
         {id:'residentialCollege',label:'书院',max:18},identity]},
@@ -117,12 +124,14 @@ export const scenarios: Scenario[] = [
         choice('previousReplacement','以前是否补办过',['是','否']),long('reason','申请补发理由',100),date('applicationDate','申请日期')]},
     ],
   },
+  ...additionalScenarios,
 ]
 
 export const exampleIdentity: FormValues = {
   name:'林示例',studentId:'00001234',college:'数据科学学院',major:'数据科学与大数据技术',gender:'女',className:'数据科学一班',
 }
 export const exampleValues: Record<string, FormValues> = {
+  ...additionalExamples,
   scholarship:{
     ...exampleIdentity,identity:'00000020050101000X',phone:'00000000000',studentType:'本科',birthMonth:'2005年1月',ethnicity:'汉族',
     politics:'共青团员',enrollment:'2024年9月',duration:'四年',grade:'2024级',rank:'3',cohortSize:'60',evaluation:'A+',passed:'12',
@@ -189,7 +198,25 @@ export function reviewForm(scenario: Scenario, values: FormValues, hasPhoto: boo
       lastAward = month
     }
   }
-  if (scenario.photo && !hasPhoto) errors.photo = '请补充演示证件照'
+  if (scenario.photo==='embedded' && !hasPhoto) errors.photo = '请补充演示证件照'
+  if (scenario.id==='resume') {
+    const required = {
+      '休学期满':'按原表说明另交休学申请原件。',
+      '退役复学':'按原表说明另附退役证复印件。',
+      '病愈复学':'按原表说明另附病愈情况证明复印件。',
+    }
+    const reminder = required[values.resumeKind as keyof typeof required]
+    if (reminder) reminders.push(reminder)
+  }
+  if (scenario.id==='resume' && values.postalCode && !/^\d{6}$/.test(values.postalCode)) errors.postalCode = '请填写 6 位邮政编码'
+  if (scenario.id==='exemption') {
+    if (values.exemptionKind==='其他' && !values.otherReason?.trim()) errors.otherReason = '请补充其他原因'
+    if (values.studyBasis==='已修课程') {
+      for (const field of ['completedCourse','completedCode','completedCredits','completedTeacher','completedGrade']) {
+        if (!values[field]?.trim()) errors[field] = '请补充已修课程资料'
+      }
+    }
+  }
   return {errors,reminders}
 }
 

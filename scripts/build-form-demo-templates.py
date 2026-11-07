@@ -1,4 +1,4 @@
-"""Prepare the four verified public school templates for offline demonstration."""
+"""Prepare verified public school templates for offline demonstration."""
 
 import argparse
 from base64 import b64encode
@@ -9,9 +9,10 @@ import re
 from shutil import copyfile
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Mm, Pt
+from docx.shared import Pt
 from PIL import Image, ImageDraw
+
+from form_demo_maps import HASHES, prepare_additional
 
 
 OFFICIAL = {
@@ -19,6 +20,7 @@ OFFICIAL = {
     "leave": "d46c5a39ce1ca7208e4da627159253a279e6439bbaf033b82fdc3d9d682505c2",
     "proof": "430f8ba13773db00a3533010857c9f26e76e96683851b6bebdd10e3b167770b3",
     "photo": "b116c172005bae42da1b8371e6209e641bccd3317f4fa92de8676791b52367b5",
+    **HASHES,
 }
 
 
@@ -123,9 +125,6 @@ def photo_template(source, output):
     date.runs[0].text = visible_date
     for run in date.runs[1:]:
         run.text = ""
-    picture = table.rows[0].cells[4].paragraphs[0].insert_paragraph_before()
-    picture.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    picture.add_run().add_picture(str(output / "avatar.png"), width=Mm(25), height=Mm(35))
     document.save(output / "photo.docx")
 
 
@@ -149,7 +148,9 @@ def main():
     leave_template(args.leave, args.output)
     proof_template(args.proof, args.output)
     photo_template(args.photo, args.output)
-    assets = ("scholarship.xlsx", "proof.docx", "leave.docx", "photo.docx", "avatar.png")
+    for key in HASHES:
+        prepare_additional(key, getattr(args, key), args.output)
+    assets = ("scholarship.xlsx", "proof.docx", "leave.docx", "photo.docx", "avatar.png", *(key+".docx" for key in HASHES))
     data = {name: b64encode((args.output / name).read_bytes()).decode("ascii") for name in assets}
     (args.output / "templateData.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
