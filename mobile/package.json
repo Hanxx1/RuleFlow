@@ -11,11 +11,12 @@
     "preview": "vite preview --outDir web-dist"
   },
   "dependencies": {
-    "@ionic/vue": "^8.4.0",
-    "@ionic/vue-router": "^8.4.0",
     "@capacitor/core": "^6.1.2",
     "@capacitor/preferences": "^6.0.2",
+    "@ionic/vue": "^8.4.0",
+    "@ionic/vue-router": "^8.4.0",
     "axios": "^1.7.7",
+    "fflate": "0.8.2",
     "pinia": "^2.2.2",
     "vue": "^3.5.0",
     "vue-router": "^4.4.3"
