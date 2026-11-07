@@ -95,12 +95,12 @@ function fromDataUrl(url: string) {
   return Uint8Array.from(atob(url.slice(url.indexOf(',')+1)),value=>value.charCodeAt(0))
 }
 
-export function buildForm(scenario: Scenario, values: FormValues, photo: string, stem: string) {
+export function buildForm(scenario: Scenario, values: FormValues, photo: string, stem: string, demo = true) {
   if (Object.keys(reviewForm(scenario,values,Boolean(photo)).errors).length || validateFilename(stem)) {
     throw Error('请先补齐并检查表单和文件名')
   }
-  const source = (templateData as Record<string,string>)[scenario.asset]
-  if (!source) throw Error('离线模板缺失')
+  const source = (templateData as Record<string,unknown>)[scenario.asset]
+  if (typeof source !== 'string') throw Error('离线模板缺失')
   const parts = unzipSync(fromDataUrl(source))
   if (scenario.format==='xlsx') {
     parts[worksheet] = strToU8(fillWorksheet(strFromU8(parts[worksheet]),scenario,values))
@@ -114,6 +114,6 @@ export function buildForm(scenario: Scenario, values: FormValues, photo: string,
   const mime = scenario.format==='xlsx'
     ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const filename = (stem.startsWith('演示-') ? stem : '演示-'+stem)+'.'+scenario.format
+  const filename = (demo && !stem.startsWith('演示-') ? '演示-'+stem : stem)+'.'+scenario.format
   return {filename,blob:new Blob([zipSync(parts,{level:6}).slice().buffer],{type:mime})}
 }

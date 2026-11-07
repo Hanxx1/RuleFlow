@@ -88,8 +88,9 @@ async function discardDraft(){if(!window.confirm('清除本页尚未提交的输
     </section>
     <section v-if="draft.sources.length" class="surface-card source-confirm-card"><div class="section-title-row"><h2>准备保存的来源</h2><span class="section-count">{{draft.sources.length}}</span></div><ImportSourceList :sources="draft.sources" @remove="draft.remove"/><p>保存后来源进入当前账户批次，刷新页面仍可恢复。</p></section>
     <section v-if="draft.text" class="privacy-preview"><div class="privacy-preview__head"><img src="/assets/icons/features/icon_隐私设置.svg" alt=""><div><b>本地隐私预览</b><p>已实际遮盖 {{preview.count}} 项；识别类型：{{preview.types.join('、')||'暂无'}}</p></div></div><pre>{{preview.redacted}}</pre><p v-if="unsupportedDetection" class="privacy-warning">检测到当前规则尚不能自动遮盖的类型，请自行核对原文。</p></section>
+    <RouterLink v-if="!targetBatchId" class="button button--secondary button--block" to="/forms/import">在本机按通知填写附件</RouterLink>
     <label class="consent-row"><input v-model="consent" type="checkbox"><span>我已核对来源与隐私预览，同意保存到当前账户。图片、PDF和网页尚未端侧扫描，需人工核对后再发送到后端处理。</span></label>
-    <div v-if="!account.signedIn" class="mode-banner"><span class="mode-banner__dot"></span><div><b>尚未登录</b><p>真实导入只进入账户空间，演示模式不会接收新数据。</p></div><RouterLink to="/auth/login">去登录</RouterLink></div>
+    <div v-if="!account.signedIn" class="mode-banner"><span class="mode-banner__dot"></span><div><b>尚未登录</b><p>保存来源到账户需要登录。按通知填写附件可以在本机进行。</p></div><RouterLink to="/auth/login">去登录</RouterLink></div>
     <button class="button button--primary button--block" type="button" :disabled="busy||!consent||!account.signedIn||!draft.sources.length" @click="persistSources">{{busy?'正在保存来源…':targetBatchId?'保存补充来源':'保存并核对来源'}}</button>
     <button v-if="draft.sources.length||shareCount" class="button button--secondary button--block" type="button" :disabled="busy" @click="discardDraft">放弃当前导入</button>
   </div>

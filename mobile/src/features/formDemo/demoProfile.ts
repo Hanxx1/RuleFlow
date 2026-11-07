@@ -2,6 +2,7 @@ import type {DemoAward} from './demoAwards'
 import {scenarioFields,type Field,type FormValues,type Scenario} from './scenarios'
 
 export type DemoOwner = 'demo:forms' | 'demo:empty'
+export type FormProfileOwner = DemoOwner | 'local:notice'
 export type DemoProfile = {revision: number; values: FormValues; awards: DemoAward[]}
 
 const emptyProfile = (): DemoProfile => ({revision:0,values:{},awards:[]})
@@ -17,7 +18,7 @@ function database(): Promise<IDBDatabase> {
   })
 }
 
-async function transact(owner: DemoOwner, edit?: (previous: DemoProfile)=>DemoProfile) {
+async function transact(owner: FormProfileOwner, edit?: (previous: DemoProfile)=>DemoProfile) {
   const db = await database()
   try {
     return await new Promise<DemoProfile>((resolve,reject)=>{
@@ -46,9 +47,9 @@ async function transact(owner: DemoOwner, edit?: (previous: DemoProfile)=>DemoPr
   }
 }
 
-export const loadDemoProfile = (owner: DemoOwner) => transact(owner)
+export const loadDemoProfile = (owner: FormProfileOwner) => transact(owner)
 
-export function updateDemoProfile(owner: DemoOwner, revision: number, edit: (previous: DemoProfile)=>DemoProfile) {
+export function updateDemoProfile(owner: FormProfileOwner, revision: number, edit: (previous: DemoProfile)=>DemoProfile) {
   return transact(owner,previous=>{
     if (previous.revision!==revision) throw Error('资料已在其他页面更新，请重读后再保存')
     return edit(previous)

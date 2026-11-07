@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import {computed,onMounted,ref,watch} from 'vue'
 import {useAccountStore} from '../../stores/account'
+import {useImportDraftStore} from '../imports/draftStore'
+import NoticeIntake from './NoticeIntake.vue'
+import {noticeFilename,type NoticeRequirements} from './noticeIntake'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
-import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile} from './demoProfile'
+import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile,type FormProfileOwner} from './demoProfile'
 import {exampleValues,isCompetitionNotice,leaveDays,proposedFilename,reviewForm,scenarioFields,scenarios,validateFilename,type FormValues,type Scenario} from './scenarios'
 
+const props = defineProps<{fromNotice?:boolean}>()
 const account = useAccountStore()
-const owner = ref<DemoOwner>('demo:forms')
+const importDraft = useImportDraftStore()
+const owner = ref<FormProfileOwner>(props.fromNotice?'local:notice':'demo:forms')
+const intake = ref<{scenario:Scenario;requirements:NoticeRequirements;attachment:string}>()
+const intakeKey = ref(0)
+const persistAllowed = computed(()=>!props.fromNotice || !account.signedIn)
 const profile = ref<DemoProfile>({revision:0,values:{},awards:[]})
 const ready = ref(false)
 const saving = ref(false)
@@ -41,9 +49,18 @@ const groups = computed(()=>scenario.value.groups.map(group=>({
 watch(review,result=>{
   for (const id of Object.keys(result.errors)) if (!completion.value.includes(id)) completion.value.push(id)
 })
-const filename = computed(()=>nameOverride.value || proposedFilename(scenario.value,values.value))
-const filenameError = computed(()=>validateFilename(filename.value))
-const filenamePreview = computed(()=>(filename.value.startsWith('演示-')?'':'演示-')+filename.value+'.'+scenario.value.format)
+const requiredStem = computed(()=>intake.value ? noticeFilename(intake.value.requirements,values.value) : '')
+const suggestedStem = computed(()=>{
+  if (props.fromNotice) return requiredStem.value || intake.value?.attachment.replace(/\.(docx|xlsx)$/i,'') || ''
+  return proposedFilename(scenario.value,values.value)
+})
+const filename = computed(()=>nameOverride.value || suggestedStem.value)
+const filenameError = computed(()=>{
+  if (intake.value?.requirements.naming && !requiredStem.value) return '请先补齐通知规定的命名字段。'
+  if (requiredStem.value && filename.value!==requiredStem.value) return '文件名须与通知识别出的命名要求一致。'
+  return validateFilename(filename.value)
+})
+const filenamePreview = computed(()=>(props.fromNotice || filename.value.startsWith('演示-')?'':'演示-')+filename.value+'.'+scenario.value.format)
 const days = computed(()=>leaveDays(values.value))
 const competition = computed(()=>isCompetitionNotice(notice.value))
 
@@ -72,13 +89,17 @@ function select(next: Scenario, saveCurrent = true) {
   changed()
 }
 
-async function switchOwner(next: DemoOwner) {
+async function switchOwner(next: FormProfileOwner) {
   const version = ++loadVersion
   owner.value = next
   ready.value = false
   drafts.clear()
   profile.value = {revision:0,values:{},awards:[]}
   select(scenario.value,false)
+  if (!persistAllowed.value) {
+    ready.value = true
+    return
+  }
   try {
     const loaded = await loadDemoProfile(next)
     if (loadVersion!==version) return
@@ -93,6 +114,31 @@ async function switchOwner(next: DemoOwner) {
   }
 }
 onMounted(()=>void switchOwner(owner.value))
+
+function invalidateIntake() {
+  intake.value = undefined
+  preview.value = false
+  changed()
+}
+
+function acceptIntake(selection: NonNullable<typeof intake.value>) {
+  intake.value = selection
+  drafts.clear()
+  select(selection.scenario,false)
+}
+
+watch(()=>props.fromNotice,enabled=>{
+  invalidateIntake()
+  intakeKey.value++
+  void switchOwner(enabled?'local:notice':'demo:forms')
+})
+watch(()=>account.user?.id,()=>{
+  if (!props.fromNotice) return
+  invalidateIntake()
+  importDraft.reset()
+  intakeKey.value++
+  void switchOwner('local:notice')
+})
 
 function fillExamples() {
   for (const field of scenarioFields(scenario.value)) {
@@ -124,6 +170,10 @@ async function saveProfile(edit: (previous: DemoProfile)=>DemoProfile, success: 
 
 async function saveCompletion() {
   if (count.value) return
+  if (!persistAllowed.value) {
+    preview.value = true
+    return
+  }
   const data = {...values.value}
   const current = scenario.value
   const additions: FormValues = {}
@@ -148,10 +198,12 @@ async function saveCompletion() {
 }
 
 async function clearRemembered() {
-  if (!await saveProfile(previous=>({...previous,values:{},awards:[]}),'本机演示资料已清除。')) return
+  if (props.fromNotice && !window.confirm('清除此浏览器保存的可复用填表资料和当前未导出的草稿？')) return
+  const success = props.fromNotice?'此浏览器保存的填表资料已清除。':'本机演示资料已清除。'
+  if (!await saveProfile(previous=>({...previous,values:{},awards:[]}),success)) return
   drafts.clear()
   select(scenario.value,false)
-  message.value = '本机演示资料已清除。'
+  message.value = success
 }
 
 function storeAward(slot: number) {
@@ -230,18 +282,20 @@ function useAvatar() {
 }
 
 function download() {
-  if (!confirmValues.value || !ready.value || saving.value || account.signedIn) return
+  if (!confirmValues.value || !ready.value || saving.value || filenameError.value ||
+      (props.fromNotice ? !intake.value : account.signedIn)) return
   try {
-    const result = buildForm(scenario.value,{...values.value},photo.value,filename.value)
+    const result = buildForm(scenario.value,{...values.value},photo.value,filename.value,!props.fromNotice)
     const url = URL.createObjectURL(result.blob)
     const link = document.createElement('a')
     link.href = url
     link.download = result.filename
     link.click()
     window.setTimeout(()=>URL.revokeObjectURL(url),15_000)
+    const generated = props.fromNotice?'文件已生成':'演示文件已生成'
     message.value = scenario.value.photo==='physical'
-      ? '演示文件已生成。请打印后按校方要求贴照，再办理提交。'
-      : '演示文件已生成，未向学校提交。'
+      ? generated+'。请打印后按校方要求贴照，再办理提交。'
+      : generated+'，未向学校提交。'
   } catch (error) {
     problem.value = error instanceof Error ? error.message : '导出失败，请重试。'
   }
@@ -255,18 +309,25 @@ function displayed(value: string, sensitive?: boolean) {
 <template>
   <main class="form-demo">
     <header class="intro">
-      <RouterLink to="/me">← 返回我的</RouterLink>
-      <p class="eyebrow">有绪 CampusWeave · 离线演示</p>
-      <h1>智能填表</h1>
-      <p>选择真实校园事务样例，补齐字段、预览并下载可编辑文件。请使用合成资料和图片。</p>
+      <RouterLink :to="fromNotice?'/imports/new':'/me'">{{ fromNotice?'← 返回导入通知':'← 返回我的' }}</RouterLink>
+      <p class="eyebrow">有绪 CampusWeave · {{ fromNotice?'本机处理':'离线演示' }}</p>
+      <h1>{{ fromNotice?'按通知填写附件':'智能填表' }}</h1>
+      <RouterLink v-if="!fromNotice" to="/imports/new">导入自己的通知和附件</RouterLink>
+      <p>{{ fromNotice?'先核对通知要求与申请表版本，再补齐资料并导出可编辑原格式文件。':'选择真实校园事务样例，补齐字段、预览并下载可编辑文件。请使用合成资料和图片。' }}</p>
     </header>
 
-    <section v-if="account.signedIn" class="panel">
+    <section v-if="account.signedIn && !fromNotice" class="panel">
       <p>这组样本仅在离线演示身份下开放。可从「我的」返回演示模式。</p>
     </section>
 
     <template v-else>
-      <section class="panel">
+      <NoticeIntake v-if="fromNotice" :key="intakeKey" @invalidate="invalidateIntake" @accept="acceptIntake"/>
+      <details v-if="fromNotice && persistAllowed" class="panel">
+        <summary>此浏览器的本机资料</summary>
+        <p>只在选择保存补录时保存可复用字段，供此浏览器下次填写。</p>
+        <button type="button" :disabled="saving || !ready" @click="clearRemembered">清除此浏览器保存的填表资料</button>
+      </details>
+      <section v-if="!fromNotice" class="panel">
         <label class="field">演示资料身份
           <select :value="owner" :disabled="saving || !ready" @change="switchOwner(($event.target as HTMLSelectElement).value as DemoOwner)">
             <option value="demo:forms">本机演示身份</option>
@@ -275,24 +336,27 @@ function displayed(value: string, sensitive?: boolean) {
         </label>
         <p>按身份分开保存。合成样例需主动加载。</p>
       </section>
-      <nav class="scenarios" aria-label="演示场景">
+      <nav v-if="!fromNotice" class="scenarios" aria-label="演示场景">
         <button v-for="item in scenarios" :key="item.id" type="button" :aria-pressed="scenario.id===item.id" :disabled="!ready || saving" @click="select(item)">
           <strong>{{ item.title }}</strong><small>{{ item.format.toUpperCase() }}</small>
         </button>
       </nav>
 
+      <template v-if="!fromNotice || intake">
       <section class="panel" aria-label="模板来源">
         <h2>{{ scenario.title }}</h2>
         <p>{{ scenario.provenance }} · <a :href="scenario.source" target="_blank" rel="noopener noreferrer">{{ scenario.school }}</a></p>
         <p>人工办理：{{ scenario.manual }}</p>
         <p v-if="scenario.printNote" class="warning">{{ scenario.printNote }}</p>
-        <div class="actions">
+        <p v-if="intake">已选原件：{{ intake.attachment }}。从已核对的通知提取约束后填写。</p>
+        <p v-if="fromNotice && !persistAllowed">登录状态下，本次补录仅用于当前文件。</p>
+        <div v-if="!fromNotice" class="actions">
           <button type="button"  :disabled="!ready || saving" @click="fillExamples">用合成资料补齐缺项</button>
           <button type="button"  :disabled="!ready || saving" @click="clearRemembered">清除本机演示资料</button>
         </div>
       </section>
 
-      <details class="panel">
+      <details v-if="!fromNotice" class="panel">
         <summary>手上只有赛事通知？</summary>
         <label class="field">粘贴公开通知片段
           <textarea v-model="notice" rows="3" maxlength="3000" placeholder="例如：校园竞赛材料提交截止时间为……"></textarea>
@@ -324,11 +388,11 @@ function displayed(value: string, sensitive?: boolean) {
                 :inputmode="field.type==='number'?'numeric':undefined" :aria-invalid="Boolean(review.errors[field.id])" autocomplete="off" @input="changed">
               <small v-if="field.hint">{{ field.hint }}</small>
               <small v-if="review.errors[field.id]" class="warning">{{ review.errors[field.id] }}</small>
-              <small>{{ profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
+              <small>{{ persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>
         </fieldset>
-        <section v-if="scenario.id==='scholarship'" class="award-archive" aria-label="演示经历档案">
+        <section v-if="scenario.id==='scholarship' && (!fromNotice || persistAllowed)" class="award-archive" aria-label="演示经历档案">
           <h3>演示经历档案</h3>
           <p>保存已填的获奖组，下次可以填入空白奖项。填表时仍需核对年月、顺序和申报范围。</p>
           <div class="actions">
@@ -370,12 +434,12 @@ function displayed(value: string, sensitive?: boolean) {
 
         <label class="toggle"><input v-model="reveal" type="checkbox"> 显示敏感字段原值</label>
         <label class="field">文件名（不含扩展名）
-          <input :placeholder="proposedFilename(scenario,values)" :value="nameOverride" @input="nameOverride=($event.target as HTMLInputElement).value; changed()">
+          <input :placeholder="suggestedStem" :value="nameOverride" @input="nameOverride=($event.target as HTMLInputElement).value; changed()">
         </label>
         <p class="file-name">{{ filenamePreview }}</p>
         <p v-if="filenameError" class="warning">{{ filenameError }}</p>
         <div class="actions">
-          <button type="button" class="primary" :disabled="Boolean(count) || saving || !ready" @click="saveCompletion">保存补录并预览</button>
+          <button type="button" class="primary" :disabled="Boolean(count) || saving || !ready" @click="saveCompletion">{{ persistAllowed?'保存补录并预览':'确认补录并预览' }}</button>
           <button type="button" :disabled="!ready || saving" @click="preview=!preview; confirmValues=false">{{ preview?'收起字段预览':'预览填写内容' }}</button>
         </div>
       </section>
@@ -390,9 +454,10 @@ function displayed(value: string, sensitive?: boolean) {
         </dl>
         <p v-if="scenario.photo==='physical'">照片框留空。打印后请按<a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方说明</a>粘贴照片。</p>
         <img v-if="scenario.photo==='embedded' && photo" class="preview-photo" :src="photo" alt="导出照片预览">
-        <label class="toggle"><input v-model="confirmValues" type="checkbox" :disabled="Boolean(count || filenameError) || !ready || saving"> 我确认这份演示文件的填写值和文件名</label>
+        <label class="toggle"><input v-model="confirmValues" type="checkbox" :disabled="Boolean(count || filenameError) || !ready || saving"> 我确认这份文件的填写值和文件名</label>
         <button type="button" class="primary" :disabled="!confirmValues || Boolean(count || filenameError) || !ready || saving" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
       </section>
+      </template>
       <p v-if="message" role="status" class="feedback">{{ message }}</p>
       <p v-if="problem" role="alert" class="feedback warning">{{ problem }}</p>
     </template>
