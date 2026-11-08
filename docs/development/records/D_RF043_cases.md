@@ -10,10 +10,10 @@
 
 | ID | 输入 / 操作 | 目标预期及依据 | 当前证据 / 待决 |
 |---|---|---|---|
-| S01 单任务 | 仅 A，无占用，W | A 为 08:00–08:30；预览不落正式安排 | N；单选基本请求在 P 实验中使用，精确本例未跑 |
+| S01 单任务 | 仅 A，无占用，W | A 为 08:00–08:30；预览不落正式安排 | E（2026-11-08）；test_s01_single_task_preview_does_not_save，精确时间及预览不写入通过 |
 | S02 多任务依赖 | A→B，A 高低优先级互换 | 均必须 A 后 B；评分不得越过依赖/截止 | E `test_schedule_splits.py::test_priority_never_overrides_deadline_or_dependency` |
 | S03 选集外耗时不足 | A 需90分钟，仅有08:00–08:30；只选 B，A→B | B 不应生成可提交建议；原因需说明前置耗时不足 | P external_predecessor：预览200，一条08:30建议；提交409，日程1→1；RF-043缺口 |
-| S04 选集外足量/缺失 | A需90分钟，已安排08:00–09:30 / 完全无安排，只选B | 足量则B≥09:30；缺失则 blocked_by_predecessor | N；与S03成对，确认完整耗时口径 |
+| S04 选集外足量/缺失 | A需90分钟，已安排08:00–09:30 / 完全无安排，只选B | 足量则B≥09:30；缺失则 blocked_by_predecessor | E（2026-11-08）；test_s04_external_predecessor 两变体通过：90分钟足量可预览并提交，缺失则阻断；S03不足量缺口仍未修 |
 | S05 过去时间 | 只选B，窗口2000-01-01 08–12 | 拒绝或显式调整到now；禁止保存过去建议 | P past_window：预览200、提交200、日程0→1；Q08定拒绝/调整 |
 | S06 草案自然过时 | 冻结now=2099-01-01 07:59生成08:00草案，now推进到08:31再提交 | 重新校验时间并拒绝，原日程不变 | N；目前无clock注入，未来用测试替身；不能用S05冒充本例 |
 | S07 时区/纯日期截止 | timezone=UTC，截止2099-01-01，窗口17–20Z，任务30分钟 | 预览与提交采用同一截止时区 | P timezone_deadline：预览17Z建议，提交409超截止；日程0→0；Q08 |
@@ -29,8 +29,8 @@
 | S17 owner/确认/幂等 | 其他owner提交草案；本owner consent=false；同草案重复commit | 404/422，无日程；重复不重复写入 | E `test_draft_owner_consent_atomic_commit_and_idempotence` |
 | S18 状态过期 | 草案后新增占用或改变Case确认 | 409 DRAFT_STALE或相应门禁，无部分写入 | E `test_changed_occupancy_invalidates_whole_draft`、`test_changed_confirmation_invalidates_draft` |
 | S19 分段提交/依赖保护 | A90分拆三片→B；先单独保存B；新增破坏既有后置的依赖 | 拒绝绕过，合法草案四片提交；非法新增依赖回滚 | E `test_split_commit_and_independent_successor_cannot_bypass_dependencies`、`test_new_dependency_cannot_break_an_existing_successor_schedule` |
-| S20 时区输入/搜索范围 | 无offset时间、end≤start、窗口91天；无deadline窗口14天 | 无效输入422；无截止仍有界 | N；schema/parse_instant/preview_schedule代码依据 |
-| S21 多片中后片失败 | 草案两片，测试替身让第二次validate失败 | 事务回滚，第一片也不保存，草案仍pending | N；现有名称含atomic的用例不等于本例已覆盖 |
+| S20 时区输入/搜索范围 | 无offset时间、end≤start、窗口91天；无deadline窗口14天 | 无效输入422；无截止仍有界 | E（2026-11-08）；test_s20_invalid_window_rejected 五变体及 test_s20_no_deadline_defaults_to_fourteen_days 通过 |
+| S21 多片中后片失败 | 草案两片，测试替身让第二次validate失败 | 事务回滚，第一片也不保存，草案仍pending | E（2026-11-08）；test_s21_second_validation_failure_rolls_back_and_allows_retry：事务内记录数0→1，注入409后0，草案pending且committed_at为空，恢复后重试保存2条 |
 
 ## 本次运行命令与结果
 
@@ -51,3 +51,16 @@
 ## 实施边界
 
 本轮只新增样例文档和隔离观察脚本，未修改 solver、API、schema、数据库迁移或正式测试。待Q03/Q06/Q07/Q08确认后，把S03/S05/S07等目标转为定向回归，再实现RF-043；RF-044的候选枚举/评分另做，不把任务priority_score视作多方案评分。C需提供通知Task与依赖/截止的去标识样例，B需确认课表revision，A需复核解释与真机基线。所有N行尚未执行。
+
+## 2026-11-08 补充验证：S01 / S04 / S20 / S21
+
+基线 main `4f9b266`。新增 `server/tests/test_schedule_boundaries.py`，共10项参数化测试；使用已有隔离内存数据库、合成账户与临时目录，无真实账户或在线模型。仅增加测试和记录，未修改 solver、API、schema、迁移或 UI。
+
+- S01：单任务精确08:00–08:30，预览不保存。
+- S04：选集外90分钟前置完整安排后，后置09:30开始并可提交；无前置安排则 blocked_by_predecessor。
+- S20：起点/终点无offset、相等、反向、91天窗口均422且不创建草案；无截止且省略终点时窗口为14天。
+- S21：第二次真实校验后注入409，注入前确认事务内已写入第一条；失败整笔回滚，草案pending、committed_at为空；移除替身后同草案可重试成功。
+
+命令：`.runtime/review-venv/Scripts/python.exe -m pytest server/tests/test_schedule_boundaries.py server/tests/test_schedule_drafts.py server/tests/test_schedule_splits.py server/tests/test_schedule_preferences.py server/tests/test_schedule_series_locks.py server/tests/test_client_calendar.py -q -p no:cacheprovider --disable-warnings`
+
+结果：24 passed、5 warnings，退出0（新10项＋既有14项）。本地日志 `.runtime/d-rf043-boundaries/pytest.txt`。本节更新上方对应行的执行状态，原有历史运行记录保留。S03/S05/S07未修复，本次未重跑其探针；其余N行仍未执行。未运行全量后端、Web/移动端或构建APK，无本次APK产物；未提交、推送或取得团队验收。
