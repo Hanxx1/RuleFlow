@@ -24,6 +24,7 @@ async function logout(){try{await account.logout()}finally{router.push('/auth/lo
     </section>
 
     <SettingsGroup title="个人资料">
+      <SettingsRow v-if="!account.signedIn" label="智能填表演示" description="四种校园表单 · 离线填写与导出" icon="/assets/icons/features/icon_个人画像.svg" to="/demo/forms"/>
       <SettingsRow label="个人画像" :description="completenessText" icon="/assets/icons/features/icon_个人画像.svg" to="/profile"/>
       <SettingsRow label="材料库" description="上传、分类并关联事项与步骤" icon="/assets/icons/features/icon_材料库.svg" to="/vault"/>
       <SettingsRow label="知识资料库" description="导入细则并检索可追溯条款" icon="/assets/icons/features/icon_材料库.svg" to="/knowledge"/>
