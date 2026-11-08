@@ -1,9 +1,14 @@
 import {strFromU8,unzipSync} from 'fflate'
 import templateData from './templateData.json'
-import {isCompetitionNotice,scenarioFields,scenarios,type FormValues,type Scenario} from './scenarios'
+import {competitionSource,scenarioFields,scenarios,type FormValues,type Scenario} from './scenarios'
 
 export type AttachmentMatch = {name: string; scenario?: Scenario; error?: string}
-export type NoticeEvidence = {line: number; text: string; kind: 'length' | 'filename' | 'photo' | 'review'}
+type NoticeClause = {id: number; line: number; text: string}
+export type NoticeEvidence = NoticeClause & {kind: 'length' | 'filename' | 'photo' | 'review'}
+export type NoticeTarget = {id: number; name: string; title?: string}
+export type NoticeSelection = {
+  id: number; scenario: Scenario; requirements: NoticeRequirements; attachment: string; manualReviews: number
+}
 type NamingRule = {parts: string[]; joiner: string; extension?: string}
 export type NoticeRequirements = {
   evidence: NoticeEvidence[]
@@ -11,6 +16,7 @@ export type NoticeRequirements = {
   naming?: NamingRule
   physicalPhoto: boolean
   competition: boolean
+  competitionEvidence?: {line: number; text: string}
   conflict: string
 }
 
@@ -55,67 +61,95 @@ export async function readNotice(file: File) {
 function namingRule(text: string): NamingRule | undefined {
   // Naming rules for email, archives and scanned copies apply to different outputs.
   if (/邮件|主题|压缩包|扫描|PDF|签字后|所有材料|照片附件/i.test(text)) return
-  const rule = /(?:命名为|文件名(?:为|格式[:：]?))\s*[“「"]([^”」"]{1,80})[”」"]/.exec(text)?.[1]
-  if (!rule || !/(姓名|学号|学院|专业|班级)/.test(rule) || /[\/<>{}:?*]/.test(rule)) return
+  const suffix = /(?:文件(?:名|命名)(?:格式)?(?:为|是)?|命名(?:格式|为))\s*[:：]?\s*(.*)$/.exec(text)?.[1]
+  const quoted = suffix && /^[“「"]([^”」"]{1,80})[”」"]/.exec(suffix)?.[1]
+  const plain = suffix && /^[\u4e00-\u9fff\w+＋-]+(?:\.(?:docx|xlsx))?$/i.test(suffix) ? suffix : ''
+  const rule = quoted || plain
+  if (!rule || rule.length>80 || /[\/<>{}:?*]/.test(rule)) return
   const extension = /\.(docx|xlsx)$/i.exec(rule)?.[1].toLowerCase()
   const stem = extension ? rule.slice(0,-extension.length-1) : rule
-  const plus = /[+＋]/.test(stem)
-  if (stem.includes('.') || (plus && stem.includes('-'))) return
-  const joiner = plus?'':'-'
-  const parts = stem.split(plus?/[+＋]/:/-/).map(part=>part.trim())
-  if (parts.length<2 || parts.some(part=>!part)) return
+  const separators = new Set(stem.replace(/＋/g,'+').match(/[+_-]/g))
+  if (stem.includes('.') || separators.size!==1) return
+  const separator = [...separators][0]
+  const joiner = separator==='+'?'':separator
+  const parts = stem.replace(/＋/g,'+').split(separator).map(part=>part.trim())
+  if (parts.some(part=>!/^[\u4e00-\u9fffA-Za-z0-9]+$/.test(part)) ||
+      !parts.some(isNamingField) ||
+      (!quoted && !extension && parts.some(part=>!isNamingField(part)))) return
   return {parts,joiner,extension}
 }
 
-export function analyzeNotice(text: string): NoticeRequirements {
+function noticeClauses(text: string): NoticeClause[] {
+  return text.split(/\r?\n/).flatMap((line,index)=>line.split(/[。；;]/)
+    .map(part=>({line:index+1,text:part.trim()})).filter(part=>part.text))
+    .map((part,id)=>({...part,id}))
+}
+
+export function suggestedTarget(evidence: NoticeEvidence, targets: NoticeTarget[]) {
+  // A naming expression can itself contain the title of an unrelated output.
+  const context = (evidence.kind==='filename'
+    ? evidence.text.split(/文件(?:名|命名)|命名(?:格式|为)/,1)[0]
+    : evidence.text).toLowerCase()
+  const attachmentNumbers = new Set(context.replace(/\s/g,'').match(/附件[0-9一二三四五六七八九十]+/g))
+  const references = targets.filter(target=>{
+    const name = target.name.toLowerCase()
+    const title = target.title?.toLowerCase()
+    const number = /^附件\s*[0-9一二三四五六七八九十]+/.exec(name)?.[0]
+    return context.includes(name) || Boolean(title && context.includes(title)) ||
+      Boolean(number && attachmentNumbers.has(number.replace(/\s/g,'')))
+  })
+  if (references.length===1) return references[0].id
+  if (targets.length===1 && !attachmentNumbers.size && !/\.(docx|xlsx)\b/.test(context)) return targets[0].id
+  return undefined
+}
+
+export function analyzeNotice(text: string, include: (clause: NoticeClause)=>boolean = ()=>true): NoticeRequirements {
+  const competitionEvidence = competitionSource(text)
   const result: NoticeRequirements = {
-    evidence:[],lengths:{},physicalPhoto:false,competition:isCompetitionNotice(text),conflict:'',
+    evidence:[],lengths:{},physicalPhoto:false,competition:Boolean(competitionEvidence),competitionEvidence,conflict:'',
   }
-  for (const [index,line] of text.split(/\r?\n/).entries()) {
-    for (const raw of line.split(/[。；;]/)) {
-      const text = raw.trim()
-      if (!text) continue
-      const evidence = {line:index+1,text:text.slice(0,260)}
-      if (/文件名|命名/.test(text)) {
-        const naming = namingRule(text)
-        if (naming) {
-          if (result.naming && JSON.stringify(result.naming)!==JSON.stringify(naming)) result.conflict = '通知存在不同命名规则，请核对适用附件。'
-          result.naming = naming
+  for (const evidence of noticeClauses(text).filter(include)) {
+    const {text} = evidence
+    if (/文件名|命名/.test(text)) {
+      const naming = namingRule(text)
+      if (naming) {
+        if (result.naming && JSON.stringify(result.naming)!==JSON.stringify(naming)) result.conflict = '通知存在不同命名规则，请核对适用附件。'
+        result.naming = naming
+      }
+      result.evidence.push({...evidence,kind:naming?'filename':'review'})
+      continue
+    }
+    if (/照片|贴照/.test(text) && /粘贴|贴照|贴.*照片|照片.*贴/.test(text) && !/免贴|无需|不(?:用|要)粘贴/.test(text)) {
+      result.physicalPhoto = true
+      result.evidence.push({...evidence,kind:'photo'})
+      continue
+    }
+    const field = /(?:申请|请假|缓考)(?:理由|事由|原因)/.test(text)?'reason':/个人.*总结/.test(text)?'achievement':undefined
+    if (field && /字/.test(text) && !/推荐理由|教师意见|院系意见|审核/.test(text)) {
+      const range = /(\d{1,4})\s*(?:至|[-—–~～])\s*(\d{1,4})\s*字/.exec(text)
+      const min = range?.[1] ?? /(?:不少于|不低于|至少)\s*(\d{1,4})\s*字/.exec(text)?.[1]
+      const max = range?.[2] ?? /(?:不超过|不得超过|最多|不多于)\s*(\d{1,4})\s*字/.exec(text)?.[1] ?? /(\d{1,4})\s*字以内/.exec(text)?.[1]
+      if (min || max) {
+        const previous = result.lengths[field] || {}
+        const constraint = {
+          min:min ? Math.max(previous.min || 0,Number(min)) : previous.min,
+          max:max ? Math.min(previous.max ?? Infinity,Number(max)) : previous.max,
         }
-        result.evidence.push({...evidence,kind:naming?'filename':'review'})
+        if (constraint.min && constraint.max!==undefined && constraint.min>constraint.max) result.conflict = '通知的字数要求互相冲突，请核对。'
+        result.lengths[field] = constraint
+        result.evidence.push({...evidence,kind:'length'})
         continue
       }
-      if (/照片|贴照/.test(text) && /粘贴|贴照|贴.*照片|照片.*贴/.test(text) && !/免贴|无需|不(?:用|要)粘贴/.test(text)) {
-        result.physicalPhoto = true
-        result.evidence.push({...evidence,kind:'photo'})
-        continue
-      }
-      const field = /(?:申请|请假|缓考)(?:理由|事由|原因)/.test(text)?'reason':/个人.*总结/.test(text)?'achievement':undefined
-      if (field && /字/.test(text) && !/推荐理由|教师意见|院系意见|审核/.test(text)) {
-        const range = /(\d{1,4})\s*(?:至|[-—–~～])\s*(\d{1,4})\s*字/.exec(text)
-        const min = range?.[1] ?? /(?:不少于|不低于|至少)\s*(\d{1,4})\s*字/.exec(text)?.[1]
-        const max = range?.[2] ?? /(?:不超过|不得超过|最多|不多于)\s*(\d{1,4})\s*字/.exec(text)?.[1] ?? /(\d{1,4})\s*字以内/.exec(text)?.[1]
-        if (min || max) {
-          const previous = result.lengths[field] || {}
-          const constraint = {
-            min:min ? Math.max(previous.min || 0,Number(min)) : previous.min,
-            max:max ? Math.min(previous.max ?? Infinity,Number(max)) : previous.max,
-          }
-          if (constraint.min && constraint.max!==undefined && constraint.min>constraint.max) result.conflict = '通知的字数要求互相冲突，请核对。'
-          result.lengths[field] = constraint
-          result.evidence.push({...evidence,kind:'length'})
-          continue
-        }
-      }
-      if (/必须|必填|填写|格式|字体|字号|签字|手签|盖章|提交|截止|打印|照片|附件|证明|上传/.test(text)) {
-        result.evidence.push({...evidence,kind:'review'})
-      }
+    }
+    if (/必须|必填|填写|格式|字体|字号|宋体|黑体|仿宋|楷体|小四|行距|签字|手签|盖章|提交|截止|打印|照片|附件|证明|上传/.test(text)) {
+      result.evidence.push({...evidence,kind:'review'})
     }
   }
   return result
 }
 
 const namingFields: Record<string,string> = {姓名:'name',学号:'studentId',学院:'college',专业:'major',班级:'className'}
+const isNamingField = (part: string) => Object.prototype.hasOwnProperty.call(namingFields,part)
 
 export function applyNotice(scenario: Scenario, requirements: NoticeRequirements) {
   let conflict = requirements.conflict
@@ -134,7 +168,7 @@ export function applyNotice(scenario: Scenario, requirements: NoticeRequirements
   if (requirements.naming?.extension && requirements.naming.extension!==scenario.format) {
     conflict = '通知要求的文件格式与所选原表不同，请核对适用附件。'
   }
-  if (requirements.naming?.parts.some(part=>namingFields[part] && !scenarioFields(scenario).some(field=>field.id===namingFields[part]))) {
+  if (requirements.naming?.parts.some(part=>isNamingField(part) && !scenarioFields(scenario).some(field=>field.id===namingFields[part]))) {
     conflict = '通知的命名规则包含所选表格没有的字段，请核对适用附件。'
   }
   return {
@@ -145,6 +179,6 @@ export function applyNotice(scenario: Scenario, requirements: NoticeRequirements
 
 export function noticeFilename(requirements: NoticeRequirements, values: FormValues) {
   if (!requirements.naming) return ''
-  const parts = requirements.naming.parts.map(part=>namingFields[part] ? values[namingFields[part]]?.trim() : part)
+  const parts = requirements.naming.parts.map(part=>isNamingField(part) ? values[namingFields[part]]?.trim() : part)
   return parts.every(Boolean) ? parts.join(requirements.naming.joiner) : ''
 }

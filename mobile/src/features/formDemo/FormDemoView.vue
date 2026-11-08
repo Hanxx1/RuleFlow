@@ -3,7 +3,7 @@ import {computed,onMounted,ref,watch} from 'vue'
 import {useAccountStore} from '../../stores/account'
 import {useImportDraftStore} from '../imports/draftStore'
 import NoticeIntake from './NoticeIntake.vue'
-import {noticeFilename,type NoticeRequirements} from './noticeIntake'
+import {noticeFilename,type NoticeSelection} from './noticeIntake'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
 import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile,type FormProfileOwner} from './demoProfile'
@@ -13,7 +13,7 @@ const props = defineProps<{fromNotice?:boolean}>()
 const account = useAccountStore()
 const importDraft = useImportDraftStore()
 const owner = ref<FormProfileOwner>(props.fromNotice?'local:notice':'demo:forms')
-const intake = ref<{scenario:Scenario;requirements:NoticeRequirements;attachment:string}>()
+const intake = ref<NoticeSelection>()
 const intakeKey = ref(0)
 const persistAllowed = computed(()=>!props.fromNotice || !account.signedIn)
 const profile = ref<DemoProfile>({revision:0,values:{},awards:[]})
@@ -39,6 +39,7 @@ const imageVersion = ref(0)
 const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
 const drafts = new Map<string,{values:FormValues;photo:string;name:string}>()
+const attachmentProgress = ref<Record<number,'editing'|'exported'>>({})
 
 
 const review = computed(()=>reviewForm(scenario.value,values.value,Boolean(photo.value)))
@@ -66,14 +67,24 @@ const competition = computed(()=>isCompetitionNotice(notice.value))
 
 function changed() {
   confirmValues.value = false
+  if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
   message.value = ''
   problem.value = ''
 }
 
-function select(next: Scenario, saveCurrent = true) {
-  if (saveCurrent) drafts.set(scenario.value.id,{values:{...values.value},photo:photo.value,name:nameOverride.value})
+function rememberDraft(key: string) {
+  drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value})
+}
+
+function clearDrafts() {
+  drafts.clear()
+  attachmentProgress.value = {}
+}
+
+function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
+  if (saveCurrent) rememberDraft(scenario.value.id)
   scenario.value = next
-  const draft = drafts.get(next.id)
+  const draft = drafts.get(draftKey)
   values.value = draft ? {...draft.values} : resolveDemoProfile(next,profile.value)
   photo.value = draft?.photo || ''
   photoInput.value = undefined
@@ -87,13 +98,15 @@ function select(next: Scenario, saveCurrent = true) {
   showAll.value = false
   completion.value = Object.keys(review.value.errors)
   changed()
+  if (intake.value && draft) message.value = '已恢复这份附件在当前页面的填写内容，请重新确认导出。'
 }
 
 async function switchOwner(next: FormProfileOwner) {
   const version = ++loadVersion
   owner.value = next
   ready.value = false
-  drafts.clear()
+  saving.value = false
+  clearDrafts()
   profile.value = {revision:0,values:{},awards:[]}
   select(scenario.value,false)
   if (!persistAllowed.value) {
@@ -116,15 +129,15 @@ async function switchOwner(next: FormProfileOwner) {
 onMounted(()=>void switchOwner(owner.value))
 
 function invalidateIntake() {
+  if (intake.value) rememberDraft('notice:'+intake.value.id)
   intake.value = undefined
   preview.value = false
   changed()
 }
 
-function acceptIntake(selection: NonNullable<typeof intake.value>) {
+function acceptIntake(selection: NoticeSelection) {
   intake.value = selection
-  drafts.clear()
-  select(selection.scenario,false)
+  select(selection.scenario,false,'notice:'+selection.id)
 }
 
 watch(()=>props.fromNotice,enabled=>{
@@ -153,18 +166,25 @@ function fillExamples() {
 async function saveProfile(edit: (previous: DemoProfile)=>DemoProfile, success: string) {
   if (saving.value || !ready.value) return false
   const identity = owner.value
+  const version = loadVersion
   saving.value = true
   problem.value = ''
   try {
-    profile.value = await updateDemoProfile(identity,profile.value.revision,edit)
+    const saved = await updateDemoProfile(identity,profile.value.revision,edit)
+    if (version!==loadVersion) return false
+    profile.value = saved
     message.value = success
     return true
   } catch (error) {
+    if (version!==loadVersion) return false
     problem.value = error instanceof Error ? error.message : '本机资料保存失败。'
-    try { profile.value = await loadDemoProfile(identity) } catch { /* Keep the draft editable. */ }
+    try {
+      const loaded = await loadDemoProfile(identity)
+      if (version===loadVersion) profile.value = loaded
+    } catch { /* Keep the draft editable. */ }
     return false
   } finally {
-    saving.value = false
+    if (version===loadVersion) saving.value = false
   }
 }
 
@@ -201,7 +221,7 @@ async function clearRemembered() {
   if (props.fromNotice && !window.confirm('清除此浏览器保存的可复用填表资料和当前未导出的草稿？')) return
   const success = props.fromNotice?'此浏览器保存的填表资料已清除。':'本机演示资料已清除。'
   if (!await saveProfile(previous=>({...previous,values:{},awards:[]}),success)) return
-  drafts.clear()
+  clearDrafts()
   select(scenario.value,false)
   message.value = success
 }
@@ -291,6 +311,7 @@ function download() {
     link.href = url
     link.download = result.filename
     link.click()
+    if (intake.value) attachmentProgress.value[intake.value.id] = 'exported'
     window.setTimeout(()=>URL.revokeObjectURL(url),15_000)
     const generated = props.fromNotice?'文件已生成':'演示文件已生成'
     message.value = scenario.value.photo==='physical'
@@ -321,7 +342,7 @@ function displayed(value: string, sensitive?: boolean) {
     </section>
 
     <template v-else>
-      <NoticeIntake v-if="fromNotice" :key="intakeKey" @invalidate="invalidateIntake" @accept="acceptIntake"/>
+      <NoticeIntake v-if="fromNotice" :key="intakeKey" :busy="!ready || saving" :progress="attachmentProgress" @invalidate="invalidateIntake" @reset="clearDrafts" @accept="acceptIntake"/>
       <details v-if="fromNotice && persistAllowed" class="panel">
         <summary>此浏览器的本机资料</summary>
         <p>只在选择保存补录时保存可复用字段，供此浏览器下次填写。</p>
@@ -447,6 +468,7 @@ function displayed(value: string, sensitive?: boolean) {
       <section v-if="preview" class="panel" aria-label="导出预览">
         <h2>导出内容预览</h2>
         <p>此处预览填写值。实际版式以 Excel 或 Word 中打开的文件为准。</p>
+        <p v-if="intake?.manualReviews" class="warning">通知中有 {{ intake.manualReviews }} 条人工核对或办理项，请返回上方通知依据逐条查看。</p>
         <dl v-for="group in scenario.groups" :key="group.title" class="preview-values">
           <template v-for="field in group.fields" :key="field.id">
             <dt>{{ field.label }}</dt><dd>{{ displayed(values[field.id],field.sensitive) }}</dd>
