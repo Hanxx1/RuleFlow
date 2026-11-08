@@ -74,3 +74,66 @@ UNKNOWN：不能降为 FALSE。当前 PlanSchedule 的本机 relevance=FALSE 阻
 ## 6. 验证与限制
 
 14 项现有定向测试通过，3 项边界实验复现现有缺口，详见 [RF-043 样例](D_RF043_cases.md) 和 [D 工作记录](D_scheduling.md)。本契约未获 C/A/B 签认，未执行数据库迁移、完整浏览器或真机验收，不标 RF-003 整卡完成。
+
+## 7. 2026-11-08 C/D 契约对齐提案：Q01 / Q02
+
+状态：D 侧对照审阅完成，待 C 及 A/B 评审；不代表 C 已接受本节新增方案。依据 main `4f9b266` 的 [C RF-002 第3–7节](C_RF002_contract.md)、`server/app/main.py::validate_evidence_refs/create_task/patch_task/task_dtos`、`server/app/schemas.py::TaskIn/PatchTask` 及本契约。唯一签认入口仍为 [公共决策表](D_public_interface_questions.md)，本节不另建审批状态。
+
+### 7.1 已对齐方向和剩余差异
+
+| 主题 | C 已提出的意见 | D 本轮具体建议（待共同确认） |
+|---|---|---|
+| Task 身份 | 唯一 Task；通知来自确认 Review；手动任务不伪装通知 | 保留原 tasks 与 ID，新增独立创建能力；来源与 Case 归属分开表达，不能从 case_id 是否为空推断来源 |
+| 依赖范围 | 首轮不默认跨 Case | 保留同一非空 Case 内依赖；允许同 owner 的独立任务之间依赖；首轮拒绝跨 Case 及独立↔Case 混合依赖。多任务一起排程不等于允许跨范围建边 |
+| Evidence 身份 | 同一模型，独立用户依据可空 Case；不能只放松 NOT NULL | 增加可验证的作用域绑定：case 作用域或 task 作用域。独立用户依据绑定一个 task_id，不是 owner 下任意任务都能复用 |
+| 排程引用 | 至少 task_id＋受控解析路径/缺失状态；显式 refs 待定 | 新响应增量提供 evidence_ids 和 evidence_state，保留 task_id、suggestions；引用详情经受控任务证据接口解析，不能把客户端任意 URL 当解析入口 |
+| UNKNOWN | C 提供资格及缺字段信息，D不重判 | 透传 C 的字段；区分用户安排依据、官方事实和资格判断。用户确认日程不会把 UNKNOWN 改为 TRUE |
+
+### 7.2 Q01 推荐契约
+
+以下字段、URL、错误码均为提议，未实现；既有 URL 保持可用。
+
+- Task 来源建议 `origin=review_confirmed | user_input | legacy_unknown`，由服务端创建路径确定；客户端不能通过提交 origin 绕过 Review。Case 内手动任务仍是 user_input，独立任务首版只允许 user_input。旧记录无法可靠溯源时用 legacy_unknown，不补造确认历史。
+- `case_id` 可空，`owner_id` 从会话取得。`case_id=null` 不等于免检：仍须核对任务 owner、task 作用域证据、依赖、截止与占用；非空 Case 继续走当前 require_confirmed 语义，不扩大成所有手动 Case 必须存在 Review。
+- 建议新增 `POST /api/v1/tasks` 专供独立任务：title、可选 deadline/duration_minutes、consent、operation_id；不接受任意外部 evidence_ids 或 Case 绑定。服务端在同一事务创建 Task、用户输入 Evidence 和引用，初始 todo，失败全部回滚。用户明确填写的标题/截止/估时是“用户输入依据”，不能当官方通知证据；缺失的截止/估时不补造。
+- 现有 `POST /cases/{case_id}/tasks` 保持证据与 Review 门禁。现有 `PATCH /tasks/{id}` 继续只承担 status；建议独立内容编辑使用 `PATCH /tasks/{id}/content`，携带 expected_revision 和 consent，仅允许独立 user_input Task；更新时新增不可变依据版本，保留历史引用。已有安排时对截止/耗时等约束变更先返回409，后续影响预览归 Q05/Q06，不静默移动日程。
+- 建议读取 `GET /tasks/{id}` 返回同一 Task DTO；独立依赖建议 `POST /task-edges`，只接受同 owner、两端 case_id 都为空的任务和明确用户输入依据。既有 Case edges 入口继续同 Case 限制。两入口复用自依赖、环、已有后置安排保护，不能仅前端禁用。
+- 独立 Task 首轮不提供“改 case_id”操作；绑定/迁移到 Case 将涉及 Evidence 作用域、Review、依赖和日程，另行评审。跨 Case/混合依赖建议409且无写入，越权保持404。
+
+### 7.3 Q02 推荐契约
+
+**作用域规则（待审）**：沿用同一 Evidence 身份与存储模型，逻辑字段建议 scope_kind、scope_task_id；DDL是否用绑定表由迁移设计确定，不在此处指定迁移编号。
+
+| 引用者 | 可引用 Evidence | 必须拒绝 |
+|---|---|---|
+| Case 内 Task/材料/规则 | 同 owner、同 case_id 的 case 作用域 Evidence | 其他 Case、其他 owner、task作用域引用 |
+| 独立 Task | 同 owner、case_id为空、scope_task_id恰为当前Task的user_input依据 | 其他独立Task依据、任意Case依据、无有效作用域的孤立引用 |
+| 未确认候选 | RF-002 的 source_ref，包含真实来源/行/版本 | 把 source_ref ID 直接作为正式 EvidenceRef 或创建可执行Task |
+| 排程建议 | 沿当前Task获得有效引用，保留其scope与来源 | 仅凭 evidence_id 存在或 owner 相同即放行；缺引用时显示“待核对”而伪造依据 |
+
+- scope_kind=case 时 case_id 非空且 scope_task_id 为空；scope_kind=task 时 case_id 为空且 scope_task_id 非空。同 owner 校验之外还要检查这组互斥约束。独立 Task 与依据绑定在一个事务内完成；环形外键/插入顺序须在迁移方案中验证，不能仅放宽列约束。
+- 候选→Case确认沿 C 的 source_ref→每Case Evidence 映射；随后仍须行动确认才生成通知 Task。共享 Document 行可被多个 Case 各自产生 Evidence，不能跨 Case 直接复用 Evidence ID。手动创建独立 Task 不消费未确认候选来绕过这两道门禁。
+- 建议受控读取 `GET /tasks/{id}/evidence`，先验证 Task owner，再逐项验证引用作用域；不接受客户端 owner_id。响应含有效依据和缺失/待核对状态；跨 owner 请求404，内部不合法引用不泄露他人摘录。
+- 新排程响应建议增量增加 evidence_ids、evidence_state（valid/needs_review）及缺失提示；旧响应缺字段时消费者按未知处理，通过任务接口回查，不能自动解释为valid。保留旧 suggestions 和外层 data/request_id；该增量须与 Q10 的 OpenAPI/客户端兼容评审合并。
+- 独立 Task 无官方资格结论，不伪造 Case 的 relevance=TRUE。Case Task 继续消费 C 提供的 relevance、relevance_reason、missing_profile_fields、missing_case_fields；UI显示UNKNOWN及待补字段。资格与是否允许执行的业务门禁需按 C Review 判定，不能由 evidence_state=valid 推出资格通过。
+- 用户依据在内容编辑时新增版本；历史草案不得静默换成新依据。变化纳入草案失效指纹或 revision 校验。独立 Evidence 首版不开放单独删除入口；删除Task/解绑仍依 Q05 的影响预览及消费者确认，不在Q02里擅定级联策略。任何路径不得级联删除Document/Vault原件。
+
+### 7.4 兼容、实现顺序与待验用例
+
+1. C/D先确认语义和字段，再由A/B协调 RF-015 与 RF-038/039 的公共迁移顺序。C负责候选映射；D负责独立Task/依据作用域与排程消费；C的RF-040消费同一DTO，不另造Task。
+2. 旧Case/Task/Evidence ID、status、引用保持不变。已有非空Case证据可映射case作用域；不能从文本标题猜origin，无法可靠溯源标legacy_unknown。旧行缺有效引用不补假证据。旧库外键、owner组合约束、回滚和混排排序必须测。
+3. 先扩展存储约束和共享校验，再接新入口与DTO，最后接D排程/C清单；既有Case路径、Offline Demo与旧status PATCH必须回归。内容变更版本和幂等字段的DDL由同一迁移批次协调。
+4. 独立创建建议 owner+operation_id 幂等，同键同内容返回原回执，同键异内容409；重放先校验访问权限。编辑expected_revision过期409，失败不新增依据或修改正式安排。并发两请求同键应只有一组Task/Evidence；不能以顺序请求通过冒充并发验证。
+
+| 待验场景 | 预期结果（均未执行，功能尚未实现） |
+|---|---|
+| 手动独立任务创建、重试 | 一个Task及绑定的用户依据；无假Case；同键重试不重复 |
+| 第二步Evidence写入失败 | Task/依据/回执全部回滚，无孤立记录 |
+| 同owner另一独立Task证据；其他Case证据 | 引用校验拒绝，不能仅owner相同即放行 |
+| 其他owner读取Task/依据 | 404且不泄露摘录 |
+| 未确认候选直接创建通知Task | 拒绝；确认映射及Review门禁仍生效 |
+| 独立↔独立／Case内／跨Case／混合依赖 | 前两类在无环且约束满足时允许；后两类拒绝；无部分写入 |
+| 旧客户端、历史数据、UNKNOWN | 旧入口可用，ID/status不变；缺引用待核对，UNKNOWN与缺字段原样保留 |
+| 内容变更后提交旧草案 | 版本/指纹冲突拒绝；正式安排不变；不自动重排 |
+
+**请求确认的最小决策包**：Q01确认来源分类、独立入口/编辑边界、依赖范围；Q02确认task作用域绑定、排程显式引用＋受控解析、UNKNOWN消费与删除保护。具体确认成员、日期、讨论链接只写回唯一公共决策表。未收到签认前，本节只能作为实现准备，不能标RF-003完成。
