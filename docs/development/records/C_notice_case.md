@@ -142,3 +142,13 @@ $env:TMP=$env:TEMP
 - RF-001 样例口径；D Q01/Q02 的 Evidence/独立Task、Q03 skipped、Q05 删除引用；B 文件与草稿/资料边界；A/B 对交互和迁移顺序的确认。
 - 待团队评审才能定稿或进入依赖公共契约的正式功能；现在仍可完善独立走读/样例。RF-014/015/016/017、020/021、独立Task及共享附件功能均未在本轮实现。
 - 公共文件修改须先沟通；首轮成果已推送并发起PR，本次获用户授权将补测文档提交至同一远端任务分支，保持待评审状态，不合并主分支。
+
+#### 2026-11-09 C 侧交叉评审补记
+
+在 `docs/RF-002-contract-review` 分支（基线 `ce597a1`）完成 PR #3 的五项 C 侧审阅，逐项意见、给 D 的依赖样例及与 B 的来源移交提议见 [C 契约第 9 节](C_RF002_contract.md)。本轮改动限于两份 C 文档。RF-015 迁移顺序待 A/B 与 C/D 确认，公共决定由 D 回写。
+
+从仓库根运行以下命令。首次沙箱运行在 pytest 临时目录创建阶段遇到 24 个 fixture 错误，以正常本机权限重跑同一命令，**24 passed，5 warnings，5.27s**。覆盖新增 10 项与既有 14 项，警告来自 FastAPI/Starlette 测试及生命周期接口。使用隔离内存库和合成账户。本轮未运行全量回归或三个已知缺口的探针。证据为本次命令输出及 [边界测试源文件](../../../server/tests/test_schedule_boundaries.py)，原始会话归档待补充。
+
+```powershell
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_schedule_boundaries.py server/tests/test_schedule_drafts.py server/tests/test_schedule_splits.py server/tests/test_schedule_preferences.py server/tests/test_schedule_series_locks.py server/tests/test_client_calendar.py -q -p no:cacheprovider
+```
