@@ -235,6 +235,18 @@ export function validateFilename(stem: string) {
   return ''
 }
 
+export function competitionSource(text: string) {
+  const lines = text.split(/\r?\n/)
+  const title = lines.find(line=>line.trim())?.split(/[。；;：:]/,1)[0] || ''
+  if (/奖学金|助学金|评优|评奖|资助/.test(title)) return undefined
+  const event = /竞赛|比赛|赛事|联赛|挑战杯/
+  const action = /报名|参赛|报送|提交|截止/
+  const index = lines.findIndex(line=>event.test(line) && action.test(line) &&
+    !/获奖|加分|评优|奖学金/.test(line))
+  if (index<0) return undefined
+  return {line:index+1,text:lines[index].trim()}
+}
+
 export function isCompetitionNotice(text: string) {
-  return /竞赛|比赛|赛事|联赛|挑战杯/.test(text) && /截止|时间|提交|报送|材料/.test(text)
+  return Boolean(competitionSource(text))
 }

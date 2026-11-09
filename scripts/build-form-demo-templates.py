@@ -152,6 +152,7 @@ def main():
         prepare_additional(key, getattr(args, key), args.output)
     assets = ("scholarship.xlsx", "proof.docx", "leave.docx", "photo.docx", "avatar.png", *(key+".docx" for key in HASHES))
     data = {name: b64encode((args.output / name).read_bytes()).decode("ascii") for name in assets}
+    data["sourceHashes"] = OFFICIAL
     (args.output / "templateData.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
