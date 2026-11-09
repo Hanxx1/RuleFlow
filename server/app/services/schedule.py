@@ -61,6 +61,11 @@ def _deadline(value: str | None, tz) -> datetime | None:
         return None
 
 
+def task_deadline(value: str | None) -> datetime | None:
+    """Date-only tasks use Shanghai day-end; explicit offsets keep their instant."""
+    return _deadline(value, timezone_for('Asia/Shanghai'))
+
+
 def _sort_tasks(tasks: list[dict[str, Any]], edges: list[dict[str, Any]], tz):
     by_id = {item["id"]: item for item in tasks}
     indegree = {item["id"]: 0 for item in tasks}
@@ -74,7 +79,7 @@ def _sort_tasks(tasks: list[dict[str, Any]], edges: list[dict[str, Any]], tz):
             successors[before].append(after)
 
     def priority(task_id: str):
-        deadline = _deadline(by_id[task_id].get("deadline"), tz)
+        deadline = task_deadline(by_id[task_id].get("deadline"))
         return (-by_id[task_id].get('priority_score',0),deadline or datetime.max.replace(tzinfo=tz), by_id[task_id]["case_id"], task_id)
 
     ready = [priority(task_id) + (task_id,) for task_id, count in indegree.items() if count == 0]
@@ -111,6 +116,8 @@ def _first_slot(
         day_close = datetime.combine(cursor.date(), work_end, tzinfo=tz)
         if cursor < day_open:
             cursor = day_open
+        if cursor + duration > latest.astimezone(tz):
+            return None
         if cursor + duration > day_close or day_minutes.get(cursor.date(),0)+duration.total_seconds()/60 > preferences.get('daily_max_minutes',780):
             cursor = datetime.combine(cursor.date() + timedelta(days=1), work_start, tzinfo=tz)
             continue
@@ -139,6 +146,8 @@ def preview_schedule(
     timezone_name: str,
     all_task_statuses: dict[str, str],
     preferences: dict | None = None,
+    *,
+    all_task_durations: dict[str, int | None] | None = None,
 ) -> dict[str, Any]:
     if window_end <= window_start:
         raise ValueError("window_end 必须晚于 window_start")
@@ -161,7 +170,7 @@ def preview_schedule(
             child=pending.pop()
             if child in descendants:continue
             descendants.add(child);pending.extend(successors.get(child,()))
-        deadline=_deadline(task.get('deadline'),tz)
+        deadline=task_deadline(task.get('deadline'))
         urgency=1/(1+max(0,(deadline-window_start).total_seconds()/86400)/7) if deadline else 0
         dependency_pressure=len(descendants)/max(1,len(tasks)-1)
         task['priority_score']=round(.4*urgency+.3*task.get('importance',0)+.15*dependency_pressure+.15*task.get('preference',0),6)
@@ -189,6 +198,8 @@ def preview_schedule(
         if edge["after_task_id"] in predecessor_map:
             predecessor_map[edge["after_task_id"]].append(edge["before_task_id"])
 
+    all_task_durations = all_task_durations or {}
+    selected_ids = {task["id"] for task in tasks}
     proposed_ends: dict[str, datetime] = {}
     failed: set[str] = set()
     suggestions = []
@@ -210,18 +221,23 @@ def preview_schedule(
                 continue
             if predecessor in proposed_ends:
                 earliest = max(earliest, proposed_ends[predecessor])
-            elif predecessor in existing_task_ends and predecessor not in {item['id'] for item in tasks}:
+            elif (
+                predecessor not in selected_ids
+                and predecessor in existing_task_ends
+                and predecessor in all_task_durations
+                and existing_minutes[predecessor] >= (all_task_durations[predecessor] or DEFAULT_SLOT_MINUTES)
+            ):
                 earliest = max(earliest, existing_task_ends[predecessor])
             else:
                 blockers.append(predecessor)
         if blockers or any(item in failed for item in predecessor_map.get(task_id, [])):
             failed.add(task_id)
             unscheduled.append(
-                {"task_id": task_id, "title": task["title"], "reason": "blocked_by_predecessor", "detail": "前置任务尚未完成或无法安排"}
+                {"task_id": task_id, "title": task["title"], "reason": "blocked_by_predecessor", "detail": "前置任务尚未完成、已有安排时长不足或无法安排"}
             )
             continue
 
-        deadline = _deadline(task.get("deadline"), tz)
+        deadline = task_deadline(task.get("deadline"))
         if task.get("deadline") and deadline is None:
             failed.add(task_id)
             unscheduled.append(

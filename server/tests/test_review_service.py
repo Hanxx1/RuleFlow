@@ -114,3 +114,21 @@ def test_reconfirmation_keeps_user_estimate_reference(db):
     db.execute('INSERT INTO task_planning VALUES(?,?,?)',(task_id,'a','block:estimate'))
     invalidate_review(db,'a','c');confirm(db,revision=2)
     assert 'block:estimate' in json.loads(db.execute('SELECT evidence_ids_json FROM tasks').fetchone()[0])
+
+
+@pytest.mark.parametrize('end,allowed', [('2099-01-01T15:59:59Z', True),
+                                        ('2099-01-01T15:59:59.000001Z', False)])
+def test_date_only_reconfirmation_uses_shanghai_exact_cutoff(db, end, allowed):
+    from app.services.review import compiled_task_id
+    action = read_review(db, 'a', 'c')['candidate']['actions'][0]
+    task_id = compiled_task_id('a', 'c', 'action:0', action)
+    db.execute('INSERT INTO schedule_items VALUES(?,?,?)', ('a', task_id, end))
+    choices = {'action:0': {'manual_deadline': '2099-01-01'}}
+    if allowed:
+        assert confirm_review(db, 'a', 'c', 1, ['action:0'], None, None, True, choices)['status'] == 'confirmed'
+        assert db.execute('SELECT deadline FROM tasks WHERE id=?', (task_id,)).fetchone()['deadline'] == '2099-01-01'
+    else:
+        with pytest.raises(ReviewError) as error:
+            confirm_review(db, 'a', 'c', 1, ['action:0'], None, None, True, choices)
+        assert error.value.code == 'REVIEW_SCHEDULE_CONFLICT'
+        assert db.execute('SELECT COUNT(*) FROM tasks').fetchone()[0] == 0

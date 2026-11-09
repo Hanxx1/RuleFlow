@@ -15,7 +15,9 @@ def test_three_gaps_fit_split_task_and_unsplit_returns_conflict():
     assert result['suggestions']==[] and result['unscheduled'][0]['required_minutes']==90
 
 
-def test_split_commit_and_independent_successor_cannot_bypass_dependencies():
+def test_split_commit_and_independent_successor_cannot_bypass_dependencies(monkeypatch):
+    from schedule_clock import freeze_schedule_clock
+    freeze_schedule_clock(monkeypatch, '2026-10-20T07:59:00+08:00')
     a,case_id=setup_case('split-commit@example.com')
     tasks=client.get('/api/v1/cases/'+case_id+'/plan',headers=head(a)).json()['data']['ordered_tasks']
     before,after=tasks[0]['id'],tasks[1]['id']

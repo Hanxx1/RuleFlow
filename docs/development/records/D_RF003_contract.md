@@ -1,7 +1,7 @@
 # 有绪 CampusWeave｜RF-003 Task 与排程契约草案
 
 日期：2026-11-05；负责人：D；依据：源码 `ac9e07c`、首批任务表、开发指导第 4 节。
-状态：D 侧走读与提案已整理，待 C 共拟、A/B 评审。本文不是已批准接口，不实施迁移。公共未决项统一见 [确认清单](D_public_interface_questions.md)。
+状态（2026-11-09更新）：D侧提案已整理；C已在RF-002第9节接受Q01/Q02核心语义，A/B协调确认及B消费核对仍待补齐；课程增量尚待共同评审。本文不是已批准接口，不实施迁移。公共未决项统一见 [确认清单](D_public_interface_questions.md)。
 
 ## 1. Task → 草案 → 正式日程走读
 
@@ -71,13 +71,13 @@ UNKNOWN：不能降为 FALSE。当前 PlanSchedule 的本机 relevance=FALSE 阻
 - 顺序：RF-001 样例与 RF-002/003 共识 → 038/039（与 C 的 015 协调迁移）；003 → 041/043；043 → 044 → 045 → 046/047；007 选型 + 041 状态 → 048。042 需真实课表样本及 012。
 - 下一轮最小修复候选为 RF-043 的前置耗时、过去时间和时区一致性；不顺带开发多方案评分、草案编辑或 Android 插件。
 
-## 6. 验证与限制
+## 6. 初版验证与限制（历史，当前状态见唯一决策表）
 
 14 项现有定向测试通过，3 项边界实验复现现有缺口，详见 [RF-043 样例](D_RF043_cases.md) 和 [D 工作记录](D_scheduling.md)。本契约未获 C/A/B 签认，未执行数据库迁移、完整浏览器或真机验收，不标 RF-003 整卡完成。
 
 ## 7. 2026-11-08 C/D 契约对齐提案：Q01 / Q02
 
-状态：D 侧对照审阅完成，待 C 及 A/B 评审；不代表 C 已接受本节新增方案。依据 main `4f9b266` 的 [C RF-002 第3–7节](C_RF002_contract.md)、`server/app/main.py::validate_evidence_refs/create_task/patch_task/task_dtos`、`server/app/schemas.py::TaskIn/PatchTask` 及本契约。唯一签认入口仍为 [公共决策表](D_public_interface_questions.md)，本节不另建审批状态。
+状态（2026-11-09更新）：C已在RF-002第9节接受本节Q01/Q02核心语义，待A/B协调确认及B消费核对；详细状态只见唯一决策表。依据 main `4f9b266` 的 [C RF-002 第3–7节](C_RF002_contract.md)、`server/app/main.py::validate_evidence_refs/create_task/patch_task/task_dtos`、`server/app/schemas.py::TaskIn/PatchTask` 及本契约。唯一签认入口仍为 [公共决策表](D_public_interface_questions.md)，本节不另建审批状态。
 
 ### 7.1 已对齐方向和剩余差异
 
@@ -137,3 +137,10 @@ UNKNOWN：不能降为 FALSE。当前 PlanSchedule 的本机 relevance=FALSE 阻
 | 内容变更后提交旧草案 | 版本/指纹冲突拒绝；正式安排不变；不自动重排 |
 
 **请求确认的最小决策包**：Q01确认来源分类、独立入口/编辑边界、依赖范围；Q02确认task作用域绑定、排程显式引用＋受控解析、UNKNOWN消费与删除保护。具体确认成员、日期、讨论链接只写回唯一公共决策表。未收到签认前，本节只能作为实现准备，不能标RF-003完成。
+
+
+## 8. 2026-11-09 评审状态与 CM-001 接续
+
+C最新`f34e70e`第9节接受第7节Q01/Q02的核心语义，包括独立依赖边界、task作用域Evidence、显式排程引用与UNKNOWN透传。第7.1节“显式refs待定”是早期C意见，已被最新接受意见替代；具体公共接口和迁移仍未获团队定稿。签认状态、余留输入及阻塞只维护在 [唯一公共决策表](D_public_interface_questions.md)。
+
+CM-001的D部分也在同表维护：课程/学期与Task关联、规则/发生时段的唯一占用、截止变更影响、备份删除检查及混合输入执行结果，含6组未执行的合成样例。不新增第二套Task、Evidence或课程协议，不将C对Q01/Q02接受扩大成课程增量接受。本轮未实施接口或迁移。

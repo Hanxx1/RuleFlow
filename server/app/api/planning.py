@@ -71,8 +71,8 @@ def validate_schedule_write(c,owner_id,case_id,task_id,starts_at,ends_at,exclude
   task=c.execute('SELECT * FROM tasks WHERE id=? AND owner_id=? AND case_id=?',(task_id,owner_id,case_id)).fetchone()
   if not task:raise HTTPException(404,'任务不存在')
   if task['deadline']:
-   from ..services.schedule import _deadline
-   deadline=_deadline(task['deadline'],timezone_for('Asia/Shanghai'))
+   from ..services.schedule import task_deadline
+   deadline=task_deadline(task['deadline'])
    if not deadline or parse_instant(ends_at)>deadline:raise HTTPException(409,'安排超出任务截止时间')
   for edge in c.execute('SELECT before_task_id FROM task_edges WHERE owner_id=? AND after_task_id=?',(owner_id,task_id)):
    predecessor=c.execute('SELECT status,duration_minutes FROM tasks WHERE id=? AND owner_id=?',(edge['before_task_id'],owner_id)).fetchone()
@@ -188,6 +188,7 @@ def schedule_preview(body:SchedulePreviewIn,user=Depends(current_user)):
   window_start=parse_instant(body.window_start) if body.window_start else now
   window_end=parse_instant(body.window_end) if body.window_end else window_start+timedelta(days=14)
  except ValueError as exc:raise HTTPException(422,str(exc))
+ if window_start<now:raise HTTPException(422,'排程窗口起点不能早于服务器当前时间，请重新选择时间')
  if body.case_id:
   owned('cases',body.case_id,user['id'])
   check_review(user['id'],body.case_id)
@@ -208,14 +209,16 @@ def schedule_preview(body:SchedulePreviewIn,user=Depends(current_user)):
    if task['id'] in planning:task.update({key:value for key,value in planning[task['id']].items() if key in {'splittable','min_chunk_minutes','max_chunk_minutes','importance','preference'}})
   edges=[dict(row) for row in c.execute('SELECT before_task_id,after_task_id FROM task_edges WHERE owner_id=?',(user['id'],)).fetchall() if row['after_task_id'] in selected_ids]
   existing=[dict(row) for row in c.execute('SELECT * FROM schedule_items WHERE owner_id=? ORDER BY starts_at,id',(user['id'],)).fetchall()]
-  statuses={row['id']:row['status'] for row in c.execute('SELECT id,status FROM tasks WHERE owner_id=?',(user['id'],)).fetchall()}
+  task_metadata=c.execute('SELECT id,status,duration_minutes FROM tasks WHERE owner_id=?',(user['id'],)).fetchall()
+  statuses={row['id']:row['status'] for row in task_metadata}
+  durations={row['id']:row['duration_minutes'] for row in task_metadata}
  if body.calendar_blocks:
   if not body.calendar_consent or body.calendar_revision is None:raise HTTPException(422,'本机课表占用时段须明确确认发送并附资料版本')
   for block in body.calendar_blocks:
    starts_at,ends_at=normalize_schedule_range(block.starts_at,block.ends_at)
    if any(not re.fullmatch(r'block:client:[A-Za-z0-9-]+',ref) for ref in block.evidence_ids):raise HTTPException(422,'课表缺少有效本机证据')
    existing.append({'id':block.id,'title':'本机课表占用','kind':'course','starts_at':starts_at,'ends_at':ends_at})
- try:result=preview_schedule(tasks,edges,existing,window_start,window_end,body.timezone,statuses,body.preferences.model_dump())
+ try:result=preview_schedule(tasks,edges,existing,window_start,window_end,body.timezone,statuses,body.preferences.model_dump(),all_task_durations=durations)
  except ValueError as exc:raise HTTPException(422,str(exc))
  if body.calendar_revision is not None:result.update(calendar_revision=body.calendar_revision,calendar_blocks=[b.model_dump() for b in body.calendar_blocks])
  return data(result)

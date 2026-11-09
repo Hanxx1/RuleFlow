@@ -4,6 +4,8 @@ import json
 import uuid
 from datetime import datetime, timezone
 
+from .schedule import parse_instant
+
 
 class DraftError(ValueError):
     def __init__(self, code, message, status=409):
@@ -37,14 +39,16 @@ def commit_draft(c, owner_id, draft_id, consent, validate, calendar_revision=Non
         raise DraftError('CALENDAR_STALE','本机课表已变化或版本缺失，请重新预览')
     for item in result['suggestions']:
         for block in result.get('calendar_blocks',[]):
-            from .schedule import parse_instant
             if parse_instant(item['starts_at'])<parse_instant(block['ends_at']) and parse_instant(block['starts_at'])<parse_instant(item['ends_at']):
                 raise DraftError('CALENDAR_CONFLICT','排程草稿与确认课表冲突')
     if row['state'] == 'committed':
         return {'draft_id': draft_id, 'state': 'committed', 'idempotent': True}
     if snapshot(c, owner_id) != row['state_hash']:
         raise DraftError('DRAFT_STALE', '任务、核对状态或日程已变化，请重新预览')
-    now = datetime.now(timezone.utc).isoformat()
+    now_instant = datetime.now(timezone.utc)
+    if any(parse_instant(item['starts_at']) < now_instant for item in result['suggestions']):
+        raise DraftError('DRAFT_EXPIRED', '草案中的安排已过时，请重新预览')
+    now = now_instant.isoformat()
     for item in result['suggestions']:
         validate(c, owner_id, item['case_id'], item['task_id'], item['starts_at'], item['ends_at'], allow_split=item.get('splittable',False))
         c.execute('INSERT INTO schedule_items(id,owner_id,case_id,task_id,title,kind,starts_at,ends_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',

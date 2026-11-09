@@ -1,3 +1,12 @@
+import pytest
+from schedule_clock import freeze_schedule_clock
+
+
+@pytest.fixture(autouse=True)
+def historical_schedule_clock(monkeypatch):
+    freeze_schedule_clock(monkeypatch, '2026-10-20T07:59:00+08:00')
+
+
 from helpers import client, account, head
 
 
