@@ -53,6 +53,61 @@ $env:TMP=$env:TEMP
 - H04–H08 未执行，真实同通知多份原表及真机仍待样本/设备。未宣称 HTML 登录页识别、自动重试、移交 UI 或正式草稿已经完成。
 - RF-002/003 最终签认与 RF-015/038/039 迁移顺序仍待团队决定；D 排程缺口不在本轮修复。
 
+#### 2026-11-10 续记：H07 现有失败链验证与修复准备
+
+**1. 任务信息**
+
+- RF-013 原任务续记，负责人 C；用户明确暂停 CM 开发，优先 RF 近期工作。用户反馈 B 与 A/B 尚未确认 form-context，选择“先做现有链路验证与修复准备”；不将该指令理解为新共享接口或公共文件修复已获团队确认。
+- 最新 fetch 后 origin/main 为 `d1d8647`；独立分支 `docs/RF-013-recovery-validation`，未带入 CM-001 分支改动。状态：H07 合成失败链诊断与修复方案准备完成，已发现开放缺口；RF-013 整卡未完成。用户已授权提交并推送本条记录和诊断脚本，实际提交与远端状态以 Git 记录为准；本轮不创建 PR。
+
+**2. 技术实现**
+
+- 新增 [probe_rf013_recovery.py](evidence/C_20261110/probe_rf013_recovery.py)，从自身路径定位仓库，复用真实 FastAPI 路由、内存 SQLite、临时原件、合成账户及 TestClient。仅外部获取与一次解析错误使用受控替身；无真实网络/OCR/模型。
+- 探针记录8项边界观察：附件发现、拒绝前不抓取、403保留父来源、手工替换、登录HTML、错误HTML、解析失败原件保护及正式关联。遇到开放目标缺口返回退出2；退出1表示探针异常，不把发现缺陷包装成测试全通过。
+- 未改生产业务、API/Schema、数据库、原前端、Provider、Android 或其他成员记录；没有实现 form-context，没有继续 CM 功能。当前本机试用服务的数据未用于实验。
+
+**3. 设计与关键决策**
+
+| 定位 | 实测事实 | 待评审的最小修复建议/影响 |
+|---|---|---|
+| `main.py::import_attachment_candidate` 调用普通 `add_import_url_source` | 候选路径为 form.pdf，但返回 text/html 时按普通网页解析并存为 ready；登录页/错误页两例均增加可分析来源 | 在已确认获取的附件路径上检查返回类型，遇 HTML 不作为成功文件；保留原 URL、父来源、安全错误码，提示手动下载上传。普通通知网页导入仍允许 HTML，不全局禁用网页解析；不按“登录”关键词猜授权，也不绕过登录。具体错误码和“HTML包装下载页”展示语义待 B/A/B 确认 |
+| `main.py::add_import_file_sources` 的异常顺序 | Document 已保存、parser失败后，在插入 source_documents 之前抛错；失败源 metadata 有 document_id，但正式关联为0条 | 对已经校验并落盘的 Document，在失败来源保存后也建立同 owner、当前 source 的正式关联；格式/签名校验失败且无 Document 时不伪造关联。需审查事务失败和引用删除影响；不修改 Document 原件保护、解析状态或既有成功路径 |
+| form-context 的后续消费 | 不能只信任 metadata 的 document_id，也不能假定所有失败源无原件 | 新接口仍待确认。读取时区分“解析失败但原件在”“未取得文件”“原件缺失”；不能通过放松 owner/批次/正式关系校验掩盖上述缺口。历史孤立关系的检测/补齐另提方案，不先批量修库 |
+
+两类修复均需触及公共高冲突文件 `server/app/main.py`，应先给 B/A/B 核对附件结果消费与来源/原件关系，再在明确范围内修复；不擅自认定团队已确认。无须为本轮诊断新增依赖或迁移；正式修复是否需要其他结构调整仍按评审结论，不预占迁移编号。
+
+拟修复验收：登录/错误HTML不得成为成功附件，普通HTML通知仍能导入，合法TXT/已适配文件附件不回归；未授权/越权/跨批次/非法候选在抓取前拒绝；403和解析失败有准确状态，成功父来源不丢失；解析失败原件仍可由owner下载、正式关系存在，其他owner拒绝；校验失败没有伪造Document；中途关联写入失败不留下假成功。将这些目标落实为生产修复的回归断言后，探针对应OPEN_GAP才可关闭。
+
+**4. 遇到的问题及解决**
+
+- 复现两类产品缺口、共3个OPEN_GAP观察：登录HTML/错误HTML被标ready，以及解析失败原件没有正式来源关联。当前未修复，不调整断言或放松校验来获得绿灯。
+- 探针使用外部响应替身，403由受控HTTPException模拟；它验证导入层的错误处理，不证明真实网站跳转/权限/网络获取已验收。解析失败由有效TXT通过文件校验后注入，未运行OCR或真实Office解析失败样本。
+
+**5. 测试与验证**
+
+环境为既有 `.runtime/c-venv`、Windows；正常本机权限运行以避免历史沙箱临时目录创建/清理限制。所有数据库/原件均在探针或pytest的独立临时空间。
+
+```powershell
+.runtime/c-venv/Scripts/python.exe -X utf8 docs/development/records/evidence/C_20261110/probe_rf013_recovery.py
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_notice_handoff_baseline.py server/tests/test_document_api.py server/tests/test_link_candidates.py server/tests/test_analysis_retry.py -q -p no:cacheprovider --tb=short
+```
+
+- 探针退出 **2**：5项目标边界符合、3项开放缺口；这是缺陷复现，不是验收通过。未授权422、另一owner404、跨批次404、非法候选422，额外抓取0次，原批次revision和来源数不变。403子来源failed/url_http_error，父原件可读，手工移除失败源再上传成功后保留父来源、case_id仍为空。
+- 登录HTML和错误HTML：均 source_status=ready、stored_mime=text/html、Document存在、analyzable_count=2，不满足“不是已取得的有效附件”的目标。不能据此推断所有HTML都是登录页；合成输入类型事先已知。
+- 解析失败：source failed、DOCUMENT_PARSE_FAILED，原件字节一致，跨owner404，原始异常未泄露；metadata含Document ID，但对应source_documents_count=0。
+- 定向pytest：**12 passed，5 warnings，2.37s，退出0**，覆盖既有来源/Document/附件/重试保护；5条为已有FastAPI/Starlette/AnyIO弃用警告。它们未覆盖新发现的3个缺口，不能替代修复验收。
+- `python scripts/check-docs.py`：203个本地目标存在；`python scripts/check-paths.py`：活跃源码路径检查通过；`node scripts/check-demo.mjs`：8份样例副本一致；`git diff --check`通过，均退出0。新增探针已实跑并人工阅读，不以仅检查已跟踪diff替代新增文件审查。未运行全量后端、前端/浏览器、新共享接口、并发、旧库迁移、真实网络/模型或Android验证。
+
+**6. 运行证据**
+
+- 可复现脚本随本分支保留；本地 `.runtime/c-rf013-recovery/probe.json` 为实际8项观察，`.runtime/c-rf013-recovery/regression.txt` 为定向pytest输出，均位于忽略目录，不保证其他机器存在。
+- 真实执行命令和输出在本次Codex会话；未生成截图/APK/产品回执。提交/PR和团队确认链接待补充，请C保留原始会话分享或导出。
+
+**7. 未完成与限制**
+
+- 两类缺口尚未修复；下一步先确认上述公共文件修复范围和错误语义，再进入最小修复及失败→通过回归。尚未获得B/A/B对来源移交提案的确认，H04/H05新接口、H06填表消费、H08真机仍未执行。
+- H07只完成合成边界验证与修复准备；真实附件网站、格式覆盖、页面恢复交互、生产数据兼容和正式移交仍需后续验证。不将本次12项回归或5项探针符合写成RF-013整卡完成。
+
 仅记录真实工作。首轮成果已于 2026-11-05 提交并推送（`786815c`），对应 [PR #2](https://github.com/Hanxx1/RuleFlow/pull/2)，2026-11-06 核对仍为 open、未合并。本次补测记录随同一分支提交，具体版本见 Git 历史。重要原始 Codex 会话分享链接或导出归档待 C 保存，本记录不能替代原始会话证据。
 
 ## RF-001｜C 模块走读子项
