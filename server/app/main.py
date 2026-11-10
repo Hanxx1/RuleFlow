@@ -1227,7 +1227,8 @@ def import_text(body:TextImport,user=Depends(current_user)):
 @app.get('/api/v1/imports/{import_id}/progress')
 def progress(import_id:str,user=Depends(current_user)):
  owned('imports',import_id,user['id'])
- with conn() as c:r=c.execute('SELECT * FROM analysis_jobs WHERE import_id=? AND owner_id=? ORDER BY created_at DESC LIMIT 1',(import_id,user['id'])).fetchone()
+ # Equal clock timestamps must still select the most recently inserted attempt.
+ with conn() as c:r=c.execute('SELECT * FROM analysis_jobs WHERE import_id=? AND owner_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',(import_id,user['id'])).fetchone()
  return data(dict(r) if r else {'state':'needs_confirmation','stage':'privacy_confirmation'})
 @app.post('/api/v1/imports/{import_id}/cancel')
 def cancel(import_id:str,user=Depends(current_user)):
