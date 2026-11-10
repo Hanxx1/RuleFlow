@@ -1,0 +1,63 @@
+{
+  "purpose": "CM-001 C-side synthetic review inputs; not a production DTO or execution receipt",
+  "proposal_version": "c-course-input-20261110-v1",
+  "synthetic": true,
+  "contract_status": "pending_team_review",
+  "semesters": [
+    {"id": "term-autumn", "owner": "sample-owner-a", "title": "2026秋", "starts_on": "2026-09-07", "ends_on": "2027-01-10"},
+    {"id": "term-spring", "owner": "sample-owner-a", "title": "2027春", "starts_on": "2027-02-22", "ends_on": "2027-07-04"}
+  ],
+  "courses": [
+    {"id": "course-linear-autumn", "owner": "sample-owner-a", "semester_id": "term-autumn", "title": "线性代数", "revision": 3},
+    {"id": "course-linear-spring", "owner": "sample-owner-a", "semester_id": "term-spring", "title": "线性代数", "revision": 1},
+    {"id": "course-programming", "owner": "sample-owner-a", "semester_id": "term-autumn", "title": "程序设计", "revision": 2}
+  ],
+  "time_rule_inputs": [
+    {"id": "rule-linear-mon", "course_id": "course-linear-autumn", "revision": 1, "weekday": 1, "starts_at_local": "09:00", "ends_at_local": "10:00", "timezone": "Asia/Shanghai"},
+    {"id": "rule-linear-wed", "course_id": "course-linear-autumn", "revision": 1, "weekday": 3, "starts_at_local": "14:00", "ends_at_local": "15:30", "timezone": "Asia/Shanghai"}
+  ],
+  "sources": [
+    {
+      "id": "source-mixed", "owner": "sample-owner-a", "revision": 1, "kind": "synthetic_document_lines",
+      "lines": [
+        {"id": "line-linear", "number": 1, "text": "2026秋线性代数：第3次作业于2026年11月20日17:00前提交。"},
+        {"id": "line-programming", "number": 2, "text": "2026秋程序设计：实验报告于2026年11月21日提交，考核以最终通知为准。"},
+        {"id": "line-case", "number": 3, "text": "校园摄影活动：2026年11月22日18:00前报名。"},
+        {"id": "line-knowledge", "number": 4, "text": "附件《学习方法》供线性代数与程序设计两门课参考。"},
+        {"id": "line-none", "number": 5, "text": "2026秋线性代数：本次明确不要求分组。"}
+      ]
+    },
+    {
+      "id": "source-user", "owner": "sample-owner-a", "revision": 1, "kind": "synthetic_user_statement",
+      "lines": [{"id": "line-user", "number": 1, "text": "用户合成声明：线性代数考试形式已向老师核对为闭卷。"}]
+    },
+    {
+      "id": "source-conflict", "owner": "sample-owner-a", "revision": 1, "kind": "synthetic_document_lines",
+      "lines": [{"id": "line-conflict", "number": 1, "text": "2026秋线性代数：考试形式改为开卷，请以本条通知为准。"}]
+    }
+  ],
+  "requirement_inputs": [
+    {"id": "req-attendance", "course_id": "course-linear-autumn", "key": "考勤", "state": "unrecorded", "value": null, "source_refs": []},
+    {"id": "req-programming-assessment", "course_id": "course-programming", "key": "考核", "state": "needs_review", "value": "以最终通知为准", "source_refs": [{"source_id": "source-mixed", "line_id": "line-programming", "quote": "考核以最终通知为准"}]},
+    {"id": "req-group", "course_id": "course-linear-autumn", "key": "分组", "state": "explicit_none", "value": null, "source_refs": [{"source_id": "source-mixed", "line_id": "line-none", "quote": "本次明确不要求分组"}]},
+    {"id": "req-exam", "course_id": "course-linear-autumn", "key": "考试形式", "state": "confirmed", "value": "闭卷", "confirmed_by": "sample-owner-a", "revision": 2, "source_refs": [{"source_id": "source-user", "line_id": "line-user", "quote": "考试形式已向老师核对为闭卷"}]}
+  ],
+  "shared_document": {"id": "document-study-method", "owner": "sample-owner-a", "revision": 1, "course_ids": ["course-linear-autumn", "course-programming"], "availability": "synthetic_reference_only"},
+  "suggestions": [
+    {"id": "suggest-linear-task", "target_kind": "task", "course_ids": ["course-linear-autumn"], "action": "propose_create", "source_refs": [{"source_id": "source-mixed", "line_id": "line-linear", "quote": "第3次作业于2026年11月20日17:00前提交"}]},
+    {"id": "suggest-programming-task", "target_kind": "task", "course_ids": ["course-programming"], "action": "propose_create", "source_refs": [{"source_id": "source-mixed", "line_id": "line-programming", "quote": "实验报告于2026年11月21日提交"}]},
+    {"id": "suggest-campus-case", "target_kind": "case", "course_ids": [], "action": "propose_create", "source_refs": [{"source_id": "source-mixed", "line_id": "line-case", "quote": "校园摄影活动"}]},
+    {"id": "suggest-knowledge-link", "target_kind": "knowledge_link", "course_ids": ["course-linear-autumn", "course-programming"], "action": "propose_link", "source_refs": [{"source_id": "source-mixed", "line_id": "line-knowledge", "quote": "供线性代数与程序设计两门课参考"}]},
+    {"id": "suggest-exam-conflict", "target_kind": "requirement", "course_ids": ["course-linear-autumn"], "action": "propose_update", "source_refs": [{"source_id": "source-conflict", "line_id": "line-conflict", "quote": "考试形式改为开卷"}]}
+  ],
+  "review_scenarios": [
+    {"id": "C-CM-01", "decision_refs": ["Q01", "Q08-d"], "input_refs": ["course-linear-autumn", "course-linear-spring"], "action": "compare_identity", "expected": "同名跨学期保持不同身份；标题相同不合并，旧Course迁移也不按名称自动合并。"},
+    {"id": "C-CM-02", "decision_refs": ["Q04", "Q08-d"], "input_refs": ["course-linear-autumn", "rule-linear-mon", "rule-linear-wed"], "action": "review_two_rules_and_duplicate_occurrence", "expected": "课程下保留两条规则；同一次发生的本机/服务端副本须凭已确认映射仅计一次，无映射时待核对，不按标题和时间猜测。"},
+    {"id": "C-CM-03", "decision_refs": ["Q01", "Q02", "Q10"], "input_refs": ["source-mixed", "suggest-linear-task", "suggest-programming-task", "suggest-campus-case", "suggest-knowledge-link"], "action": "select_two_ignore_others_then_cancel", "expected": "允许分别修正两课程与普通事务归属；未确认和取消均不写正式数据，source_ref不能直接充当Evidence或放行Review。"},
+    {"id": "C-CM-04", "decision_refs": ["Q02", "Q10"], "input_refs": ["req-exam", "suggest-exam-conflict"], "action": "review_conflicting_requirement", "expected": "并排显示闭卷旧值及开卷建议与各自来源；不覆盖已确认值，用户采纳后保留历史。没有读取到要求仍是未记录，不变成无要求。"},
+    {"id": "C-CM-05", "decision_refs": ["Q05", "Q10"], "input_refs": ["document-study-method", "course-linear-autumn", "course-programming"], "action": "preview_course_deletion_then_cancel", "expected": "展示资料关联及Task/时间/提醒影响；取消零写入，删一课不默认删共享Document、另一课关联或已有Task。"},
+    {"id": "C-CM-06", "decision_refs": ["Q05", "Q08-d", "Q10"], "input_refs": ["course-linear-autumn", "document-study-method"], "action": "preview_old_backup_offline_and_cross_owner", "expected": "旧revision先报冲突；离线服务端引用待核对，引用备份不含原文件；跨owner不直接复用引用，禁止自动覆盖当前课程。"},
+    {"id": "C-CM-07", "decision_refs": ["Q01", "Q02", "Q10"], "input_refs": ["suggest-linear-task", "suggest-programming-task", "suggest-campus-case"], "action": "partial_execution_and_transport_retry", "expected": "独立项允许分别返回结果，失败项重试不重复成功项；依赖失败项保持等待。单项内部仍原子，S21排程失败整份回滚。"},
+    {"id": "C-CM-08", "decision_refs": ["Q01", "Q02", "Q10"], "input_refs": ["suggest-linear-task", "source-mixed"], "action": "reject_foreign_owner_stale_or_invalid_source", "expected": "跨owner、过期版本、行不属于来源或引用失效均不写正式数据，不回显其他owner内容；同操作键异内容冲突。"}
+  ]
+}
