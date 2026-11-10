@@ -20,7 +20,7 @@ const references=computed(()=>detail.value?.evidence_ids.map(id=>fixtureEvidence
   <div class="demo-controls"><div class="view-switch" role="group" aria-label="时间网格视图"><button type="button" :aria-pressed="mode==='day'" @click="mode='day'">日视图</button><button type="button" :aria-pressed="mode==='week'" @click="mode='week'">周视图</button></div><button type="button" @click="selected=anchorDay">回到样例周</button></div>
   <div class="date-nav"><button type="button" :aria-label="mode==='day'?'前一天':'前一周'" @click="navigate(-1)">‹</button><h2 aria-live="polite">{{days[0]}}{{mode==='week'?' — '+days[6]:''}}</h2><button type="button" :aria-label="mode==='day'?'后一天':'后一周'" @click="navigate(1)">›</button></div>
   <label class="date-picker">查看日期 <input type="date" :value="selected" @change="($event.target as HTMLInputElement).value && (selected=($event.target as HTMLInputElement).value)"></label>
-  <p class="demo-legend">课程 · 任务 · 忙碌 <span>重叠时段分列显示；周视图可左右滑动</span></p>
+  <p class="demo-legend">课程 · 任务 · 忙碌 <span>七天同屏，上下滑动查看时间；点击重叠卡片展开全部安排</span></p>
   <ScheduleTimeGrid :items="items" :days="days" :evidence="fixtureEvidence" @select="show" @day="changeDay"/>
   <label class="exception-toggle"><input v-model="exceptional" type="checkbox">查看异常样例（非法时间与缺少依据）</label>
   <dialog ref="dialog" class="grid-detail" aria-label="样例时段详情" @cancel.prevent="close" @click="($event.target===dialog)&&close()">
