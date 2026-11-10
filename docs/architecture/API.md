@@ -128,7 +128,8 @@ URL 导入拒绝本机、private、loopback、link-local 和 reserved 地址，�
 - POST /api/v1/documents/{id}/redact：{revision,finding_ids,consent:true}，返回副本id/hash，原件不变；无坐标拒绝。
 - GET /api/v1/document-copies/{id}/content：owner授权下载，无缓存；PDF文字层及选中区域永久移除。
 - POST /api/v1/schedule/drafts：同preview输入，新增preferences {work_start_hour,work_end_hour,buffer_minutes,daily_max_minutes}；返回draft_id/suggestions分段/unscheduled。
-- POST /api/v1/schedule/drafts/{id}/commit：{consent:true}；DRAFT_STALE整体拒绝，成功幂等。
+- POST /api/v1/schedule/drafts/{id}/commit：{consent:true}；数据变化时409 DRAFT_STALE；待提交草案任一片段开始时刻早于本次事务采样的服务器now时409 DRAFT_EXPIRED（草案中的安排已过时，请重新预览），在首条写入前整体拒绝，保持pending及原日程；成功后重复提交仍幂等。
+- POST /api/v1/schedule/preview 与 /drafts：window_start早于本次请求采样的服务器now时422（排程窗口起点不能早于服务器当前时间，请重新选择时间），不自动调整、不创建草案；相等允许，省略起点使用同一now。所有比较按带时区的绝对时刻。空建议草案沿用无日程写入语义，不使用创建年龄作为TTL。
 - PUT /api/v1/tasks/{id}/planning：{duration_minutes,splittable,min_chunk_minutes,max_chunk_minutes,importance,preference}；生成用户填写Evidence，已有安排先移除。
 - POST /api/v1/schedule/series：ScheduleItem加count(2..13)、every_weeks(1..4)、timezone；仅course/busy，整体事务。
 - POST /api/v1/schedule/items/{id}/lock：{locked:true|false}。锁定需解锁才能PATCH/DELETE；独立任务安排检查前置与deadline。
@@ -167,3 +168,8 @@ Profile新增 `moral_score`（0–100数值）、`advisor_count`/`participation_
 `POST /api/v1/cases/{id}/analysis/retry`：`{"consent":true}`，使用该owner事项的已保存正文及附件证据，保留历史及任务状态，返回新的待确认候选。动态网页附件只记录发现和来源，不自动获取；网络返回HTML而非附件时必须提示补充文件。
 
 迁移017/018分别增加case_attachment_documents与case_attachment_links；按owner隔离，Demo重置也清理这些关系。
+
+
+### 排程任务截止口径（2026-11-09）
+
+纯日期Task.deadline统一按Asia/Shanghai当天23:59:59解释；明确带时区时间戳保留原绝对时刻。排程请求timezone用于工作时段及展示，不延长或缩短任务截止；预览截止排序、紧迫度、可排窗口及提交保护采用同一口径。安排结束等于截止可接受，晚于截止拒绝；旧不合法草案提交仍409且不写入。本变更不修改截止存储格式或HTTP结构。
