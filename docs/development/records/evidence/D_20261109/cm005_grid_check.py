@@ -130,23 +130,58 @@ try:
     # Offline entry with original demo still available after returning.
     cdp('Page.navigate',{'url':web+'/plan?tab=schedule'});before=open_demo()
     assert js("document.querySelector('.date-nav').innerText.includes('2026-11-09')")
-    assert js("document.querySelector('.grid-block[data-item=K1-A]').style.top==='540px'")
-    assert js("document.querySelector('.grid-block[data-item=K1-A]').getBoundingClientRect().height===60")
+    assert js("document.querySelector('.grid-block[data-item=K1-A]').style.top==='1620px'")
+    assert js("document.querySelector('.grid-block[data-item=K1-A]').getBoundingClientRect().height===180")
     assert js("document.querySelector('.grid-block[data-item=T2]').innerText.includes('时间重叠')") is False
     screenshot('day')
     tap('周视图');wait("document.querySelectorAll('.grid-day').length===7")
     screenshot('week-overlap')
+    # Short titles remain readable without stretching their time geometry.
+    for width,height in [(360,800),(390,844),(844,390)]:
+        cdp('Emulation.setDeviceMetricsOverride',{'width':width,'height':height,'deviceScaleFactor':1,'mobile':True})
+        assert js("(()=>{const b=document.querySelector('[data-short-item=T3]'),t=b.querySelector('strong'),r=b.getBoundingClientRect();return r.height>=44&&t.scrollHeight<=t.clientHeight&&t.scrollWidth<=t.clientWidth&&getComputedStyle(t).whiteSpace==='normal'})()"),'Short title is clipped or touch target too small'
+        assert js("document.querySelector('.grid-block[data-item=T3]').getBoundingClientRect().height===30"),'Short time geometry stretched'
+        assert js('document.documentElement.scrollWidth<=innerWidth+1'),'Short title overflows page'
+        js("document.querySelector('.grid-short-slots').scrollIntoView({block:'center'})")
+        screenshot('short-title-'+str(width))
+        tap_selector('[data-short-item=T3]');wait("!!document.querySelector('dialog[open]')")
+        assert js("document.querySelector('dialog[open]').innerText.includes('易错步骤')")
+        tap('关闭');wait("!document.querySelector('dialog[open]')")
+        assert js("document.activeElement.dataset.shortItem==='T3'")
+    checks.append('short titles wrap fully at three viewports, touch details and focus return, exact 10-minute geometry')
+    for width,height in [(360,800),(390,844),(844,390)]:
+        cdp('Emulation.setDeviceMetricsOverride',{'width':width,'height':height,'deviceScaleFactor':1,'mobile':True})
+        assert js("document.querySelectorAll('.grid-overlap').length===1")
+        assert js("(()=>{const b=document.querySelector('.grid-overlap');return b.dataset.overlapCount==='3'&&b.getBoundingClientRect().width>=b.parentElement.clientWidth-3})()"),'Overlap summary must use full day width'
+        assert js("!document.querySelector('.grid-block[data-item=K1-A]')"),'Week still contains narrow overlap lanes'
+        tap_selector('.grid-overlap');wait("!!document.querySelector('.overlap-dialog[open]')")
+        assert js("document.querySelectorAll('.overlap-item').length===3")
+        assert js("[...document.querySelectorAll('.overlap-item strong')].every(e=>e.scrollWidth<=e.clientWidth&&e.scrollHeight<=e.clientHeight)")
+        screenshot('overlap-expanded-'+str(width))
+        tap_selector('[data-overlap-item=K1-A]');wait("!!document.querySelector('.grid-detail[open]')")
+        assert js("!document.querySelector('.overlap-dialog[open]')")
+        tap('关闭');wait("!document.querySelector('dialog[open]')")
+        assert js("document.activeElement.classList.contains('grid-overlap')")
+        tap_selector('.grid-overlap');wait("!!document.querySelector('.overlap-dialog[open]')")
+        cdp('Input.dispatchKeyEvent',{'type':'keyDown','key':'Escape','code':'Escape','windowsVirtualKeyCode':27});cdp('Input.dispatchKeyEvent',{'type':'keyUp','key':'Escape','code':'Escape','windowsVirtualKeyCode':27})
+        wait("!document.querySelector('dialog[open]')")
+        assert js("document.activeElement.classList.contains('grid-overlap')")
+        assert js("document.querySelectorAll('.grid-date').length===7")
+    checks.append('overlap full-column summary, readable three-item sheet, detail transition and Escape focus return at three widths')
+
     for width,height in [(360,800),(390,844),(844,390)]:
         cdp('Emulation.setDeviceMetricsOverride',{'width':width,'height':height,'deviceScaleFactor':1,'mobile':True})
         assert js('document.documentElement.scrollWidth<=innerWidth+1'),'Page overflow'
-        assert js("document.querySelector('.grid-scroll').scrollWidth>document.querySelector('.grid-scroll').clientWidth")
-        js("document.querySelector('.grid-scroll').scrollIntoView({block:'center'});document.querySelector('.grid-scroll').scrollLeft=0;document.querySelector('.grid-scroll').scrollTop=480")
+        assert js("document.querySelector('.grid-scroll').scrollWidth<=document.querySelector('.grid-scroll').clientWidth+1")
+        js("document.querySelector('.grid-scroll').scrollIntoView({block:'center'});document.querySelector('.grid-scroll').scrollLeft=0;document.querySelector('.grid-scroll').scrollTop=1440")
         rect=js("(()=>{const r=document.querySelector('.grid-scroll').getBoundingClientRect();return {x:Math.min(r.right-30,innerWidth-30),y:Math.max(100,Math.min(r.bottom-40,innerHeight-120))}})()")
         cdp('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[rect]})
         for i in range(1,7):
             cdp('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':rect['x']-i*18,'y':rect['y']-i*8}]});time.sleep(.03)
         cdp('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]});time.sleep(.3)
-        assert js("document.querySelector('.grid-scroll').scrollLeft>0"),'Touch horizontal scroll failed'
+        assert js("document.querySelector('.grid-scroll').scrollLeft===0"),'Week must fit without horizontal scrolling'
+        assert js("[...document.querySelectorAll('.grid-date')].every(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})"),'Seven dates must remain visible'
+        assert js("getComputedStyle(document.querySelector('.grid-block strong')).whiteSpace==='normal'"),'Card titles must wrap'
         js("document.querySelector('.grid-scroll').scrollLeft=99999")
         assert js("(()=>{const s=document.querySelector('.grid-scroll').getBoundingClientRect();return Math.abs(document.querySelector('.grid-ruler').getBoundingClientRect().left-s.left)<3&&Math.abs(document.querySelector('.grid-corner').getBoundingClientRect().left-s.left)<3})()"),'Sticky time axis drifts at maximum scroll'
         old_top=js("document.querySelector('.grid-scroll').scrollTop")
@@ -161,11 +196,11 @@ try:
     checks.append('G08 three viewport touch scroll and no page overflow')
     cdp('Emulation.setDeviceMetricsOverride',{'width':390,'height':844,'deviceScaleFactor':1,'mobile':True})
     tap_selector('[aria-label="查看2026-11-11日视图"]');wait("document.querySelectorAll('.grid-day').length===1")
-    assert js("document.querySelector('.grid-block[data-item=K1-B]').style.top==='840px'")
-    assert js("document.querySelector('.grid-block[data-item=B2]').style.height==='30px'")
+    assert js("document.querySelector('.grid-block[data-item=K1-B]').style.top==='2520px'")
+    assert js("document.querySelector('.grid-block[data-item=B2]').style.height==='90px'")
     screenshot('midnight')
     tap_selector('.grid-block[data-item=K1-B]');wait("!!document.querySelector('dialog[open]')")
-    assert js("document.querySelector('dialog').innerText.includes('周一与周三两条时段')")
+    assert js("document.querySelector('dialog[open]').innerText.includes('周一与周三两条时段')")
     screenshot('course-detail');tap('关闭');wait("!document.querySelector('dialog[open]')")
     assert js("document.activeElement.dataset.item==='K1-B'")
     # Keyboard activation, native dialog trap and Escape focus return.
@@ -180,18 +215,18 @@ try:
     wait("!!document.querySelector('dialog[open]')");tap('关闭');wait("!document.querySelector('dialog[open]')")
     checks.append('G02/G04/G05/G06/G09/G10 geometry, split, course details and keyboard')
     date('2026-11-13');assert js("document.querySelectorAll('.grid-block').length===0");assert js("!!document.querySelector('.grid-ruler')")
-    date('2026-11-14');assert js("document.querySelector('.grid-block[data-item=T3]').style.top==='725px'")
-    tap_selector('.grid-index summary');tap_selector('[data-index-item=T3]');wait("!!document.querySelector('dialog[open]')");assert js("document.querySelector('dialog').innerText.includes('易错步骤')");tap('关闭')
-    date('2026-11-16');assert js("document.querySelector('.grid-block[data-item=B4]').style.height==='30px'")
+    date('2026-11-14');assert js("!!document.querySelector('[data-short-item=T3]')");assert js("document.querySelector('.grid-block[data-item=T3]').style.top==='2175px'")
+    tap_selector('.grid-index summary');tap_selector('[data-index-item=T3]');wait("!!document.querySelector('dialog[open]')");assert js("document.querySelector('dialog[open]').innerText.includes('易错步骤')");tap('关闭')
+    date('2026-11-16');assert js("document.querySelector('.grid-block[data-item=B4]').style.height==='90px'")
     date('2026-12-31');tap_selector('[aria-label="后一天"]');wait("document.querySelector('.date-nav').innerText.includes('2027-01-01')")
-    tap('周视图');assert js("document.querySelector('.grid-date').textContent.includes('12-28')")
+    tap('周视图');assert js("document.querySelector('.grid-date').getAttribute('aria-label').includes('2026-12-28')")
     assert js("document.querySelector('.grid-empty').textContent.includes('本周')")
     tap('回到样例周');tap('日视图');wait("document.querySelector('.date-nav').innerText.includes('2026-11-09')")
     tap_selector('.exception-toggle input');wait("document.querySelector('.grid-demo').innerText.includes('时间数据异常')")
     for zone in ['UTC','Asia/Shanghai']:
         cdp('Emulation.setTimezoneOverride',{'timezoneId':zone})
-        assert js("document.querySelector('.grid-block[data-item=offset]').style.top==='540px'")
-    tap_selector('.grid-block[data-item=missing]');wait("!!document.querySelector('dialog[open]')");assert js("document.querySelector('dialog').innerText.includes('待核对')");tap('关闭')
+        assert js("document.querySelector('.grid-block[data-item=offset]').style.top==='1620px'")
+    tap_selector('.grid-block[data-item=missing]');wait("!!document.querySelector('dialog[open]')");assert js("document.querySelector('dialog[open]').innerText.includes('待核对')");tap('关闭')
     checks.append('G03/G07/G11 navigation, empty, offset and malformed/missing evidence')
     verify_isolation(before,'G01 offline');tap('返回日程');wait("!!document.querySelector('.plan-schedule')")
     assert js("document.body.innerText.includes('离线样例计划')")
