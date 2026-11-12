@@ -1,6 +1,6 @@
 {
   "purpose": "CM-001 C-side synthetic review inputs; not a production DTO or execution receipt",
-  "proposal_version": "c-course-input-20261110-v1",
+  "proposal_version": "c-course-input-20261112-v2",
   "synthetic": true,
   "contract_status": "pending_team_review",
   "semesters": [
@@ -14,7 +14,7 @@
   ],
   "time_rule_inputs": [
     {"id": "rule-linear-mon", "course_id": "course-linear-autumn", "revision": 1, "weekday": 1, "starts_at_local": "09:00", "ends_at_local": "10:00", "timezone": "Asia/Shanghai"},
-    {"id": "rule-linear-wed", "course_id": "course-linear-autumn", "revision": 1, "weekday": 3, "starts_at_local": "14:00", "ends_at_local": "15:30", "timezone": "Asia/Shanghai"}
+    {"id": "rule-linear-wed", "course_id": "course-linear-autumn", "revision": 1, "weekday": 3, "starts_at_local": "14:00", "ends_at_local": "15:00", "timezone": "Asia/Shanghai"}
   ],
   "sources": [
     {
@@ -49,6 +49,14 @@
     {"id": "suggest-campus-case", "target_kind": "case", "course_ids": [], "action": "propose_create", "source_refs": [{"source_id": "source-mixed", "line_id": "line-case", "quote": "校园摄影活动"}]},
     {"id": "suggest-knowledge-link", "target_kind": "knowledge_link", "course_ids": ["course-linear-autumn", "course-programming"], "action": "propose_link", "source_refs": [{"source_id": "source-mixed", "line_id": "line-knowledge", "quote": "供线性代数与程序设计两门课参考"}]},
     {"id": "suggest-exam-conflict", "target_kind": "requirement", "course_ids": ["course-linear-autumn"], "action": "propose_update", "source_refs": [{"source_id": "source-conflict", "line_id": "line-conflict", "quote": "考试形式改为开卷"}]}
+  ],
+  "d_review_alignment": [
+    {"id": "C-D-CM-01", "d_case": "D-CM-01", "decision_refs": ["Q01", "Q08-d"], "input_refs": ["course-linear-autumn", "course-linear-spring"], "c_review": "proposed_accept", "additional_preconditions": [], "expected": {"new_task_count": 0, "new_occupancy_count": 0, "course_identity": "distinct_by_owner_and_stable_semester_course_identity_not_title"}, "pending": ["B Workspace identity and revision", "A/B relationship and permission review"]},
+    {"id": "C-D-CM-02", "d_case": "D-CM-02", "decision_refs": ["Q04", "Q08-d"], "input_refs": ["course-linear-autumn", "rule-linear-mon", "rule-linear-wed"], "c_review": "proposed_accept_with_mapping_gate", "additional_preconditions": ["Both rules are effective and not cancelled in the reviewed week", "A server-side Monday record describes the same occurrence and has a verified mapping"], "expected": {"new_task_count": 0, "weekly_unique_occupancy_count_with_verified_mapping": 2, "monday": "09:00-10:00", "wednesday": "14:00-15:00", "missing_mapping": "needs_review_do_not_guess_identity"}, "pending": ["D occurrence mapping and version checks", "B local revision", "A/B cross-end authority"]},
+    {"id": "C-D-CM-03", "d_case": "D-CM-03", "decision_refs": ["Q01", "Q02", "Q07", "Q10"], "input_refs": ["suggest-linear-task", "suggest-programming-task", "suggest-campus-case", "suggest-knowledge-link"], "c_review": "proposed_accept", "additional_preconditions": ["User confirms only the K1 homework and K2 report", "Valid Evidence binding and Task confirmation contract are available"], "selected_suggestion_ids": ["suggest-linear-task", "suggest-programming-task"], "expected": {"new_task_count_if_both_succeed": 2, "new_case_count": 0, "new_occupancy_count": 0, "new_knowledge_link_count": 0, "cancel_before_execution": "zero_formal_writes", "retry": "failed_items_only_success_receipts_reused"}, "pending": ["D non-Case Task and receipt API", "B source reference consumption", "A/B idempotency and partial result protocol"]},
+    {"id": "C-D-CM-04", "d_case": "D-CM-04", "decision_refs": ["Q02", "Q05"], "input_refs": ["document-study-method", "course-linear-autumn", "course-programming"], "c_review": "proposed_accept", "additional_preconditions": ["K1 already has linked Task and Schedule records; no concrete IDs or clocks are supplied"], "expected": {"new_task_count": 0, "preview_or_cancel": "preserve_all_records_and_occupancy", "shared_original_and_k2_link": "preserved", "confirmed_deletion": "execute_only_user_selected_operations_under_reviewed_policy"}, "pending": ["B shared references", "D Task rule Schedule reminder impact", "A/B delete versus unlink and recovery policy"]},
+    {"id": "C-D-CM-05", "d_case": "D-CM-05", "decision_refs": ["Q05", "Q08-d", "Q10"], "input_refs": ["course-linear-autumn", "document-study-method"], "c_review": "proposed_accept_with_restore_scope_pending", "additional_preconditions": ["Backup is older than current rules and contains foreign-owner or invalid Task references"], "expected": {"preview_new_task_count": 0, "preview": "preserve_current_occupancy", "foreign_owner": "reject_without_private_details", "invalid_reference": "needs_review_do_not_create_task", "offline_reference": "needs_review", "write": "only_after_user_selects_valid_scope_and_resolves_versions"}, "pending": ["B RF-012 owner and restore boundary", "D time recalculation and old draft invalidation", "A/B atomic scope rollback and partial failure policy"]},
+    {"id": "C-D-CM-06", "d_case": "D-CM-06", "decision_refs": ["Q02", "Q06", "Q10"], "input_refs": ["course-linear-autumn"], "c_review": "proposed_accept_with_receipt_order_clarification", "additional_preconditions": ["An existing Task is scheduled on Friday", "A user-reviewed source proposes Thursday as its deadline", "No exact calendar dates or clock times are supplied"], "expected": {"new_task_count": 0, "new_occupancy_count": 0, "existing_friday_occupancy": "unchanged_until_separate_valid_rescheduling", "source": "keep_old_and_new_source_history", "stale_uncommitted_operation": "reject_zero_writes", "already_committed_same_key_same_content": "return_original_receipt_without_reapplying", "lost_response": "unknown_until_receipt_is_checked"}, "pending": ["C/D source and Task-bound Evidence confirmation", "D conflict and receipt implementation", "A/B version check order operation scope and receipt query"]}
   ],
   "review_scenarios": [
     {"id": "C-CM-01", "decision_refs": ["Q01", "Q08-d"], "input_refs": ["course-linear-autumn", "course-linear-spring"], "action": "compare_identity", "expected": "同名跨学期保持不同身份；标题相同不合并，旧Course迁移也不按名称自动合并。"},
