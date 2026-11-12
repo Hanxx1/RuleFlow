@@ -1,0 +1,15 @@
+# CM-002 课程交互样例
+
+从仓库根运行 `npm.cmd --prefix mobile run dev -- --host 127.0.0.1 --port 5174 --strictPort`，打开 `http://127.0.0.1:5174/course-preview.html`。
+
+主应用入口为工作台“我的课程”→`/courses`，由路由懒加载，内容仍明确标记为交互样例。`course-preview.html` 是保留的独立 Vite 开发入口，未单独配置为生产构建入口。品牌文案使用有绪 CampusWeave。
+
+- 列表按学期筛选；同名课程按独立样例 ID 区分。
+- 详情包含总览、课程要求、任务、资料；后两区明确未查询真实数据。
+- 可新增样例、编辑档案和简单小组说明；档案编辑按顺序保留名称、学期、教师、地点和小组旧值，未改变内容的保存不增加历史。要求支持六类常用字段、自定义字段、四种状态、来源和旧值历史。
+- 编辑仅存在组件内存中；取消不应用，刷新重置。不使用 Workspace、账户、LocalStorage 或服务端 API。
+- `demoModel.ts` 只是模块内展示模型，不能视为已批准的 CM-001 数据契约。
+
+验证：`npm.cmd --prefix mobile test -- src/features/courses/demoModel.test.ts`；全项目类型/构建检查用 `npm.cmd --prefix mobile run build`。浏览器交互另见成员 C 的工作记录。
+
+待办：快捷/完整规则编辑分层、正式来源引用，以及 CM-001/RF-012 确认后的正式保存与重开、正式修订记录。任务、资料、时间规则继续由相应模块提供，不在样例里另建执行逻辑。

@@ -47,7 +47,7 @@ function closeGuide(){guideOpen.value=false;localStorage.setItem('zhishi-onboard
       <FeatureShortcut label="我的事项" icon="/assets/icons/features/icon_我的事项.svg" to="/cases" hint="查看全部事项"/>
       <FeatureShortcut label="材料库" icon="/assets/icons/features/icon_材料库.svg" to="/vault" hint="分类与关联材料"/>
       <FeatureShortcut label="使用指南" icon="/assets/icons/features/icon_使用指南.svg" to="/guide?from=/home" hint="完整流程与常见问题"/>
-      <FeatureShortcut label="常见问题" icon="/assets/icons/features/icon_常见问题.svg" to="/help" hint="查看说明"/>
+      <FeatureShortcut label="我的课程" icon="/assets/icons/features/icon_courses.svg" to="/courses" hint="课程档案与要求样例"/>
     </section>
     <p class="home-guide-entry">第一次使用？<button type="button" @click="openGuide">查看四步快速上手 →</button></p>
 
