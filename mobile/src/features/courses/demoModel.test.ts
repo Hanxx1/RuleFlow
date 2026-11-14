@@ -1,6 +1,20 @@
 import {describe,it,expect} from 'vitest';
 import {createSamples,createCourse,updateCourseProfile,updateRequirement} from './demoModel';
 describe('CM-002 presentation boundaries',()=>{
+  it('does not manufacture history for unchanged requirements but preserves multiline revisions',()=>{
+    const [course]=createSamples();const item=course.requirements[0];
+    expect(updateRequirement(course,item.id,{...item,value:` ${item.value} `})).toBe(course);
+    const value='签到占 10%\n缺席须补充说明\n例外由教师核对';
+    const source='用户声明：课堂笔记第 1 行\n教师说明第 2 行';
+    const changed=updateRequirement(course,item.id,{state:'待核对',value,source});
+    expect(changed.requirements[0]).toMatchObject({value,source,history:[{state:item.state,value:item.value,source:item.source}]});
+    expect(item.history).toEqual([]);
+  });
+  it('rejects oversized content without altering the original requirement or its evidence',()=>{
+    const [course]=createSamples();const snapshot=JSON.stringify(course);const item=course.requirements[0];
+    for(const field of ['value','source'])expect(()=>updateRequirement(course,item.id,{...item,[field]:'字'.repeat(2001)})).toThrow('2000');
+    expect(JSON.stringify(course)).toBe(snapshot);
+  });
   it('preserves profile revisions, course identity and requirement evidence when editing',()=>{
     const [original,otherTerm]=createSamples();
     const changed=updateCourseProfile(original,{...original,name:' 软件工程实践 ',term:'2027 春季',teacher:' 新教师 ',location:'实验室',group:'用户输入小组'});
