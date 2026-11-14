@@ -18,11 +18,15 @@ export function updateCourseProfile(course:CoursePreview,input:CourseProfile):Co
 }
 export function updateRequirement(course:CoursePreview,id:string,input:{state:RequirementState;value:string;source:string}):CoursePreview {
   if(!requirementStates.includes(input.state)) throw new Error('请选择有效的记录状态。');
+  if(input.value.length>2000 || input.source.length>2000) throw new Error('要求内容和依据各不能超过 2000 字，请保留原文后分项记录。');
   if(input.state!=='未记录' && !input.source.trim()) throw new Error('请记录依据或注明“用户声明”。');
   if((input.state==='已确认'||input.state==='待核对')&&!input.value.trim()) throw new Error('请填写要求内容。');
   if((input.state==='未记录'||input.state==='明确无要求')&&input.value.trim()) throw new Error('当前状态不能保留要求内容，请清空内容或调整状态。');
   if(!course.requirements.some(item=>item.id===id)) throw new Error('要求已不存在，请重新打开。');
-  return {...course,requirements:course.requirements.map(item=>item.id!==id?item:{...item,...input,value:input.value.trim(),source:input.source.trim(),history:[...item.history,{state:item.state,value:item.value,source:item.source}]})};
+  const current=course.requirements.find(item=>item.id===id)!;
+  const next={state:input.state,value:input.value.trim(),source:input.source.trim()};
+  if(current.state===next.state && current.value===next.value && current.source===next.source) return course;
+  return {...course,requirements:course.requirements.map(item=>item.id!==id?item:{...item,...next,history:[...item.history,{state:item.state,value:item.value,source:item.source}]})};
 }
 export function createSamples():CoursePreview[] {
   const current=createCourse('sample-current','软件工程','2026 秋季');
