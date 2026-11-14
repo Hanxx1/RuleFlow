@@ -232,6 +232,20 @@
 
 提交授权补记（2026-11-14）：用户要求“提交编写PR DES”，本次提交范围为课程组件、模型、模型测试、模块 README 及本记录共五个文件，并提供 PR 描述。独立 RF-013 未跟踪测试继续排除；实际提交号见 Git 历史。本次不创建或合并 PR，未将保存方案建议改为已确认。
 
+### 2026-11-14 本机课程正式保存切片
+
+1. **任务信息** — C；用户要求开始下一阶段，并明确转达“已确认上述范围，可实施”：复用 Workspace、档案与旧课表分开、owner/revision 校验、历史原子保存、退出清理及旧数据迁移。确认来源为本次用户答复，未提供团队讨论链接；该确认不扩展至 Task、时间规则、知识库或服务端 Evidence 协议。fetch 后 `origin/main` 仍为 `58224fd`，创建 `feat/CM-002-course-persistence`；随后将已推送的前置编辑切片 `143a0f9` 快进纳入本任务分支，未合并 main。状态：本机保存／重开切片已实现并验证，CM-002 整卡未完成；未提交、推送或创建 PR。
+2. **技术实现** — 从 `demoModel.ts` 提取无合成数据的 `courseModel.ts`，旧导入保留兼容再导出；`courseRecords.ts` 校验课程、要求及历史。`clientWorkspace.ts` 增加记录版本 v3 和 `courseProfiles`，原 `courses` 与旧占用逻辑不变；v1/v2 读取转换，显式保存时在原 IndexedDB revision 事务中写回。`CoursePreview.vue` 主应用读写当前身份本机数据、独立预览保持内存样例，新增异常／加载状态、冲突草稿保留及重新读取核对，切换身份清空旧编辑输入，卸载／身份失效的待提交写入被事务门禁拒绝。`router.ts` 更新本页标题；`MeView.vue` 增加退出清理确认；`ClientProfileView.vue` 仅更新备份／清理文案。更新既有 Workspace 测试版本预期，新增 `coursePersistence.test.ts`，无依赖、服务端或 Android 修改。
+3. **设计与关键决策** — Workspace v3 为数据记录版本，不更改 IndexedDB 数据库版本／store。避免读取时自动写迁移，减少覆盖新数据风险；课表／画像仍由同一 Workspace revision 协调，其他页面变更可能使课程保存被拒绝，需重读核对。课程新旧值与来源文字同一次提交，不静默截断历史；100 门课、每课100项要求、每档案／要求500条旧值，超限明确拒绝。来源是本机用户声明，界面提示外部来源待核对，不伪造服务端 EvidenceRef 或向 Task 传入样例依据。沿用退出删除当前账户 Workspace，先提示备份。导出含课程及历史；CM-003 预览未完成前，旧直接恢复入口拒绝导入含课程的备份或覆盖已有课程，避免无预览写入；无课程旧备份保留原能力。
+4. **遇到的问题及解决** — 沙箱 fetch 无法连接本机代理，通过工具批准的正常本机网络成功获取，主线无新增提交。走读发现旧 `validateWorkspace()` 会丢弃未知字段，故同时更新模型、校验、读写及备份路径，未只向旧记录追加课程字段。首次浏览器检查发现主应用文档 title 为空，在课程组件挂载／卸载时设置／还原标题后，相同页面身份断言通过。原“样例／刷新重置”提示按主应用与独立预览分开，避免真实保存界面显示错误状态。
+5. **测试与验证** — Windows、既有 Node／Vitest／Edge。定向执行 `npm.cmd --prefix mobile test -- src/features/courses/coursePersistence.test.ts src/features/courses/demoModel.test.ts src/services/clientWorkspace.test.ts src/services/timetable.test.ts`：4文件27项通过。全量 `npm.cmd --prefix mobile test`：23文件136项通过；`npm.cmd --prefix mobile run build`：类型检查及生产构建通过，206 modules，保留既有 Vite CJS 弃用提示。新增11项覆盖 v1/v2 惰性迁移、重开与隔离、旧历史、非法数据零写入、陈旧版本、身份失效、模拟存储失败、恢复门禁和旧备份兼容。浏览器使用 Playwright／Edge（Browser plugin not available），Vite 仅绑定 `127.0.0.1:5182`，390×844、1280×900 验证主动保存／刷新、档案及要求历史、自定义字段、跨学期同名、取消零写入、冲突草稿保留／核对、无变化要求保存、合成账户切换／退出清理、真实 IndexedDB 并发一成功一拒绝、失效写入拒绝、旧v2首次保存升级及旧4条课表保留、样例不入账户数据，均通过，无 pageerror／console error／横向溢出或 Vite overlay。账号由本机合成 Pinia 状态提供，不代表真实登录／鉴权联调；未执行后端、真实模型、Android、设备或 CM-003 恢复验收，无 APK。
+6. **运行证据** — 仓库内模型与测试；仓库外 `C:/Users/Logic/.codex/visualizations/2026/11/14/01a1d7ce-22af-7812-bb5d-dc4caabc9cda/check-course-persistence.cjs`，同目录截图 `course-saved-390.png`、`course-saved-1280.png`。浏览器脚本与截图仅本机可访问，未提交；命令结果见本次原始会话。原始 Codex 会话分享／导出待 C 保存。RF-013 未跟踪测试 SHA-256 仍为 `66043c97597546d861d579733fe63321de6b9c2089014100510b637b20926ed5`，保留并排除本轮交付。
+7. **未完成与限制** — 尚无课程导入／恢复预览、删课影响、正式 EvidenceRef、B/D 真数据关联或跨设备同步；浏览器清理或退出会失去本机数据，本期导出可保管但含课程备份暂不能恢复。v3 备份不能由旧版 App 读取。本机旧值历史不等于防篡改审计；上限到达后拒绝新保存，不能无提示删旧历史。CM-001 其他决策不因此整体获批；前置 `143a0f9` 尚未合入 main，评审时应先合前置切片或明确审阅本任务包含的改动。提交／推送仍待用户授权。
+
+补充收尾：退出确认补测最初通过脚本导入路由跳转后，URL 为 `/me` 但仍显示课程 DOM，按钮等待超时；保留该失败，不把路由导入当作真实页面交互。改用底部“我的”链接及浏览器返回后，同样两尺寸全链重跑通过，退出确认包含课程清理说明，取消后课程保留。仅“我的”页面账户摘要 HTTP 使用合成响应；保存、迁移和清理仍运行真实 IndexedDB。已人工查看最终手机首屏截图。`scripts/check-docs.py`（212个本地目标）、`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8份副本）及 `git diff --check` 均通过。构建产生既有 LF/CRLF 提示，无 diff 空白错误。
+
+提交授权补记（2026-11-14）：用户明确要求“提交推送并写DES”，授权将本次本机保存切片及本记录提交并推送至 `feat/CM-002-course-persistence`，提供 PR 标题和描述；实际提交号及远端状态以 Git 记录为准。范围共12个文件，排除独立 RF-013 未跟踪测试；不创建或合并 PR。
+
 ## 当前进度与下一工作入口（2026-11-10 历史快照）
 
 本节只索引下方原任务记录，不新建平行验收结论。当时安排为：**暂停 CM 开发，先完成 C 的近期 RF 工作**；后续已恢复 CM 页面开发，最新进展见上方 CM-002 的 11-12 补记。团队任务编号、分工、检查点及验收标准保持原约定。
