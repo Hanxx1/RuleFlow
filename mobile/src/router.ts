@@ -16,7 +16,7 @@ const utilityPages=[
 const routes:RouteRecordRaw[]=[
   {path:'/',redirect:'/welcome'},
   {path:'/home',component:HomeView,meta:{title:'工作台'}},
-  {path:'/courses',component:()=>import('./features/courses/CoursePreview.vue'),props:{integrated:true},meta:{title:'我的课程 · 交互样例'}},
+  {path:'/courses',component:()=>import('./features/courses/CoursePreview.vue'),props:{integrated:true},meta:{title:'我的课程'}},
   {path:'/cases',component:CasesView,meta:{title:'我的事项'}},
   {path:'/plan/schedule',redirect:{path:'/plan',query:{tab:'schedule'}}},
   {path:'/plan',component:PlanView,meta:{title:'执行计划'}},

@@ -11,7 +11,7 @@ const identity=computed(()=>account.user?.email||'本机演示用户');
 const initial=computed(()=>identity.value.trim().charAt(0).toUpperCase()||'知');
 const completenessText=computed(()=>account.completeness?`当前规则资料完整度 ${account.completeness.score}%`:'用于规则资格判断，缺失原因会分别说明');
 onMounted(()=>{if(account.signedIn){account.loadCompleteness();account.loadSettings()}});
-async function logout(){try{await account.logout()}finally{router.push('/auth/login')}}
+async function logout(){if(!window.confirm('退出登录会清除当前账户在本机的画像、课表和课程档案。请先到个人画像导出备份；课程备份恢复预览尚未开放。确认退出？'))return;try{await account.logout()}finally{router.push('/auth/login')}}
 </script>
 
 <template>
