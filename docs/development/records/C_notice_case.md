@@ -415,6 +415,40 @@ $env:TMP=$env:TEMP
 
 仅记录真实工作。首轮成果已于 2026-11-05 提交并推送（`786815c`），对应 [PR #2](https://github.com/Hanxx1/RuleFlow/pull/2)，2026-11-06 核对仍为 open、未合并。本次补测记录随同一分支提交，具体版本见 Git 历史。重要原始 Codex 会话分享链接或导出归档待 C 保存，本记录不能替代原始会话证据。
 
+#### 2026-11-17 H07 最小修复与回归
+
+**1. 任务信息** — C；用户在本次会话明确转达“已确认上述范围，可实施”：仅在 `main.py` 修复附件 HTML/XHTML 误成功与解析失败原件缺正式来源关联，保留普通网页、授权、owner 和事务规则，不改 API/数据库。此确认不扩展至 form-context、公共 AI、候选存储或 CM 联合写入。`git fetch origin --prune` 成功，最新 main 为 `00d70a9`，从该基线创建 `fix/RF-013-attachment-recovery`。状态：H07 两类缺口最小修复已实现，验证结果见下；RF-013 整卡未完成。未提交、推送或创建 PR。
+
+**2. 技术实现** — 修改 `server/app/main.py`：原 URL 路由委托内部 `_add_import_url_source`，仅附件入口传入 `attachment=True`；下载返回 HTML/XHTML 时在解析、Document 保存前记 failed 来源及 `ATTACHMENT_HTML_RESPONSE`，既有逻辑继续记录父来源。普通 HTML 通知仍可导入。文件解析失败／无文字时保留 Document 与错误码，以 failed 来源保存，不再提前抛出而跳过正式关联。`_store_import_source` 将可选 Document 关联与来源插入放在同一数据库事务。原本本地未跟踪的 `server/tests/test_import_recovery_guards.py` 纳入本次修复交付范围，保留原7项断言，新增4项参数化后回归；未修改其他成员文件、前端、Provider、依赖、Schema、数据库迁移或 Android。
+
+**3. 设计与关键决策** — 附件返回网页一律显示尚未取得有效文件，不猜测登录状态、不自动跟随登录；这也不声明支持将网页当作附件。公共路由签名不增加附件开关，避免产生新查询参数或改变 OpenAPI。原件解析失败仍不可分析，但正式关联保护原件不被当成无引用文件删除；用户移除来源后才可按既有权限显式删除原件。来源和关联插入失败一起回滚；不批修历史孤立关系，不伪造旧数据引用。
+
+**4. 遇到的问题及解决** — 沙箱 Git 首次无法连接本机代理；通过 GitHub 只读工具核对 main 后，在工具批准的正常本机权限执行 fetch 成功。首次沙箱 pytest 无输出，已中止，未计作完成；使用项目忽略目录 TEMP/TMP 及正常本机权限运行原命令取得真实结果。未修改代理、TLS、依赖或放宽断言。
+
+**5. 测试与验证** — Windows、既有 `.runtime/c-venv`（CPython 3.12）、内存 SQLite、合成账户与临时文件；网络获取与解析异常由定向测试替身注入。所有命令从仓库根执行，TEMP/TMP 指向本机忽略目录 `.runtime/c-rf013-20261117/tmp`。
+
+```powershell
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_import_recovery_guards.py -q -p no:cacheprovider --tb=short
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_import_recovery_guards.py server/tests/test_notice_handoff_baseline.py server/tests/test_link_candidates.py server/tests/test_document_api.py server/tests/test_analysis_retry.py -q -p no:cacheprovider --tb=short
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests -q -p no:cacheprovider --tb=short --disable-warnings
+.runtime/c-venv/Scripts/python.exe -X utf8 scripts/check-api-contract.py
+.runtime/c-venv/Scripts/python.exe -X utf8 docs/development/records/evidence/C_20261110/probe_rf013_recovery.py
+```
+
+- 修复前原7项在最新后端基线复现：**4 failed、3 passed、5 warnings，退出1**。三种附件HTML/XHTML误为ready，解析失败正式关联为0。
+- 最小修复后原7项加相关旧来源、原件权限及重试排序回归：**20 passed、5 warnings，退出0**。
+- 补充删除保护、混合文件隔离、关联失败事务回滚及手工替换后，本文件 **11 passed、5 warnings，退出0**。原7项失败断言未删除或改弱。
+- 后端全量：**235 passed、5 warnings，28.85s，退出0**。覆盖当前主线旧链路及本轮11项回归；不是前端、真机或真实模型验收。
+- 原H07探针 **8项PASS、0项OPEN_GAP，退出0**；仍是合成诊断，不是真网站或产品整卡验收。
+- OpenAPI 指纹与已接受基线 `aa40e470df16fa9b2143aa452c92dab9debaa18467e3b9a7694cbeb95df838ed` 一致；未重写基准。5条警告为既有FastAPI／Starlette／AnyIO弃用。
+- `scripts/check-docs.py`（212个本地目标）、`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8份副本一致）及 `git diff --check` 均通过，退出0；这些静态检查不替代产品验收。
+
+**6. 运行证据** — 实际命令输出见本次原始会话；仓库内修复、11项回归与既有H07探针可供复现。没有创建提交、PR、截图、APK或共享日志链接。原RF-013测试源文件因本轮新增4项回归已变化，旧SHA-256不再代表当前文件；原始7项断言保留。原始Codex会话分享／导出待C保存，本记录不能替代。
+
+**7. 未完成与限制** — 两类修复只影响后续导入，不自动补历史孤立来源关系。真实网站／OCR／Office格式、失败恢复页面和Android分享未验，无新APK；本轮未运行前端。form-context及H04/H05、B消费H06、真机H08仍需对应确认及实现，RF-013整卡不标完成。CM的PR #16/#17保持独立，未修改或合并。提交与推送须用户另行确认本次具体diff。
+
+提交授权补记（2026-11-17）：用户明确要求“提交并推送”，授权将上述 `main.py`、11项回归测试及本记录共三个文件提交并推送至 `fix/RF-013-attachment-recovery`。上文未提交状态为验证阶段快照；实际提交号及远端状态以 Git 历史和推送结果为准。本次不创建 PR 或合并主线。
+
 ## RF-001｜C 模块走读子项
 
 ### 1. 任务信息
