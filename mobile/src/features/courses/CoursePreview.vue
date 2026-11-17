@@ -4,6 +4,7 @@ import {RouterLink} from 'vue-router';
 import {commonRequirements,createCourse,requirementStates,updateCourseProfile,updateRequirement,type RequirementState,type CoursePreview} from './courseModel';
 import {createSamples} from './demoModel';
 import CourseRestorePreview from './CourseRestorePreview.vue';
+import CourseDeletePreview from './CourseDeletePreview.vue';
 import {useAccountStore} from '../../stores/account';
 import {emptyWorkspace,loadWorkspace,saveWorkspace,indexedWorkspace,type Workspace} from '../../services/clientWorkspace';
 const props=withDefaults(defineProps<{integrated?:boolean}>(),{integrated:false});
@@ -74,6 +75,7 @@ async function addCustom(){if(saving.value)return;const label=custom.value.trim(
       <div class="actions"><button class="button button--secondary" @click="open('')">返回课程列表</button><button class="button button--secondary" @click="startProfile()">编辑档案</button></div>
       <section class="panel"><span class="term">{{course.term}}</span><h2>{{course.name}}</h2><p>{{course.teacher||'教师待记录'}} · {{course.location||'地点待记录'}}</p></section>
       <nav class="course-tabs" aria-label="课程详情分区"><button v-for="value in ['总览','课程要求','任务','资料']" :key="value" :aria-pressed="tab===value" @click="tab=value;editingRequirement='';error=''">{{value}}</button></nav>
+      <CourseDeletePreview v-if="tab==='总览'" :course="course" :owner="owner" :revision="workspace?.revision??0" :unavailable="loading||saving||changedElsewhere" :sample="!integrated" />
       <section v-if="tab==='总览'" class="panel"><h2>课程总览</h2><p>已确认 {{course.requirements.filter(r=>r.state==='已确认').length}} 项要求，其余请逐项记录或核对。</p><p>{{integrated?'档案信息依据：本机用户填写，教师原文尚未核验。':'档案信息依据：合成样例／本次用户输入，未对接教师原文。'}}</p><h3>小组与分工</h3><p>{{course.group||'尚未记录小组信息'}}</p><h3>上课时间</h3><p>课程时间规则待与课表模块接入，当前不生成或修改排程占用。</p><details v-if="course.profileHistory.length" class="profile-history"><summary>档案修改历史（{{course.profileHistory.length}}）</summary><p>{{integrated?'按修改顺序保留旧值，随课程档案保存在本机。':'按修改顺序保留旧值；仅为本页样例记录，刷新后重置。'}}</p><ol><li v-for="(entry,index) in course.profileHistory" :key="index"><p>{{entry.term}} · {{entry.name}}</p><p>教师：{{entry.teacher||'未记录'}}；地点：{{entry.location||'未记录'}}</p><p>小组与分工：{{entry.group||'未记录'}}</p></li></ol></details></section>
       <section v-else-if="tab==='课程要求'" class="requirements">
         <article v-for="item in course.requirements" :key="item.id" class="panel"><div class="actions"><h2>{{item.label}}</h2><span class="state">{{item.state}}</span></div><p>{{item.value||(item.state==='明确无要求'?'已明确记录无此项要求':'尚无要求内容，不能据此视为无要求')}}</p><p class="source">依据：{{item.source||'暂无依据，待记录'}}</p>

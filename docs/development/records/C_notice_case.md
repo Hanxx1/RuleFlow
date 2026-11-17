@@ -47,6 +47,18 @@
 
 提交授权补记（2026-11-17）：用户审阅提交范围后明确要求“提交并推送”，授权将本次预览逻辑、组件、测试、课程页、模块 README 与本记录共6个文件提交并推送至 `feat/CM-003-course-restore-preview`。原 RF-013 未跟踪测试排除。上述未提交状态为验证阶段快照，实际提交号及推送结果以 Git 记录为准；本次不创建 PR 或合并主线。
 
+### 2026-11-17 续：删除影响只读预览
+
+1. **任务信息** — C；用户在远端进度与下一阶段建议后要求“开始开发”，本次落实 CM-003 删除影响只读流程。实际工作区为仓库旁独立 clone `RuleFlow-CM003-delete-preview`，分支 `feat/CM-003-course-delete-preview`，基于 PR #16 的 `1a1724e`；fetch 时 main 仍为 `00d70a9`。本子项已实现并验证，整卡未完成；本次未提交、推送、创建 PR 或合并。原 RF-013 工作区未修改。
+2. **技术实现** — 新增 `mobile/src/features/courses/CourseDeletePreview.vue`，在 `CoursePreview.vue` 总览接入并更新模块 README。读取当前选中课程，展示档案／要求／依据文字／历史数量和要求范围；任务、时间规则、日程、提醒、排程草案与共享资料均明确待核对。仅本地展开／关闭；Escape 与关闭返回触发按钮。身份、课程内容、revision、加载或本机变更提示变化时关闭，stale 时禁用重新展开。未改共享类型、存储、API、数据库、导航、B/D 文件或 Android，无新依赖。
+3. **设计与关键决策** — 现有课程没有正式跨模块关联字段，不猜测“无关联”或按同名匹配；仅列当前已读记录与待核验事项。不开放删除、解绑、恢复或模拟成功，不将文字依据当正式 EvidenceRef。沿用既有课程身份与 RF-012 保存边界，未新增公共协议或代写团队签认。
+4. **遇到的问题及解决** — 托管 worktree 工具未返回且 Git 中未出现新 worktree，终止等待后改用独立本地 clone；沙箱 clone 的 MSYS 错误由批准的正常本机命令解决。沙箱 npm 离线缓存缺依赖，批准后使用本机已有缓存安装锁文件依赖成功。Browser plugin not available，使用既有 Playwright/Edge；沙箱 Edge 因 `TransactNamedPipe` 退出，正常 Edge 访问沙箱服务超时；停止沙箱服务后在批准权限下启动仅监听 127.0.0.1 的 Vite 并验证。桌面脚本首次在异步重读完成前判断 enabled 失败，改为等待原按钮启用后保留同一断言，两尺寸完整重跑通过；未放宽功能断言。
+5. **测试与验证** — Windows、现有 Node/Vitest/Playwright/Edge。`npm.cmd --prefix mobile test`：24 文件 146 项通过；`npm.cmd --prefix mobile run build`：类型检查与生产构建通过，213 modules，保留 Vite CJS 旧提示。仓库外 `check-course-delete.cjs` 对 `/courses` 的 390×844、1280×900 验证通过：页面身份／非空／无框架错误遮罩、控制台无错误、无横向溢出；当前课程数量与历史、同名跨学期独立、未接关联保持待核对、关闭／Escape 焦点返回、本机变更禁用／重读、合成身份切换清空。预览前后所有 Workspace（包含另一个合成 owner）序列化完全一致，IDB put/add/delete/clear 调用 0，业务请求 0；实际登录鉴权未测。人工查看两尺寸截图，最终手机 context 启用 isMobile/hasTouch。`python -X utf8 scripts/check-docs.py`（212 个本地目标）、`python -X utf8 scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份样例一致）及 `git diff --check` 通过。未运行后端、在线模型、实际恢复／删除、跨模块或 Android 真机测试，无 APK。
+6. **运行证据** — 本次工具命令输出及实际新增组件；本机证据目录 `C:/Users/Logic/.codex/visualizations/2026/11/17/01a1e8af-10a6-77f2-9e13-a3acf8338e0a/` 中的 `check-course-delete.cjs`、`course-delete-390.png`、`course-delete-1280.png` 及 `course-delete-viewport-390.png`／`course-delete-viewport-1280.png`。仅合成资料，脚本和截图未提交。commit/PR 不适用；原始 Codex 会话分享或导出待 C 保存，工作记录不能替代。
+7. **未完成与限制** — 只读删除影响准备不等于实际影响查询完成。B 仍需核资料引用保护及 RF-012 删除／恢复范围，D 核 Task／规则／日程／提醒／草案影响，A/B 协调公共协议后才能实施正式操作；CM-003 实际恢复、删除及联合验收未完成。此分支包含 #16 前置，后续评审须注明依赖，并保留其他分支 C 工作记录和 README 的独立增量。
+
+提交授权补记（删除影响切片，2026-11-17）：用户明确要求“提交推送，并且编写PR DES”。授权范围为本次删除预览组件、课程页接入、模块 README 与本记录共4文件，推送 `feat/CM-003-course-delete-preview`；准备 PR 描述，未授权创建或合并 PR。上述未提交状态为开发阶段快照；实际提交号及推送结果以 Git 记录为准。用户的默认附带 DES 偏好另写入仓库外本地 AGENTS.md，不纳入项目提交。
+
 ## CM-001｜课程公共契约与混合输入样例（2026-11-10）
 
 ### 1. 任务信息
