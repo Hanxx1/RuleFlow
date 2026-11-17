@@ -3,8 +3,9 @@ import {computed,onMounted,onBeforeUnmount,ref,watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import {commonRequirements,createCourse,requirementStates,updateCourseProfile,updateRequirement,type RequirementState,type CoursePreview} from './courseModel';
 import {createSamples} from './demoModel';
+import CourseRestorePreview from './CourseRestorePreview.vue';
 import {useAccountStore} from '../../stores/account';
-import {loadWorkspace,saveWorkspace,indexedWorkspace,type Workspace} from '../../services/clientWorkspace';
+import {emptyWorkspace,loadWorkspace,saveWorkspace,indexedWorkspace,type Workspace} from '../../services/clientWorkspace';
 const props=withDefaults(defineProps<{integrated?:boolean}>(),{integrated:false});
 const account=props.integrated?useAccountStore():null;
 const owner=computed(()=>account?.user?.id||'offline');
@@ -14,6 +15,7 @@ const courses=ref(props.integrated?[]:createSamples()),selected=ref(''),term=ref
 const course=computed(()=>courses.value.find(item=>item.id===selected.value));
 const terms=computed(()=>[...new Set(courses.value.map(item=>item.term))]);
 const visible=computed(()=>courses.value.filter(item=>term.value==='全部学期'||item.term===term.value));
+const restoreCurrent=computed(()=>props.integrated?workspace.value:{...emptyWorkspace('offline'),courseProfiles:courses.value});
 const creating=ref(false),editing=ref(false),editingRequirement=ref('');
 const profile=ref({name:'',term:'',teacher:'',location:'',group:''});
 const requirement=ref({state:'未记录' as RequirementState,value:'',source:''}),custom=ref('');
@@ -50,7 +52,8 @@ async function addCustom(){if(saving.value)return;const label=custom.value.trim(
   <div class="page courses-preview">
     <RouterLink v-if="integrated" class="text-link" to="/home">← 返回工作台</RouterLink>
     <header><p class="eyebrow">有绪 CampusWeave · 繁事有绪，办事有方。</p><h1>我的课程</h1><p>按学期整理课程，让每条要求都有依据。</p></header>
-    <aside class="preview-note"><template v-if="integrated"><strong>{{account?.signedIn?'当前账户的本机课程':'本机体验课程，与登录账户隔离'}}</strong><p>主动保存后可刷新或重开；课程不会自动上传。依据文字为用户记录，外部来源仍待核对。退出登录会清除该账户的本机课程，请先到个人画像导出本机备份。</p><p>本期仅支持备份导出，课程恢复预览尚未接入。任务、资料和课表时间尚未关联。</p></template><template v-else><strong>课程交互样例</strong><p>全部为合成数据，修改仅在本页内存中生效，刷新后重置。不会读取或保存账户、课表、任务和资料。</p></template></aside>
+    <aside class="preview-note"><template v-if="integrated"><strong>{{account?.signedIn?'当前账户的本机课程':'本机体验课程，与登录账户隔离'}}</strong><p>主动保存后可刷新或重开；课程不会自动上传。依据文字为用户记录，外部来源仍待核对。退出登录会清除该账户的本机课程，请先到个人画像导出本机备份。</p><p>可导出备份并预览课程内容，实际恢复尚未开放。任务、资料和课表时间尚未关联。</p></template><template v-else><strong>课程交互样例</strong><p>全部为合成数据，修改仅在本页内存中生效，刷新后重置。不会读取或保存账户、课表、任务和资料。</p></template></aside>
+    <CourseRestorePreview v-if="restoreCurrent" :current="restoreCurrent" :sample="!integrated" />
     <p v-if="loading" role="status">正在读取本机课程…</p>
     <div v-if="integrated" class="actions"><p v-if="changedElsewhere">本机资料可能已变化，保存前请重新读取并核对。</p><button class="button button--secondary" :disabled="loading||saving" @click="reload(true)">读取最新记录，保留草稿</button></div>
     <p v-if="message" role="status">{{message}}</p><p v-if="error" role="alert" class="error">{{error}}</p>
