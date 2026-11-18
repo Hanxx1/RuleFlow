@@ -112,7 +112,7 @@ try:
         expression="""(async()=>{const dbs=await indexedDB.databases();const data={local:{...localStorage},session:{...sessionStorage},dbs:{}};for(const info of dbs){await new Promise((resolve,reject)=>{const q=indexedDB.open(info.name);q.onerror=reject;q.onsuccess=()=>{const db=q.result;const names=[...db.objectStoreNames];if(!names.length){db.close();resolve();return}const tx=db.transaction(names,'readonly');data.dbs[info.name]={};for(const name of names){const r=tx.objectStore(name).getAll();r.onsuccess=()=>data.dbs[info.name][name]=r.result}tx.oncomplete=()=>{db.close();resolve()};tx.onerror=reject}})}return JSON.stringify(data)})()"""
         result=cdp('Runtime.evaluate',{'expression':expression,'awaitPromise':True,'returnByValue':True})
         assert 'exceptionDetails' not in result,result
-        return result['result']['value']
+        return json.loads(result['result']['value'])
     checks=[]
     def open_demo():
         wait("!![...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='查看时间网格样例')")
@@ -233,6 +233,9 @@ try:
     # Check both an empty signed-in account and an account with a confirmed Case.
     empty={'email':'grid-empty-'+uuid.uuid4().hex[:8]+'@example.com','password':uuid.uuid4().hex}
     registered=req(api+'/api/v1/auth/register',empty)['data'];req(api+'/api/v1/auth/verify',{'token':registered['development_verification_token']})
+    saved=req(api+'/api/v1/schedule/items',dict(title='账户跨周安排',kind='busy',
+        starts_at='2026-11-15T23:30:00+08:00',ends_at='2026-11-16T00:30:00+08:00'),token)['data']
+    selector='.grid-block[data-item="'+saved['id']+'"]'
     for label,creds in [('empty account',empty),('existing account',credentials)]:
         cdp('Page.navigate',{'url':web+'/auth/login'});wait("!!document.querySelector('input[type=email]')")
         for kind,value in [('email',creds['email']),('password',creds['password'])]:
@@ -241,10 +244,48 @@ try:
         js("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href')==='/plan').click()")
         if label=='empty account':wait("document.body.innerText.includes('还没有可执行事项')")
         else:wait("document.body.innerText.includes('行动步骤')&&!document.body.innerText.includes('正在整理执行顺序')")
+        tap('查看账户日程网格')
+        wait("!!document.querySelector('.date-picker input')")
+        date('2026-11-15')
+        if label=='empty account':
+            wait("document.querySelector('.grid-empty')?.textContent==='当天没有安排'")
+            assert not js("document.body.innerText.includes('账户跨周安排')")
+        else:
+            wait("!!document.querySelector("+json.dumps(selector)+")")
+            tap_selector(selector)
+            wait("document.querySelector('dialog[open]')?.innerText.includes('账户跨周安排')")
+            detail=js("document.querySelector('dialog[open]').innerText")
+            assert '23:30' in detail and '00:30' in detail and '待核对' in detail
+            screenshot('account-detail')
+            tap('关闭')
+            tap('周视图')
+            wait("document.querySelectorAll('.grid-day').length===7")
+            assert js("document.querySelector("+json.dumps(selector)+").closest('.grid-day').dataset.day")=='2026-11-15'
+            tap_selector('button[aria-label="后一周"]')
+            wait("!!document.querySelector('.grid-day[data-day=\"2026-11-16\"] .grid-block')")
+            assert js("document.querySelector("+json.dumps(selector)+").style.top")=='0px'
+            screenshot('account-week')
+            tap_selector('button[aria-label="后一周"]')
+            wait("document.querySelector('.grid-empty')?.textContent==='本周没有安排'")
+            assert not js("!!document.querySelector("+json.dumps(selector)+")")
+            cdp('Network.enable')
+            cdp('Network.setBlockedURLs',{'urls':['*/api/v1/schedule?*']})
+            tap_selector('button[aria-label="前一周"]')
+            wait("!!document.querySelector('.grid-demo [role=alert] button')")
+            assert not js("!!document.querySelector('.grid-empty,.grid-block')")
+            screenshot('account-load-failure')
+            cdp('Network.setBlockedURLs',{'urls':[]})
+            tap('重试')
+            wait("!!document.querySelector("+json.dumps(selector)+")")
+            assert js("document.querySelectorAll("+json.dumps(selector)+").length") == 1
+            assert not js("!!document.querySelector('.grid-demo [role=alert]')")
+            checks.append('Account empty week clears old items; failed request shows retry, recovery restores one item')
+        tap('返回日程')
         before=open_demo();tap('周视图');wait("document.querySelectorAll('.grid-day').length===7");verify_isolation(before,'G01 '+label);tap('返回日程')
-    assert count()==0
+    assert count()==1
+    checks.append('Account grids: owner isolation, day/week selection, cross-week midnight and evidence detail')
     checks.append('G12 existing account formal schedule unchanged; RF043 verified separately')
-    (OUT/'results.json').write_text(json.dumps({'checks':checks,'boundary':'Isolated real local API accounts; static fixtures; Chrome touch/keyboard, not physical Android.'},ensure_ascii=False,indent=2),encoding='utf-8')
+    (OUT/'results.json').write_text(json.dumps({'checks':checks,'boundary':'Isolated real local API accounts; account schedules and static fixtures; Chrome touch/keyboard, not physical Android.'},ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps({'output':str(OUT),'checks':checks},ensure_ascii=False));ws.close()
 finally:
     for p in reversed(processes):
