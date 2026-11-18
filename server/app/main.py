@@ -1045,9 +1045,11 @@ def _batch_for_source_mutation(batch_id:str,owner_id:str):
  with conn() as c:c.execute("UPDATE import_batches SET state='draft',revision=revision+1,analyzed_revision=NULL,started_at=NULL,demo_processing_at=NULL,demo_completed_at=NULL,final_status=NULL,result_json=NULL,updated_at=? WHERE id=? AND owner_id=?",(stamp(),batch_id,owner_id))
  return owned('import_batches',batch_id,owner_id)
 
-def _store_import_source(owner_id:str,batch_id:str,kind:str,name:str,status:str,error:str|None,metadata:dict,extracted_text:str|None):
+def _store_import_source(owner_id:str,batch_id:str,kind:str,name:str,status:str,error:str|None,metadata:dict,extracted_text:str|None,document_id:str|None=None):
  source_id=str(uuid.uuid4());now=stamp()
- with conn() as c:c.execute('INSERT INTO import_sources(id,owner_id,batch_id,kind,name,status,error,metadata_json,extracted_text,evidence_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(source_id,owner_id,batch_id,kind,name,status,error,json.dumps(metadata,ensure_ascii=False),extracted_text,None,now,now))
+ with conn() as c:
+  c.execute('INSERT INTO import_sources(id,owner_id,batch_id,kind,name,status,error,metadata_json,extracted_text,evidence_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(source_id,owner_id,batch_id,kind,name,status,error,json.dumps(metadata,ensure_ascii=False),extracted_text,None,now,now))
+  if document_id:c.execute('INSERT INTO source_documents VALUES(?,?,?)',(owner_id,source_id,document_id))
  return _import_source_json(owned('import_sources',source_id,owner_id))
 
 def _source_error(exc:Exception):
@@ -1085,15 +1087,20 @@ def add_import_text_source(batch_id:str,body:TextImport,user=Depends(current_use
 
 @app.post('/api/v1/import-batches/{batch_id}/sources/url')
 def add_import_url_source(batch_id:str,body:UrlImport,user=Depends(current_user)):
+ return _add_import_url_source(batch_id,body,user)
+
+def _add_import_url_source(batch_id:str,body:UrlImport,user,attachment:bool=False):
  if not body.consent:raise HTTPException(422,'请先确认隐私处理范围')
  _batch_for_source_mutation(batch_id,user['id']);parsed=urlparse(body.url);name=body.title or parsed.hostname or '网页通知'
  try:
-  raw,mime,final_url=fetch_public(body.url);blocks=parse_url_blocks(raw,mime,final_url);extracted='\n\n'.join(block['text'] for block in blocks if block.get('text','').strip())
+  raw,mime,final_url=fetch_public(body.url)
+  if attachment and mime in {'text/html','application/xhtml+xml'}:
+   raise HTTPException(422,{'code':'ATTACHMENT_HTML_RESPONSE','message':'附件地址返回网页，尚未取得有效文件；请核对来源或手动上传原件'})
+  blocks=parse_url_blocks(raw,mime,final_url);extracted='\n\n'.join(block['text'] for block in blocks if block.get('text','').strip())
   if not extracted:raise ValueError('empty')
   suffix={'text/html':'.html','application/xhtml+xml':'.xhtml','application/pdf':'.pdf','text/plain':'.txt'}.get(mime,mimetypes.guess_extension(mime) or '')
   with conn() as c:document=store_document(c,document_root(),user['id'],raw,mime,'网页原件'+suffix,lambda *args:blocks)
-  source=_store_import_source(user['id'],batch_id,'url',name,'ready',None,{'url':body.url,'final_url':final_url,'mime':mime,'blocks':len(blocks),'document_id':document['id'],'attachments':attachment_candidates(raw,mime,final_url)},extracted)
-  with conn() as c:c.execute('INSERT INTO source_documents VALUES(?,?,?)',(user['id'],source['id'],document['id']))
+  source=_store_import_source(user['id'],batch_id,'url',name,'ready',None,{'url':body.url,'final_url':final_url,'mime':mime,'blocks':len(blocks),'document_id':document['id'],'attachments':attachment_candidates(raw,mime,final_url)},extracted,document['id'])
   return data(source)
  except Exception as exc:
   return data(_store_import_source(user['id'],batch_id,'url',name,'failed',_source_error(exc),{'url':body.url,'error_code':_source_error_code(exc)},None))
@@ -1105,7 +1112,7 @@ def import_attachment_candidate(batch_id:str,source_id:str,body:AttachmentImport
  if source['batch_id']!=batch_id:raise HTTPException(404,'来源不属于当前批次')
  candidates=json.loads(source['metadata_json']).get('attachments',[])
  if body.index>=len(candidates):raise HTTPException(422,'附件候选不存在')
- result=add_import_url_source(batch_id,UrlImport(url=candidates[body.index]['url'],title=candidates[body.index]['title'],consent=True),user)
+ result=_add_import_url_source(batch_id,UrlImport(url=candidates[body.index]['url'],title=candidates[body.index]['title'],consent=True),user,attachment=True)
  with conn() as c:
   child=c.execute('SELECT metadata_json FROM import_sources WHERE id=? AND owner_id=?',(result['data']['id'],user['id'])).fetchone()
   metadata=json.loads(child['metadata_json']);metadata['parent_source_id']=source_id
@@ -1124,10 +1131,10 @@ async def add_import_file_sources(batch_id:str,files:list[UploadFile]=File(...),
    raw=await read_upload(upload);metadata.update(size=len(raw),sha256=hashlib.sha256(raw).hexdigest())
    with conn() as c:document=store_document(c,document_root(),user['id'],raw,mime,name,parse_bytes)
    metadata.update(document_id=document['id'],blocks=len(document['lines']))
-   if document['status']=='failed':raise DocumentError(document['error_code'],'文件已保存，解析未完成；可查看原件')
-   extracted='\n'.join(line['text'] for line in document['lines'])
-   source=_store_import_source(user['id'],batch_id,'file',name,'ready',None,metadata,extracted)
-   with conn() as c:c.execute('INSERT INTO source_documents VALUES(?,?,?)',(user['id'],source['id'],document['id']))
+   failed=document['status']=='failed'
+   if failed:metadata['error_code']=document['error_code']
+   extracted=None if failed else '\n'.join(line['text'] for line in document['lines'])
+   source=_store_import_source(user['id'],batch_id,'file',name,'failed' if failed else 'ready','文件已保存，解析未完成；可查看原件' if failed else None,metadata,extracted,document['id'])
    result.append(source)
   except DocumentError as exc:
    metadata['error_code']=exc.code;result.append(_store_import_source(user['id'],batch_id,'file',name,'failed',str(exc),metadata,None))
