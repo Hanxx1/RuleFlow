@@ -39,7 +39,9 @@ public class ShareReceiverInstrumentedTest {
   }
   private void launch(Intent intent){context.startActivity(intent.setClass(context,ShareReceiverActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION));}
   private Uri textFile(String name) throws Exception {
-    File file=new File(context.getCacheDir(),"instrumented-"+System.nanoTime()+name);created.add(file);
+    File directory=new File(context.getCacheDir(),"exports");
+    assertTrue(directory.isDirectory()||directory.mkdirs());
+    File file=new File(directory,"instrumented-"+System.nanoTime()+name);created.add(file);
     try(FileOutputStream stream=new FileOutputStream(file)){stream.write("Synthetic share input".getBytes("UTF-8"));}
     return FileProvider.getUriForFile(context,context.getPackageName()+".fileprovider",file);
   }
@@ -49,6 +51,12 @@ public class ShareReceiverInstrumentedTest {
     JSONArray items=awaitItems(2),ids=new JSONArray();ArrayList<File> copies=new ArrayList<>();
     for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assertEquals("pending",item.getString("state"));assertEquals("file",item.getString("kind"));File file=new File(item.getString("local_path"));assertTrue(file.exists());copies.add(file);ids.put(item.getString("id"));}
     PendingImportStore.clear(context,ids);for(File file:copies)assertFalse(file.exists());assertEquals(baseline.size(),PendingImportStore.read(context).length());
+  }
+  @Test public void providerRejectsFilesOutsideExportDirectory() throws Exception {
+    File file=new File(context.getCacheDir(),"instrumented-private-"+System.nanoTime());created.add(file);
+    try(FileOutputStream stream=new FileOutputStream(file)){stream.write(1);}
+    try{FileProvider.getUriForFile(context,context.getPackageName()+".fileprovider",file);fail("cache root must not be shareable");}
+    catch(IllegalArgumentException expected){ /* Outside configured roots. */ }
   }
   @Test public void sharedUrlIsQueuedWithoutNetwork() throws Exception {
     launch(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"https://example.com/synthetic-notice"));
