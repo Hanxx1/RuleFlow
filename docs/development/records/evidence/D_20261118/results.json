@@ -1,0 +1,19 @@
+{
+  "base": "2785e1c + existing workspace changes",
+  "localOccurrences": [
+    [
+      "2026-11-09T09:00:00+08:00",
+      "2026-11-11T14:00:00+08:00",
+      "2026-11-16T09:00:00+08:00",
+      "2026-11-18T14:00:00+08:00"
+    ],
+    [
+      "2026-11-11T14:00:00+08:00",
+      "2026-11-16T09:00:00+08:00",
+      "2026-11-18T14:00:00+08:00"
+    ]
+  ],
+  "deleteCancelPreserved": true,
+  "restoreCancelPreserved": true,
+  "serverScheduleCount": 1
+}
