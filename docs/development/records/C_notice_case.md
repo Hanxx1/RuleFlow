@@ -52,6 +52,76 @@
 
 提交授权补记（2026-11-17）：用户审阅切片说明后明确要求“提交并推送”。本次授权范围为模型、合成样例、组件、入口脚本、独立HTML、测试、模块README及本记录共8个文件，推送至 `feat/CM-007-mixed-review-preview`。原RF-013未跟踪测试排除。上述未提交状态为验证阶段快照；实际提交号与推送结果以Git记录为准。本次不创建PR或合并主线。
 
+
+### PR #17 冲突处理与补测（2026-11-18）
+
+1. **任务信息** — C；用户要求处理 PR #17 冲突。在干净的独立 clone `RuleFlow-CM003-delete-preview` 复用工作区，切换至 `feat/CM-007-mixed-review-preview`（`7d64dea`），fetch 后将 `origin/main`（`a7d5986`）以 `--no-commit --no-ff` 合入。本地冲突已解决，尚未提交或推送；远端冲突待提交推送后重新核验。
+2. **技术实现** — 仅人工解决本记录及课程模块 README 两处文本冲突，保留 CM-007 与 CM-003 恢复／删除只读预览的完整说明和记录。主线业务代码自动合并，未额外修改；README 待办从“删除影响预览”修正为“删除影响关联核验”，对应已存在只读预览的实际边界。
+3. **设计与关键决策** — 合并主线而不重写 PR 历史；双方追加内容均保留。主线后端附件恢复及 Android FileProvider 更新保持原样，不重新设计公共接口或配置。
+4. **遇到的问题及解决** — 两个分支在相同位置追加独立内容造成文本冲突；按章节保留双方内容并消除过时重复待办。无业务代码冲突。
+5. **测试与验证** — Windows 既有依赖环境；`npm.cmd --prefix mobile test`：25 文件、160 项通过；`npm.cmd --prefix mobile run build`：类型检查与生产构建通过，213 modules。另在 mobile 目录以 Node ESM 调用现有 Vite `build`，输入 `mixed-import-preview.html`，输出 `.runtime/pr17-mixed-build/`：15 modules，独立 HTML/JS/CSS 构建通过；保留已有 Vite CJS 弃用提示。`python -X utf8 scripts/check-docs.py`（212 个本地目标）、`python -X utf8 scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份样例一致）通过；冲突索引已清空，差异空白检查通过。未重跑浏览器、后端或 Android 测试，本次人工变更仅文档。
+6. **运行证据** — 本次真实命令输出、暂存合并差异及本机忽略目录 `.runtime/pr17-mixed-build/`；相对 `origin/main` 仍仅原 PR 的 8 文件存在差异。无新提交、APK 或远端成功回执；原始 Codex 会话分享／导出待 C 保存。
+7. **未完成与限制** — 用户已于本轮明确授权“提交并推送，更新远端PR”，本次按授权提交此合并并更新 PR #17 描述；不合并 PR。实际提交号、推送结果及远端可合并状态以 Git / GitHub 回执为准。CM-007 正式接入、公共协议及原有真机验证限制仍适用。
+
+## CM-003｜课程备份只读恢复预览（2026-11-17）
+
+### 1. 任务信息
+
+- 负责人 C；用户在近期任务总结后要求“开始开发”，本次执行建议的恢复预览纯逻辑与界面切片。基线为 fetch 后 `origin/main` / `00d70a9`，分支 `feat/CM-003-course-restore-preview`。状态：只读预览子项已实现并验证，CM-003 整卡未完成；未提交、推送或创建 PR。
+- 公共恢复写入、删除影响及跨模块引用协议不在本次范围；本次开工不代替团队签认。
+
+### 2. 技术实现
+
+- 新增 `mobile/src/features/courses/courseRestorePreview.ts`：`previewCourseRestore` 复用既有 `upgradeWorkspace` / `validateWorkspace`，先校验 owner，再解析课程；按稳定 ID 对比新增、相同、冲突，保留档案、要求、来源和历史供对照。`summarizeCourseRestore` 仅计算选中范围的合并／覆盖预期及 100 门容量限制，不返回存储操作或调用保存。
+- 新增 `CourseRestorePreview.vue` 和10项 `courseRestorePreview.test.ts`；在本模块 `CoursePreview.vue` 增加入口并更新提示，模块 README 补使用方法与限制。文件最多2 MB；初始不选课程，预览当前／备份内容、历史与预期数量，取消清空；身份变化、当前数据变化及卸载令异步读取失效。主应用比较当前 Workspace，独立入口仅比较内存样例。
+- 未修改 Workspace 格式、备份导出／导入服务、公共导航、数据库、API、AI、B/D 模块或 Android；既有直接恢复门禁保持。只读使用已有存储接口，不提供恢复／删除写入。
+
+### 3. 设计与关键决策
+
+- 合并预期保留本机冲突；覆盖预期仅替换选中的同 ID 课程（包含其要求及历史），明确提示可能替换较新历史。名称不作为身份，未选课程、画像及旧课表不纳入写入范围。这是可评审的预览行为，不是已批准的恢复协议。
+- v1/v2 备份按既有读取兼容规则预览，不从旧课表制造课程档案；旧版异常携带课程档案时拒绝静默丢弃。非法、跨 owner、未知版本、重复身份及无效要求拒绝；不泄露其他 owner 的课程内容或校验细节。
+- 现有课程档案没有正式 Task／资料／时间规则关联字段，本次仅标明这些引用待核对，展示旧课表记录数量，不宣称完成失效引用核验、时段恢复或服务端原文件备份。
+
+### 4. 遇到的问题及解决
+
+- 默认 Git fetch 的本机代理不可达，沙箱禁代理后 DNS 线程启动失败；通过工具批准的正常本机权限、单次禁代理 fetch 成功取得 main，未修改 Git 全局配置。
+- 沙箱 Edge 启动因 `TransactNamedPipe` 错误退出；正常本机 Edge 访问沙箱 Vite 超时。停止本次沙箱服务，以工具批准的正常本机权限启动仅监听 `127.0.0.1:5183` 的 Vite 后，相同浏览器脚本通过，没有降低断言。
+- 人工查看截图发现读取后文件选择框被清空，改为读取时保留已选文件、关闭或数据变化时再清空；相同脚本两尺寸重跑通过。
+
+### 5. 测试与验证
+
+- Windows、既有 Node/Vitest、Playwright 1.62.1、Edge；Browser plugin not available，按前端测试技能使用已有 Playwright，不新增依赖。
+- `npm.cmd --prefix mobile test -- src/features/courses/courseRestorePreview.test.ts`：10项通过；`npm.cmd --prefix mobile test`：24文件146项通过。覆盖同名跨学期、内容／历史冲突、合并及选中覆盖统计、输入不变、跨 owner、v1/v2、损坏／未知版本／过大／非法要求、重复身份、stale／身份变化、无效选择和容量超限。
+- `npm.cmd --prefix mobile run build`：类型检查及生产构建通过，210 modules；保留既有 Vite CJS 弃用提示。
+- 最终文件选择修正后重跑构建与同一浏览器脚本均通过；`scripts/check-docs.py`（212个本地链接／图片目标）、`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8份样例一致）和 `git diff --check` 均通过。人工查看手机及桌面截图。
+- 仓库外 `check-course-restore.cjs` 在 `/courses`、390×844和1280×900运行通过：实际页面新增合成课程、读取真实 IndexedDB 生成合成备份、文件选择、冲突对照、勾选／模式切换、取消及重开清空、跨 owner 不泄露、损坏／旧备份、并发修改后重读失效、合成身份切换清空。预览和取消前后序列化 IndexedDB Workspace 完全一致。页面身份／非空／框架遮罩／控制台／横向溢出检查通过；已人工查看手机截图。身份由合成 Pinia 状态切换，不是实际登录鉴权联调。
+- 未执行后端、在线模型、Android、真机、恢复写入、跨端引用或删除测试，无新 APK。旧 RF-013 回归文件未运行、不纳入本切片。
+
+### 6. 运行证据
+
+- 仓库内预览源文件、10项测试及本次命令输出。仓库外浏览器脚本与截图：`C:/Users/Logic/.codex/visualizations/2026/11/17/01a1e764-ce2d-7412-b594-f5124a379d1e/check-course-restore.cjs`、同目录 `restore-preview-390.png`、`restore-preview-1280.png`；仅本机可访问，未提交截图、备份或用户数据。
+- 原有未跟踪 `server/tests/test_import_recovery_guards.py` SHA-256 仍为 `66043c97597546d861d579733fe63321de6b9c2089014100510b637b20926ed5`，保留不改。commit／PR 不适用；原始 Codex 会话分享或导出待 C 保存，工作记录不能替代。
+
+### 7. 未完成与限制
+
+- 本次只完成课程备份只读预览；不提供实际恢复，含课程备份仍被旧导入门禁拒绝。删除影响预览、备份选中写入、恢复原子范围、时间／Task／资料引用检查及 B/D 执行回执待对应确认与实现。合并／覆盖预览不意味着这些协议获批。
+- 预览校验整个备份的既有 Workspace 格式，任一非法记录会拒绝整份预览，不隔离恢复合法子项。外部引用均待核对，不显示核验成功。没有跨设备或真实鉴权验收，无法保证浏览器清理后的恢复。
+- 下一步由 B 核 RF-012 备份范围、owner/revision和历史替换，D 核时间规则／Task影响，A/B协调恢复范围和写入协议后，再做确认写入及删除影响切片。未向团队发消息或代写他人签认；提交、推送待用户授权。
+
+提交授权补记（2026-11-17）：用户审阅提交范围后明确要求“提交并推送”，授权将本次预览逻辑、组件、测试、课程页、模块 README 与本记录共6个文件提交并推送至 `feat/CM-003-course-restore-preview`。原 RF-013 未跟踪测试排除。上述未提交状态为验证阶段快照，实际提交号及推送结果以 Git 记录为准；本次不创建 PR 或合并主线。
+
+### 2026-11-17 续：删除影响只读预览
+
+1. **任务信息** — C；用户在远端进度与下一阶段建议后要求“开始开发”，本次落实 CM-003 删除影响只读流程。实际工作区为仓库旁独立 clone `RuleFlow-CM003-delete-preview`，分支 `feat/CM-003-course-delete-preview`，基于 PR #16 的 `1a1724e`；fetch 时 main 仍为 `00d70a9`。本子项已实现并验证，整卡未完成；本次未提交、推送、创建 PR 或合并。原 RF-013 工作区未修改。
+2. **技术实现** — 新增 `mobile/src/features/courses/CourseDeletePreview.vue`，在 `CoursePreview.vue` 总览接入并更新模块 README。读取当前选中课程，展示档案／要求／依据文字／历史数量和要求范围；任务、时间规则、日程、提醒、排程草案与共享资料均明确待核对。仅本地展开／关闭；Escape 与关闭返回触发按钮。身份、课程内容、revision、加载或本机变更提示变化时关闭，stale 时禁用重新展开。未改共享类型、存储、API、数据库、导航、B/D 文件或 Android，无新依赖。
+3. **设计与关键决策** — 现有课程没有正式跨模块关联字段，不猜测“无关联”或按同名匹配；仅列当前已读记录与待核验事项。不开放删除、解绑、恢复或模拟成功，不将文字依据当正式 EvidenceRef。沿用既有课程身份与 RF-012 保存边界，未新增公共协议或代写团队签认。
+4. **遇到的问题及解决** — 托管 worktree 工具未返回且 Git 中未出现新 worktree，终止等待后改用独立本地 clone；沙箱 clone 的 MSYS 错误由批准的正常本机命令解决。沙箱 npm 离线缓存缺依赖，批准后使用本机已有缓存安装锁文件依赖成功。Browser plugin not available，使用既有 Playwright/Edge；沙箱 Edge 因 `TransactNamedPipe` 退出，正常 Edge 访问沙箱服务超时；停止沙箱服务后在批准权限下启动仅监听 127.0.0.1 的 Vite 并验证。桌面脚本首次在异步重读完成前判断 enabled 失败，改为等待原按钮启用后保留同一断言，两尺寸完整重跑通过；未放宽功能断言。
+5. **测试与验证** — Windows、现有 Node/Vitest/Playwright/Edge。`npm.cmd --prefix mobile test`：24 文件 146 项通过；`npm.cmd --prefix mobile run build`：类型检查与生产构建通过，213 modules，保留 Vite CJS 旧提示。仓库外 `check-course-delete.cjs` 对 `/courses` 的 390×844、1280×900 验证通过：页面身份／非空／无框架错误遮罩、控制台无错误、无横向溢出；当前课程数量与历史、同名跨学期独立、未接关联保持待核对、关闭／Escape 焦点返回、本机变更禁用／重读、合成身份切换清空。预览前后所有 Workspace（包含另一个合成 owner）序列化完全一致，IDB put/add/delete/clear 调用 0，业务请求 0；实际登录鉴权未测。人工查看两尺寸截图，最终手机 context 启用 isMobile/hasTouch。`python -X utf8 scripts/check-docs.py`（212 个本地目标）、`python -X utf8 scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份样例一致）及 `git diff --check` 通过。未运行后端、在线模型、实际恢复／删除、跨模块或 Android 真机测试，无 APK。
+6. **运行证据** — 本次工具命令输出及实际新增组件；本机证据目录 `C:/Users/Logic/.codex/visualizations/2026/11/17/01a1e8af-10a6-77f2-9e13-a3acf8338e0a/` 中的 `check-course-delete.cjs`、`course-delete-390.png`、`course-delete-1280.png` 及 `course-delete-viewport-390.png`／`course-delete-viewport-1280.png`。仅合成资料，脚本和截图未提交。commit/PR 不适用；原始 Codex 会话分享或导出待 C 保存，工作记录不能替代。
+7. **未完成与限制** — 只读删除影响准备不等于实际影响查询完成。B 仍需核资料引用保护及 RF-012 删除／恢复范围，D 核 Task／规则／日程／提醒／草案影响，A/B 协调公共协议后才能实施正式操作；CM-003 实际恢复、删除及联合验收未完成。此分支包含 #16 前置，后续评审须注明依赖，并保留其他分支 C 工作记录和 README 的独立增量。
+
+提交授权补记（删除影响切片，2026-11-17）：用户明确要求“提交推送，并且编写PR DES”。授权范围为本次删除预览组件、课程页接入、模块 README 与本记录共4文件，推送 `feat/CM-003-course-delete-preview`；准备 PR 描述，未授权创建或合并 PR。上述未提交状态为开发阶段快照；实际提交号及推送结果以 Git 记录为准。用户的默认附带 DES 偏好另写入仓库外本地 AGENTS.md，不纳入项目提交。
+
 ## CM-001｜课程公共契约与混合输入样例（2026-11-10）
 
 ### 1. 任务信息
@@ -466,6 +536,40 @@ $env:TMP=$env:TEMP
 提交准备范围仅为 `C_notice_case.md` 与 `C_RF013_source_handoff.md` 两份文档，仍如实保留RED结果及待确认状态；测试源文件留在本地，待正式修复与GREEN回归后随修复分支交付。本次准备不表示已提交、推送或获得公共修复确认。
 
 仅记录真实工作。首轮成果已于 2026-11-05 提交并推送（`786815c`），对应 [PR #2](https://github.com/Hanxx1/RuleFlow/pull/2)，2026-11-06 核对仍为 open、未合并。本次补测记录随同一分支提交，具体版本见 Git 历史。重要原始 Codex 会话分享链接或导出归档待 C 保存，本记录不能替代原始会话证据。
+
+#### 2026-11-17 H07 最小修复与回归
+
+**1. 任务信息** — C；用户在本次会话明确转达“已确认上述范围，可实施”：仅在 `main.py` 修复附件 HTML/XHTML 误成功与解析失败原件缺正式来源关联，保留普通网页、授权、owner 和事务规则，不改 API/数据库。此确认不扩展至 form-context、公共 AI、候选存储或 CM 联合写入。`git fetch origin --prune` 成功，最新 main 为 `00d70a9`，从该基线创建 `fix/RF-013-attachment-recovery`。状态：H07 两类缺口最小修复已实现，验证结果见下；RF-013 整卡未完成。未提交、推送或创建 PR。
+
+**2. 技术实现** — 修改 `server/app/main.py`：原 URL 路由委托内部 `_add_import_url_source`，仅附件入口传入 `attachment=True`；下载返回 HTML/XHTML 时在解析、Document 保存前记 failed 来源及 `ATTACHMENT_HTML_RESPONSE`，既有逻辑继续记录父来源。普通 HTML 通知仍可导入。文件解析失败／无文字时保留 Document 与错误码，以 failed 来源保存，不再提前抛出而跳过正式关联。`_store_import_source` 将可选 Document 关联与来源插入放在同一数据库事务。原本本地未跟踪的 `server/tests/test_import_recovery_guards.py` 纳入本次修复交付范围，保留原7项断言，新增4项参数化后回归；未修改其他成员文件、前端、Provider、依赖、Schema、数据库迁移或 Android。
+
+**3. 设计与关键决策** — 附件返回网页一律显示尚未取得有效文件，不猜测登录状态、不自动跟随登录；这也不声明支持将网页当作附件。公共路由签名不增加附件开关，避免产生新查询参数或改变 OpenAPI。原件解析失败仍不可分析，但正式关联保护原件不被当成无引用文件删除；用户移除来源后才可按既有权限显式删除原件。来源和关联插入失败一起回滚；不批修历史孤立关系，不伪造旧数据引用。
+
+**4. 遇到的问题及解决** — 沙箱 Git 首次无法连接本机代理；通过 GitHub 只读工具核对 main 后，在工具批准的正常本机权限执行 fetch 成功。首次沙箱 pytest 无输出，已中止，未计作完成；使用项目忽略目录 TEMP/TMP 及正常本机权限运行原命令取得真实结果。未修改代理、TLS、依赖或放宽断言。
+
+**5. 测试与验证** — Windows、既有 `.runtime/c-venv`（CPython 3.12）、内存 SQLite、合成账户与临时文件；网络获取与解析异常由定向测试替身注入。所有命令从仓库根执行，TEMP/TMP 指向本机忽略目录 `.runtime/c-rf013-20261117/tmp`。
+
+```powershell
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_import_recovery_guards.py -q -p no:cacheprovider --tb=short
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_import_recovery_guards.py server/tests/test_notice_handoff_baseline.py server/tests/test_link_candidates.py server/tests/test_document_api.py server/tests/test_analysis_retry.py -q -p no:cacheprovider --tb=short
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests -q -p no:cacheprovider --tb=short --disable-warnings
+.runtime/c-venv/Scripts/python.exe -X utf8 scripts/check-api-contract.py
+.runtime/c-venv/Scripts/python.exe -X utf8 docs/development/records/evidence/C_20261110/probe_rf013_recovery.py
+```
+
+- 修复前原7项在最新后端基线复现：**4 failed、3 passed、5 warnings，退出1**。三种附件HTML/XHTML误为ready，解析失败正式关联为0。
+- 最小修复后原7项加相关旧来源、原件权限及重试排序回归：**20 passed、5 warnings，退出0**。
+- 补充删除保护、混合文件隔离、关联失败事务回滚及手工替换后，本文件 **11 passed、5 warnings，退出0**。原7项失败断言未删除或改弱。
+- 后端全量：**235 passed、5 warnings，28.85s，退出0**。覆盖当前主线旧链路及本轮11项回归；不是前端、真机或真实模型验收。
+- 原H07探针 **8项PASS、0项OPEN_GAP，退出0**；仍是合成诊断，不是真网站或产品整卡验收。
+- OpenAPI 指纹与已接受基线 `aa40e470df16fa9b2143aa452c92dab9debaa18467e3b9a7694cbeb95df838ed` 一致；未重写基准。5条警告为既有FastAPI／Starlette／AnyIO弃用。
+- `scripts/check-docs.py`（212个本地目标）、`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8份副本一致）及 `git diff --check` 均通过，退出0；这些静态检查不替代产品验收。
+
+**6. 运行证据** — 实际命令输出见本次原始会话；仓库内修复、11项回归与既有H07探针可供复现。没有创建提交、PR、截图、APK或共享日志链接。原RF-013测试源文件因本轮新增4项回归已变化，旧SHA-256不再代表当前文件；原始7项断言保留。原始Codex会话分享／导出待C保存，本记录不能替代。
+
+**7. 未完成与限制** — 两类修复只影响后续导入，不自动补历史孤立来源关系。真实网站／OCR／Office格式、失败恢复页面和Android分享未验，无新APK；本轮未运行前端。form-context及H04/H05、B消费H06、真机H08仍需对应确认及实现，RF-013整卡不标完成。CM的PR #16/#17保持独立，未修改或合并。提交与推送须用户另行确认本次具体diff。
+
+提交授权补记（2026-11-17）：用户明确要求“提交并推送”，授权将上述 `main.py`、11项回归测试及本记录共三个文件提交并推送至 `fix/RF-013-attachment-recovery`。上文未提交状态为验证阶段快照；实际提交号及远端状态以 Git 历史和推送结果为准。本次不创建 PR 或合并主线。
 
 ## RF-001｜C 模块走读子项
 

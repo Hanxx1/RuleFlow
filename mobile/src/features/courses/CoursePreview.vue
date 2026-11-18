@@ -3,8 +3,10 @@ import {computed,onMounted,onBeforeUnmount,ref,watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import {commonRequirements,createCourse,requirementStates,updateCourseProfile,updateRequirement,type RequirementState,type CoursePreview} from './courseModel';
 import {createSamples} from './demoModel';
+import CourseRestorePreview from './CourseRestorePreview.vue';
+import CourseDeletePreview from './CourseDeletePreview.vue';
 import {useAccountStore} from '../../stores/account';
-import {loadWorkspace,saveWorkspace,indexedWorkspace,type Workspace} from '../../services/clientWorkspace';
+import {emptyWorkspace,loadWorkspace,saveWorkspace,indexedWorkspace,type Workspace} from '../../services/clientWorkspace';
 const props=withDefaults(defineProps<{integrated?:boolean}>(),{integrated:false});
 const account=props.integrated?useAccountStore():null;
 const owner=computed(()=>account?.user?.id||'offline');
@@ -14,6 +16,7 @@ const courses=ref(props.integrated?[]:createSamples()),selected=ref(''),term=ref
 const course=computed(()=>courses.value.find(item=>item.id===selected.value));
 const terms=computed(()=>[...new Set(courses.value.map(item=>item.term))]);
 const visible=computed(()=>courses.value.filter(item=>term.value==='全部学期'||item.term===term.value));
+const restoreCurrent=computed(()=>props.integrated?workspace.value:{...emptyWorkspace('offline'),courseProfiles:courses.value});
 const creating=ref(false),editing=ref(false),editingRequirement=ref('');
 const profile=ref({name:'',term:'',teacher:'',location:'',group:''});
 const requirement=ref({state:'未记录' as RequirementState,value:'',source:''}),custom=ref('');
@@ -50,7 +53,8 @@ async function addCustom(){if(saving.value)return;const label=custom.value.trim(
   <div class="page courses-preview">
     <RouterLink v-if="integrated" class="text-link" to="/home">← 返回工作台</RouterLink>
     <header><p class="eyebrow">有绪 CampusWeave · 繁事有绪，办事有方。</p><h1>我的课程</h1><p>按学期整理课程，让每条要求都有依据。</p></header>
-    <aside class="preview-note"><template v-if="integrated"><strong>{{account?.signedIn?'当前账户的本机课程':'本机体验课程，与登录账户隔离'}}</strong><p>主动保存后可刷新或重开；课程不会自动上传。依据文字为用户记录，外部来源仍待核对。退出登录会清除该账户的本机课程，请先到个人画像导出本机备份。</p><p>本期仅支持备份导出，课程恢复预览尚未接入。任务、资料和课表时间尚未关联。</p></template><template v-else><strong>课程交互样例</strong><p>全部为合成数据，修改仅在本页内存中生效，刷新后重置。不会读取或保存账户、课表、任务和资料。</p></template></aside>
+    <aside class="preview-note"><template v-if="integrated"><strong>{{account?.signedIn?'当前账户的本机课程':'本机体验课程，与登录账户隔离'}}</strong><p>主动保存后可刷新或重开；课程不会自动上传。依据文字为用户记录，外部来源仍待核对。退出登录会清除该账户的本机课程，请先到个人画像导出本机备份。</p><p>可导出备份并预览课程内容，实际恢复尚未开放。任务、资料和课表时间尚未关联。</p></template><template v-else><strong>课程交互样例</strong><p>全部为合成数据，修改仅在本页内存中生效，刷新后重置。不会读取或保存账户、课表、任务和资料。</p></template></aside>
+    <CourseRestorePreview v-if="restoreCurrent" :current="restoreCurrent" :sample="!integrated" />
     <p v-if="loading" role="status">正在读取本机课程…</p>
     <div v-if="integrated" class="actions"><p v-if="changedElsewhere">本机资料可能已变化，保存前请重新读取并核对。</p><button class="button button--secondary" :disabled="loading||saving" @click="reload(true)">读取最新记录，保留草稿</button></div>
     <p v-if="message" role="status">{{message}}</p><p v-if="error" role="alert" class="error">{{error}}</p>
@@ -71,6 +75,7 @@ async function addCustom(){if(saving.value)return;const label=custom.value.trim(
       <div class="actions"><button class="button button--secondary" @click="open('')">返回课程列表</button><button class="button button--secondary" @click="startProfile()">编辑档案</button></div>
       <section class="panel"><span class="term">{{course.term}}</span><h2>{{course.name}}</h2><p>{{course.teacher||'教师待记录'}} · {{course.location||'地点待记录'}}</p></section>
       <nav class="course-tabs" aria-label="课程详情分区"><button v-for="value in ['总览','课程要求','任务','资料']" :key="value" :aria-pressed="tab===value" @click="tab=value;editingRequirement='';error=''">{{value}}</button></nav>
+      <CourseDeletePreview v-if="tab==='总览'" :course="course" :owner="owner" :revision="workspace?.revision??0" :unavailable="loading||saving||changedElsewhere" :sample="!integrated" />
       <section v-if="tab==='总览'" class="panel"><h2>课程总览</h2><p>已确认 {{course.requirements.filter(r=>r.state==='已确认').length}} 项要求，其余请逐项记录或核对。</p><p>{{integrated?'档案信息依据：本机用户填写，教师原文尚未核验。':'档案信息依据：合成样例／本次用户输入，未对接教师原文。'}}</p><h3>小组与分工</h3><p>{{course.group||'尚未记录小组信息'}}</p><h3>上课时间</h3><p>课程时间规则待与课表模块接入，当前不生成或修改排程占用。</p><details v-if="course.profileHistory.length" class="profile-history"><summary>档案修改历史（{{course.profileHistory.length}}）</summary><p>{{integrated?'按修改顺序保留旧值，随课程档案保存在本机。':'按修改顺序保留旧值；仅为本页样例记录，刷新后重置。'}}</p><ol><li v-for="(entry,index) in course.profileHistory" :key="index"><p>{{entry.term}} · {{entry.name}}</p><p>教师：{{entry.teacher||'未记录'}}；地点：{{entry.location||'未记录'}}</p><p>小组与分工：{{entry.group||'未记录'}}</p></li></ol></details></section>
       <section v-else-if="tab==='课程要求'" class="requirements">
         <article v-for="item in course.requirements" :key="item.id" class="panel"><div class="actions"><h2>{{item.label}}</h2><span class="state">{{item.state}}</span></div><p>{{item.value||(item.state==='明确无要求'?'已明确记录无此项要求':'尚无要求内容，不能据此视为无要求')}}</p><p class="source">依据：{{item.source||'暂无依据，待记录'}}</p>
