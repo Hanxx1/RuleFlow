@@ -1,0 +1,16 @@
+{
+  "checks": [
+    "short titles wrap fully at three viewports, touch details and focus return, exact 10-minute geometry",
+    "overlap full-column summary, readable three-item sheet, detail transition and Escape focus return at three widths",
+    "G08 three viewport touch scroll and no page overflow",
+    "G02/G04/G05/G06/G09/G10 geometry, split, course details and keyboard",
+    "G03/G07/G11 navigation, empty, offset and malformed/missing evidence",
+    "G01 offline isolated",
+    "G01 empty account isolated",
+    "Account empty week clears old items; failed request shows retry, recovery restores one item",
+    "G01 existing account isolated",
+    "Account grids: owner isolation, day/week selection, cross-week midnight and evidence detail",
+    "G12 existing account formal schedule unchanged; RF043 verified separately"
+  ],
+  "boundary": "Isolated real local API accounts; account schedules and static fixtures; Chrome touch/keyboard, not physical Android."
+}

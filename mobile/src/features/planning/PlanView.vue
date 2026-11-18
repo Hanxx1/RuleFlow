@@ -10,8 +10,8 @@ import StatusBadge from '../../components/StatusBadge.vue';
 import TaskTimeline from '../../components/TaskTimeline.vue';
 import AppBottomSheet from '../../components/AppBottomSheet.vue';
 import PlanSchedule from './PlanSchedule.vue';
-import ScheduleGridDemo from './ScheduleGridDemo.vue';
-const gridDemo=ref(false);
+import ScheduleGridView from './ScheduleGridView.vue';
+const gridSource=ref<'sample'|'account'|null>(null);
 
 const route=useRoute(),router=useRouter(),account=useAccountStore(),cases=useCasesStore();
 const selectedId=ref(''),planLoading=ref(false),pageError=ref(''),pickerOpen=ref(false);
@@ -28,8 +28,14 @@ async function changeStatus(id:string,status:string){try{await cases.setTask(id,
   <div class="page page--plan">
     <AppHeader title="执行计划"/>
     <GuideLink topic="plan" label="任务状态、课表避让和排程确认怎么用？"/>
-    <button v-if="!gridDemo" class="button button--secondary" type="button" @click="gridDemo=true">查看时间网格样例</button>
-    <template v-if="gridDemo"><button class="button button--secondary" type="button" @click="gridDemo=false">返回日程</button><ScheduleGridDemo/></template>
+    <div v-if="!gridSource" class="button-row">
+      <button v-if="account.user?.id" class="button button--primary" type="button" @click="gridSource='account'">查看账户日程网格</button>
+      <button class="button button--secondary" type="button" @click="gridSource='sample'">查看时间网格样例</button>
+    </div>
+    <template v-if="gridSource">
+      <button class="button button--secondary" type="button" @click="gridSource=null">返回日程</button>
+      <ScheduleGridView v-if="gridSource==='sample' || account.user?.id" :key="gridSource==='sample'?'sample':account.user?.id" :source="gridSource"/>
+    </template>
     <template v-else>
     <AppState v-if="cases.loading&&!cases.items.length" kind="loading" title="正在生成计划视图"/>
     <AppState v-else-if="!cases.items.length" title="还没有可执行事项" description="完成一次通知导入后，证据充分的步骤会出现在这里。"><RouterLink class="button button--primary" to="/imports/new">导入通知</RouterLink></AppState>

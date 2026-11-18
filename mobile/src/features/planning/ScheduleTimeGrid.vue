@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed,nextTick,onMounted,ref,watch} from 'vue';
 import {layoutDays,kindLabels,minuteLabel,type GridItem,type Segment} from './scheduleGrid';
-const props=defineProps<{items:GridItem[];days:string[];evidence:Record<string,string>}>();
+const props=defineProps<{sample?:boolean;items:GridItem[];days:string[];evidence:Record<string,string>}>();
 const emit=defineEmits<{select:[item:GridItem,trigger:HTMLElement];day:[day:string]}>();
 const scroller=ref<HTMLElement|null>(null);
 const layout=computed(()=>layoutDays(props.items,props.days));
@@ -33,7 +33,7 @@ onMounted(()=>{if(scroller.value)scroller.value.scrollTop=480*minuteHeight});
 <template>
  <div :class="['time-grid-shell',{'time-grid-shell--week':days.length>1}]">
   <p v-if="layout.errors.length" class="notice notice--danger" role="alert">{{layout.errors.join('；')}}</p>
-  <p v-if="layout.days.every(d=>!d.segments.length)" class="grid-empty" role="status">{{days.length===1?'当天':'本周'}}没有样例安排</p>
+  <p v-if="layout.days.every(d=>!d.segments.length)" class="grid-empty" role="status">{{days.length===1?'当天':'本周'}}没有{{sample?'样例':''}}安排</p>
   <section v-if="shortSlots.length" class="grid-short-slots" aria-label="短时段完整标题">
    <h3>短时段</h3>
    <p>完整标题在这里查看，点击打开详情。</p>
@@ -58,7 +58,7 @@ onMounted(()=>{if(scroller.value)scroller.value.scrollTop=480*minuteHeight});
     <button v-for="s in activeGroup.segments" :key="s.item.id" class="overlap-item" :data-overlap-item="s.item.id" type="button" @click="chooseOverlap(s.item)"><span>{{minuteLabel(s.start)}}–{{minuteLabel(s.end)}} · {{kindLabels[s.item.kind]}}</span><strong>{{s.item.title}}</strong><span v-if="needsReview(s.item)">待核对</span><span>查看详情 ›</span></button>
    </template>
   </dialog>
-  <details class="grid-index"><summary>时段索引 · 短时段也可在这里查看详情</summary><section v-for="day in layout.days" :key="day.day"><h3>{{day.day}}</h3><p v-if="!day.segments.length">当天没有样例安排</p><button v-for="s in day.segments" :key="s.item.id" type="button" :data-index-item="s.item.id" @click="choose(s.item,$event)">{{minuteLabel(s.start)}}–{{minuteLabel(s.end)}} · {{kindLabels[s.item.kind]}} · {{s.item.title}}<span v-if="needsReview(s.item)"> · 待核对</span><span v-if="s.conflict"> · 时间重叠</span></button></section></details>
+  <details class="grid-index"><summary>时段索引 · 短时段也可在这里查看详情</summary><section v-for="day in layout.days" :key="day.day"><h3>{{day.day}}</h3><p v-if="!day.segments.length">当天没有{{sample?'样例':''}}安排</p><button v-for="s in day.segments" :key="s.item.id" type="button" :data-index-item="s.item.id" @click="choose(s.item,$event)">{{minuteLabel(s.start)}}–{{minuteLabel(s.end)}} · {{kindLabels[s.item.kind]}} · {{s.item.title}}<span v-if="needsReview(s.item)"> · 待核对</span><span v-if="s.conflict"> · 时间重叠</span></button></section></details>
  </div>
 </template>
 <style scoped>
