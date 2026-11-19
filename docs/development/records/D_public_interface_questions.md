@@ -21,6 +21,19 @@ python docs/development/records/evidence/D_20261119/check_legacy_task_links.py .
 
 每次执行前后均比对候选目录文件清单与内容哈希；原始快照目录也保持一致。两种反例的差异数量均严格等于一条。[校验脚本](evidence/D_20261119/check_legacy_task_links.py) · [逐场景实测输出](evidence/D_20261119/legacy-task-link-check-results.json)。这是旧数据保留检查，实际迁移后的 API 行为仍需执行旧接口回归。
 
+### 干净检出中的 pytest 回归（2026-11-19）
+
+[三个命令行回归用例](../../../server/tests/test_legacy_task_link_checker.py)复用后端测试套件的隔离数据库结构，从仓库中的合成明细填入样本行，在 pytest 临时目录生成 SQLite 文件和 56 字节的资料文件，然后以子进程调用上方只读校验器。每个场景单独建库，断言退出码及完整 JSON 差异。
+
+在 aa4c934 的临时检出中只加入本次测试文件，使用独立 Python 3.11.6 环境并按 server/requirements.lock 安装依赖。完整样本退出 0，差异为空；缺边退出 1，仅报预期边 ID 的行数从 1 变为 0；等长改动退出 1，仅报目标资料 ID、文件名和两项 SHA-256。三个场景全部通过。现有 CI 入口自动收集用例，完整后端套件 239 项通过，5 条弃用警告（21.50 秒）。
+
+~~~powershell
+python -m pytest server/tests/test_legacy_task_link_checker.py -q -p no:cacheprovider
+python -m pytest server/tests -q -p no:cacheprovider
+~~~
+
+上述结果来自本地独立检出。旧库实际升级后的数据保留与 API 行为仍待复验。
+
 ## RF-038/039 迁移影响清单（2026-11-19，D 侧评审输入）
 
 在 db1ced5 上只读打开 PR #23 留存的合成旧库。最大已应用迁移版本为 18，tasks.case_id 和 evidence.case_id 均为 NOT NULL。按[基线结果](evidence/D_20261119/legacy-case-task.json)逐项核对，目标 Task 的 ID、owner、Case、todo 状态及依据 ID 全部匹配。PRAGMA foreign_key_check 返回零行。
