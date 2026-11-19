@@ -1,0 +1,17 @@
+{
+  "task_id": "f81ff7fd-6f25-4e35-9dda-a2f4d269c008",
+  "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+  "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+  "evidence_ids": [
+    "block:44a85eb2-0c74-43ca-bb43-5167a7ca266b"
+  ],
+  "status_sequence": [
+    "todo",
+    "in_progress",
+    "done"
+  ],
+  "case_task_count": 2,
+  "original_status": "todo",
+  "source_commit": "fcca46333576b919bbe6811ae87f4da20c40c7dc",
+  "pytest_summary": "7 passed, 5 warnings in 1.77s"
+}
