@@ -4,6 +4,39 @@
 
 本文件是 RF-003 **唯一决策状态入口**。详细方案保留在 [D 契约第7节](D_RF003_contract.md#7-2026-11-08-cd-契约对齐提案q01--q02)，课程增量也写回本表，不另设已批准副本。CM-001 中 C 主导业务/身份，B 提资料和 Workspace，D 提 Task/时间；相关评审规则见 [团队计划](../../plans/TEAM_EXECUTION_PLAN.md) 第3节和第4节。
 
+## RF-038/039 迁移前明细的只读校验（2026-11-19）
+
+在仓库根目录运行下列命令。升级后可将两个路径替换为候选数据库和配套 vault。输入须是已关闭、已完成 WAL 检查点的静态副本。命令按基线主键或复合键查询 11 张表，对照旧字段及合成资料的 SHA-256，输出 JSON。退出 0 表示基线匹配，1 表示有差异，2 表示输入或运行错误。新增表、列和不同键的记录允许存在。
+
+~~~powershell
+python docs/development/records/evidence/D_20261119/check_legacy_task_links.py .runtime/rf038-linked-verified/linked.sqlite .runtime/rf038-linked-verified/vault
+~~~
+
+| 独立副本 | 构造及实测 |
+|---|---|
+| 完整 v18 | 复制数据库和 vault，退出 0，差异为空。 |
+| 缺少一条依赖 | 只移除 task_edges 中基线记录的边，保留两条 Task 及其余数据。退出 1，仅报该边 ID 的期望行数 1、实际 0。 |
+| 资料内容改变 | 只翻转 fixture.txt 首字节的最低位，保留文件名和大小。退出 1，仅报该资料 ID、文件名及不同的预期／实际哈希。 |
+| 兼容性对照 | 新增表、为 materials 增加一列并插入另一主键的材料记录。退出 0，差异为空。 |
+
+每次执行前后均比对候选目录文件清单与内容哈希；原始快照目录也保持一致。两种反例的差异数量均严格等于一条。[校验脚本](evidence/D_20261119/check_legacy_task_links.py) · [逐场景实测输出](evidence/D_20261119/legacy-task-link-check-results.json)。这是旧数据保留检查，实际迁移后的 API 行为仍需执行旧接口回归。
+
+## RF-038/039 迁移影响清单（2026-11-19，D 侧评审输入）
+
+在 db1ced5 上只读打开 PR #23 留存的合成旧库。最大已应用迁移版本为 18，tasks.case_id 和 evidence.case_id 均为 NOT NULL。按[基线结果](evidence/D_20261119/legacy-case-task.json)逐项核对，目标 Task 的 ID、owner、Case、todo 状态及依据 ID 全部匹配。PRAGMA foreign_key_check 返回零行。
+
+| 数据或调用点 | 当前行为 | 迁移验收项 |
+|---|---|---|
+| tasks、evidence | tasks.evidence_ids_json 保存引用列表；两张表均要求 Case。依据读取核对 owner 和 Case。 | 保留旧 Task 与依据的 ID、归属、原文及状态；为独立 Task 明确自己的依据作用域与事务，不能仅放宽 case_id。 |
+| task_material_links、vault_task_links、schedule_items | 三表以 task_id 外键引用 tasks.id，删除约束均为 NO ACTION。 | 在含材料、资料和正式日程的旧库副本中逐条比较关联键、owner 和条数，随后运行 foreign_key_check。 |
+| task_edges、task_planning、task_edge_evidence | 前置／后继任务、排程设置、依赖边的依据由业务代码关联，数据库外键检查不覆盖这些路径。 | 对照同一条边的前后 Task、边 ID 与依据列表；核对 Task 的拆分设置与所属账户；旧 Case 依赖仍可读取和排程。 |
+| Case 手动创建、通知确认、旧状态 PATCH | Case 创建和状态更新受确认门禁约束。PATCH 更新后用 owner 和 case_id 筛选任务再构造响应；独立任务若使用 NULL，SQL 的等号查询无法回读该行。通知确认还按 owner、Case 和已有任务 ID 核验。 | 旧通知确认与手动创建各自保留来源及门禁；PATCH 只更新原任务。独立创建及状态回读需按经确认的独立授权路径验证。 |
+| 事项清单、资料、排程 | 当前有按 Case 连接或过滤的读取、资料关联校验、逐 Case 检查确认状态的排程预览，以及任务日程／规划设置写入。 | 旧 Case 列表、材料和资料详情保持可读。另验独立任务在授权清单中的可见性、空选集、混合选择和旧草案重验；不凭相同标题推断归属。 |
+
+代码入口：[原始表定义](../../../server/app/bootstrap.py)、[迁移与关联表](../../../server/app/migrations.py)、[Task 及资料接口](../../../server/app/main.py)、[通知确认](../../../server/app/services/review.py)、[排程](../../../server/app/api/planning.py)。
+
+**已验与待验。** 旧库中上述三张直接引用表、task_edges 和 task_planning 均为零行，因此本次空库关联检查不能证明带关联数据的迁移成功。当前版本的旧 Task、Review、排程拆分和草案四组测试共 14 项通过，5 条弃用警告。随后已从该旧库建立独立的 v18 副本，保留原两条 Task 的 ID、归属和状态。已补一份材料及任务关联、一份可下载的合成资料及 Case/Task 关联、一条正式任务日程、一条有依据的前置依赖和一组排程设置（60 分钟，可拆分为 30–60 分钟）。通过本机接口创建业务记录；材料与 Task 的联结行在副本中直接写入，再由 Case 资源接口回读。资料下载内容与输入逐字节一致，外键检查零违规，完整性检查为 ok。生成前后原库 SHA-256 相同。[迁移前逐行明细与校验值](evidence/D_20261119/legacy-task-links.json) 收录 11 张业务表。后续升级应复制数据库并同时保留配套 vault 目录，逐项比较明细与下载内容。待 C 确认业务门禁、B 确认依据消费、A/B 确认迁移顺序后，在另一副本上实际升级，再做同一组检查。当前未分配新迁移编号。
+
 ## 2026-11-19 · RF-038/039 旧 Task 兼容基线
 
 在 fcca463 上通过现有 API 导入合成通知“请准备实验报告。”。确认前创建 Case Task 返回 409；确认后携带该 Case 的原文 EvidenceRef 创建任务，返回 200，初始状态为 todo。用 SQLite backup 复制整个文件库，再把同一应用连接到恢复副本。通过旧 PATCH 接口依次改为 in_progress 和 done，两次均返回 200。每步均重新读取 Case 资源并用独立 SQLite 连接核对持久化结果。Task ID、owner、Case、标题、依据 ID 均保持一致，依据原文可回查；Case 内两个 Task 的 ID 集合一致，原库仍为 todo。

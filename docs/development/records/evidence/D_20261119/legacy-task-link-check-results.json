@@ -1,0 +1,48 @@
+{
+  "base_commit": "db1ced5326a952938906ae5144bddb10e810eab5",
+  "schema_version": 18,
+  "snapshot_sha256": "43e239758748d04dab8e61ebbd1041f0ce3d7ee1ef1abfe4790d7313e0031456",
+  "source_files_unchanged": true,
+  "runs": [
+    {
+      "scenario": "complete",
+      "exit_code": 0,
+      "unchanged_after_check": true,
+      "differences": []
+    },
+    {
+      "scenario": "missing_edge",
+      "exit_code": 1,
+      "unchanged_after_check": true,
+      "differences": [
+        {
+          "table": "task_edges",
+          "key": {
+            "id": "671fdec5-8302-4c43-ab39-92664089ddb3"
+          },
+          "expected_count": 1,
+          "actual_count": 0
+        }
+      ]
+    },
+    {
+      "scenario": "changed_file",
+      "exit_code": 1,
+      "unchanged_after_check": true,
+      "differences": [
+        {
+          "vault_item_id": "916ffa32-3df7-4971-bad4-70890bad501f",
+          "file": "fixture.txt",
+          "expected_sha256": "1513e37395df0ccbfa4fd094455e3901ef89229be48e240deeb502a6cd496cd7",
+          "actual_sha256": "79677ced78f0a111d4c854f07ff07e5f3ebfe43657bb0d74e2586876ce0a2ce5"
+        }
+      ]
+    },
+    {
+      "scenario": "additive_schema_and_row",
+      "exit_code": 0,
+      "unchanged_after_check": true,
+      "differences": []
+    }
+  ]
+}
