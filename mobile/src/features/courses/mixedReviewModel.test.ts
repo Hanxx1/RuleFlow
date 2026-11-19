@@ -21,6 +21,21 @@ describe('CM-007 synthetic review coordination',()=>{
     expect(get(out,'sample-code-rule').attempts).toBe(0);expect(JSON.stringify(r)).toBe(before);
     expect(out.items.every(item=>item.eligibility==='UNKNOWN')).toBe(true);
   });
+  it('D-CM-03 retries only the second course task and leaves campus unselected',()=>{
+    const rule='sample-code-rule', first='sample-linear-task', second='sample-code-task';
+    let review=simulateMixedReview(selected([rule]),[rule],'partial');
+    expect(get(review,rule).status).toBe('success');
+    for(const id of [first,second])review=editMixedItem(review,id,{selected:true,acknowledged:true});
+    review=simulateMixedReview(review,[first,second],'partial');
+    expect(get(review,first)).toMatchObject({kind:'task',target:'sample-linear',status:'success',attempts:1});
+    expect(get(review,second)).toMatchObject({kind:'task',target:'sample-code',status:'failed',attempts:1});
+    const firstReceipt=get(review,first);
+    review=simulateMixedReview(review,[second],'partial');
+    expect(get(review,second)).toMatchObject({status:'success',attempts:2});
+    expect(get(review,first)).toEqual(firstReceipt);
+    expect(get(review,rule).attempts).toBe(1);
+    expect(get(review,'sample-campus')).toMatchObject({selected:false,status:'pending',attempts:0});
+  });
   it('requires explicit conflict/duplicate review and does not silently apply changes',()=>{
     const r=editMixedItem(createMixedReviewSamples(),'sample-linear-task',{selected:true});
     expect(reviewIssue(r,r.items[0])).toContain('现有记录');
