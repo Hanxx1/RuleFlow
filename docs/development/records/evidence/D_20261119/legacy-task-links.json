@@ -1,0 +1,159 @@
+{
+  "source_commit": "db1ced5",
+  "schema_version": 18,
+  "source_sha256": "6d5c37819c24e6ba0a6e2e6946b1e1df043649114bb4c124030839830f65fed1",
+  "snapshot_sha256": "43e239758748d04dab8e61ebbd1041f0ce3d7ee1ef1abfe4790d7313e0031456",
+  "vault_content_sha256": "1513e37395df0ccbfa4fd094455e3901ef89229be48e240deeb502a6cd496cd7",
+  "foreign_key_violations": 0,
+  "integrity_check": "ok",
+  "rows": {
+    "tasks": [
+      {
+        "id": "47b0b067-73f1-5ae9-a69e-3279308e007f",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "title": "准备实验报告",
+        "status": "todo",
+        "deadline": null,
+        "evidence_ids_json": "[\"block:44a85eb2-0c74-43ca-bb43-5167a7ca266b\"]",
+        "created_at": "2026-11-19T06:03:47.601520+00:00",
+        "updated_at": "2026-11-19T06:03:47.601520+00:00",
+        "duration_minutes": null
+      },
+      {
+        "id": "f81ff7fd-6f25-4e35-9dda-a2f4d269c008",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "title": "整理实验报告（兼容基线）",
+        "status": "todo",
+        "deadline": null,
+        "evidence_ids_json": "[\"block:44a85eb2-0c74-43ca-bb43-5167a7ca266b\", \"block:ef3aaadc-9b21-4b6f-a180-aeae44b6f866\"]",
+        "created_at": "2026-11-19T06:03:47.607527+00:00",
+        "updated_at": "2026-11-19T06:36:43.419613+00:00",
+        "duration_minutes": 60
+      }
+    ],
+    "materials": [
+      {
+        "id": "009f2038-d0c7-40e0-9408-143017f53ab0",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "title": "合成实验报告材料",
+        "state": "missing",
+        "evidence_ids_json": "[\"block:44a85eb2-0c74-43ca-bb43-5167a7ca266b\"]",
+        "created_at": "2026-11-19T06:36:43.387932+00:00"
+      }
+    ],
+    "task_material_links": [
+      {
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "task_id": "f81ff7fd-6f25-4e35-9dda-a2f4d269c008",
+        "material_id": "009f2038-d0c7-40e0-9408-143017f53ab0"
+      }
+    ],
+    "vault_items": [
+      {
+        "id": "916ffa32-3df7-4971-bad4-70890bad501f",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "name": "fixture.txt",
+        "category": "proof",
+        "mime": "text/plain",
+        "size": 56,
+        "content_provider": "local",
+        "content_key": "916ffa32-3df7-4971-bad4-70890bad501f",
+        "created_at": "2026-11-19T06:36:43.401289+00:00",
+        "updated_at": "2026-11-19T06:36:43.401289+00:00"
+      }
+    ],
+    "vault_task_links": [
+      {
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "vault_item_id": "916ffa32-3df7-4971-bad4-70890bad501f",
+        "task_id": "f81ff7fd-6f25-4e35-9dda-a2f4d269c008"
+      }
+    ],
+    "vault_case_links": [
+      {
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "vault_item_id": "916ffa32-3df7-4971-bad4-70890bad501f",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44"
+      }
+    ],
+    "schedule_items": [
+      {
+        "id": "dd637a11-f2df-43f7-b2f6-5b4e0e779daa",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "task_id": "f81ff7fd-6f25-4e35-9dda-a2f4d269c008",
+        "title": "合成实验安排",
+        "kind": "task",
+        "starts_at": "2099-01-05T01:00:00Z",
+        "ends_at": "2099-01-05T02:00:00Z",
+        "created_at": "2026-11-19T06:36:43.426616+00:00",
+        "updated_at": "2026-11-19T06:36:43.426616+00:00"
+      }
+    ],
+    "task_edges": [
+      {
+        "id": "671fdec5-8302-4c43-ab39-92664089ddb3",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "before_task_id": "f81ff7fd-6f25-4e35-9dda-a2f4d269c008",
+        "after_task_id": "47b0b067-73f1-5ae9-a69e-3279308e007f"
+      }
+    ],
+    "task_edge_evidence": [
+      {
+        "edge_id": "671fdec5-8302-4c43-ab39-92664089ddb3",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "evidence_ids_json": "[\"block:db67f600-5c68-446b-bdf0-b9be2079898b\"]",
+        "source": "user_input"
+      }
+    ],
+    "task_planning": [
+      {
+        "task_id": "f81ff7fd-6f25-4e35-9dda-a2f4d269c008",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "splittable": 1,
+        "min_chunk_minutes": 30,
+        "max_chunk_minutes": 60,
+        "importance": 0.75,
+        "preference": 0.5,
+        "evidence_id": "block:ef3aaadc-9b21-4b6f-a180-aeae44b6f866",
+        "updated_at": "2026-11-19T06:36:43.419613+00:00"
+      }
+    ],
+    "evidence": [
+      {
+        "id": "block:44a85eb2-0c74-43ca-bb43-5167a7ca266b",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "source_name": "用户导入文本",
+        "text": "请准备实验报告。",
+        "locator": "全文",
+        "page": null,
+        "created_at": "2026-11-19T06:03:47.556185+00:00"
+      },
+      {
+        "id": "block:db67f600-5c68-446b-bdf0-b9be2079898b",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "source_name": "用户填写依赖",
+        "text": "用户确认步骤“整理实验报告（兼容基线）”先于“准备实验报告”",
+        "locator": "用户填写，不代表原文要求",
+        "page": null,
+        "created_at": "2026-11-19T06:36:43.411159+00:00"
+      },
+      {
+        "id": "block:ef3aaadc-9b21-4b6f-a180-aeae44b6f866",
+        "owner_id": "f264dba2ed89a5f656fb301b131784cc",
+        "case_id": "2c4e5ea6-9778-4957-b443-e31bbd974c44",
+        "source_name": "用户排程偏好",
+        "text": "用户估计步骤耗时60分钟；可拆分=True；最小片段30分钟；最大片段60分钟；重要性0.75；偏好0.5",
+        "locator": "用户填写，不代表官方通知",
+        "page": null,
+        "created_at": "2026-11-19T06:36:43.419613+00:00"
+      }
+    ]
+  }
+}
