@@ -4,6 +4,18 @@
 
 本文件是 RF-003 **唯一决策状态入口**。详细方案保留在 [D 契约第7节](D_RF003_contract.md#7-2026-11-08-cd-契约对齐提案q01--q02)，课程增量也写回本表，不另设已批准副本。CM-001 中 C 主导业务/身份，B 提资料和 Workspace，D 提 Task/时间；相关评审规则见 [团队计划](../../plans/TEAM_EXECUTION_PLAN.md) 第3节和第4节。
 
+## 2026-11-19 · RF-038/039 旧 Task 兼容基线
+
+在 fcca463 上通过现有 API 导入合成通知“请准备实验报告。”。确认前创建 Case Task 返回 409；确认后携带该 Case 的原文 EvidenceRef 创建任务，返回 200，初始状态为 todo。用 SQLite backup 复制整个文件库，再把同一应用连接到恢复副本。通过旧 PATCH 接口依次改为 in_progress 和 done，两次均返回 200。每步均重新读取 Case 资源并用独立 SQLite 连接核对持久化结果。Task ID、owner、Case、标题、依据 ID 均保持一致，依据原文可回查；Case 内两个 Task 的 ID 集合一致，原库仍为 todo。
+
+仓库根目录复跑命令：
+
+~~~powershell
+.\.runtime\review-venv\Scripts\python.exe -m pytest -q -s server/tests/test_legacy_case_task.py server/tests/test_review_api.py
+~~~
+
+[可执行用例](../../../server/tests/test_legacy_case_task.py) · [本轮合成 ID、状态序列和测试结果](evidence/D_20261119/legacy-case-task.json)。1 项新基线与 6 项既有测试通过，5 条依赖弃用警告。每次复跑会生成新的合成 ID，按同一次运行前后比对。后续迁移应从保留的旧库复制出新副本，在副本上应用新迁移，再按本轮记录的 ID 核验。此次只验证现行版本的旧接口与同版本数据库恢复。
+
 ## 2026-11-19 · CM-008 联调交接（D-CM-03）
 
 A、C 可在仓库根目录运行下列命令。基线为 fd87690 加本轮测试。输入沿用 [CM-007 合成通知](../../../mobile/src/features/courses/mixedReviewSamples.ts)，断言在[混合建议测试](../../../mobile/src/features/courses/mixedReviewModel.test.ts)。
