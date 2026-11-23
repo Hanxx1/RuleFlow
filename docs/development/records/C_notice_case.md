@@ -14,6 +14,51 @@
 
 提交授权补记（2026-11-23）：用户明确要求「提交并推送」。本次仅提交RF-002契约中的RF-015评审草案、本记录和新增通知兼容基线测试三个文件，分支 `docs/RF-015-migration-review`；原任务表修改及RF-013 RED测试排除。上方未提交状态为验证阶段快照，最终提交和推送状态以Git回执为准。同步主线时保留双方C记录，附PR DES，不创建或合并PR，不实施新迁移。
 
+主线同步补记：任务提交 `2b176e7` 后合入 `origin/main` 的 `ce3ecd4`；仅本记录顶部追加内容冲突，保留RF-015及主线进度复核两节。生产源码和测试未改变，未重复运行已通过的38项定向测试；同步后 `check-docs.py`（247个本地目标）、`check-paths.py`及暂存差异检查通过。远端推送结果以Git回执为准。
+
+## 2026-11-22｜远端同步、进度复核与下一阶段建议
+
+### 1. 任务信息
+
+用户要求拉取最新代码、检查项目进度并明确下一阶段任务。本轮为 C 侧工程复核，不代领其他成员任务，不代表新增公共方案获批。当前分支 `docs/RF-013-form-context-preparation` 从 `00d70a9` 快进到 `origin/main` 的 `3bcd0d7`（27 个提交）；未创建提交、推送或 PR。
+
+### 2. 技术实现
+
+先检查规则、README、分支和未提交内容，再成功 fetch。原有四份文档修改、合成样例及未跟踪测试以 `pre-sync-20261122-RF013-local-work` stash 保存后恢复；仅一处 C 记录追加冲突，保留主线 H07 修复记录与本机 form-context 准备记录两段，已无未合并索引，恢复原未暂存状态。stash 备份保留。本轮未修改业务代码、数据库、公共 API 或 Android 配置；本节为新增工作记录。
+
+### 3. 设计与关键决策
+
+以源码和提交祖先关系核对现状：PR #18 的 H07 修复 `eef559b` 已进入主线；此前“仍开放”的描述仅为历史快照。CM-002 本机保存、CM-003 恢复/删除只读预览、CM-007 模拟核对、CM-005 账户日程网格以及 D 的兼容/时间样例已在主线；不据此宣布真实候选执行、独立 Task、跨端恢复或原生提醒完成。当前 `form-context` 路由仍不存在，独立 Task 及 Evidence 迁移仍需公共确认。
+
+### 4. 遇到的问题及解决
+
+沙箱内 fetch 首次因代理连接失败，正常权限重试成功。沙箱内 pytest 无输出，中止后改用本机权限、隔离临时目录及合成账户完成验证。首次完整集合额外出现看板最近更新排序、事项画像资格重算两项失败；两项定向连续三轮均通过，随后主线集合全量通过。非稳定失败原因尚未定位，不能认定已修复，不修改断言掩盖问题。
+
+### 5. 测试与验证
+
+Windows；现有 `.runtime/c-venv` Python 3.12.14；测试进程 TEMP/TMP 指向 `.runtime/progress-check-20261122/tmp`，不改全局配置。实际结果：
+
+- `npm.cmd --prefix mobile test`：26 文件，164 passed。
+- `npm.cmd --prefix mobile run build`：类型检查及生产构建通过，213 modules；保留 Vite CJS 弃用提示。
+- `.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests -q -p no:cacheprovider --tb=short --disable-warnings`：237 passed、12 failed、5 warnings；10 项为本地未实现 form-context 的 RED 目标，均收到 404，另外两项见上节。
+- 上述两项逐项指定 node ID 连续运行三轮：每轮 2 passed、5 warnings。
+- `.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests -q -p no:cacheprovider --ignore=server/tests/test_form_context.py --tb=no --disable-warnings`：239 passed、5 warnings，25.34 秒。这里只排除未跟踪的 RED 准备文件，未跳过任何主线测试；不是当前含 RED 工作区全量通过。
+- `check-api-contract.py`、`check-docs.py`（242 个本地目标）、`check-paths.py`、`node scripts/check-demo.mjs`（8 份副本）及 `git diff --check` 通过。
+
+### 6. 运行证据
+
+基线 `3bcd0d7c597defcf5ad471c4f053f3fbc84b389f`；本次命令回执与保留的同步前 stash。历史设备结论复核来源为 A.md、D_CM005_grid_proposal.md 与 D_public_interface_questions.md，不冒充本轮设备实测。无新 APK、模型调用、部署或设备证据；原始 Codex 会话分享链接或导出待保留。
+
+### 7. 未完成与限制
+
+以下为沿用既定分工和依赖的下一阶段建议，不变更团队日期或签认状态。11-20 门槛仍有缺口，11-29 真联调条件尚未全部满足。
+
+1. C 优先与 B 核对 RF-011/013 的 URL、DTO、版本、引用失败及缓存规则，由 A/B 确认公共边界；获确认后实现只读来源链并使现有 10 项目标回归通过，补父引用、一致快照和零业务写入边界，再由 B 接账户填表。
+2. C/D 分别列 RF-015 与 RF-038/039 的拟改表、外键、旧数据检查项；B 核 Evidence 消费，A/B 协调共享迁移负责人和顺序。在唯一公共决策表回填确认，不抢先迁移。
+3. 确认后 C 按 RF-008/014/015 → RF-016～018 推进候选与单目标真实确认；D 提供独立 Task 后再接 RF-040、CM-006/007。先打通一条真实路径，再扩多项和部分失败恢复；模拟回执不能替代联调。
+4. B 继续已有模板修正，推进 RF-012 保存/备份选择及正式草稿；A 协调 RF-006 未通过的登录恢复、RF-007 文件/提醒设备验收、统一版本和部署/模型条件。BUG-A01 历史暂缓状态保留，由 A 决定恢复处理，不在本轮擅自开工。
+5. A 组织 CM-008 同版本联调；C 串来源、候选和课程，B/D 验各自执行器，记录越权、stale、重复请求、部分失败和未知结果查询。两个非稳定后端失败列入后续定位清单。本轮不宣称 11-20、11-29 或整卡验收通过。
+
 ## CM-007｜混合建议逐项核对与模拟结果（2026-11-17）
 
 ### 1. 任务信息
@@ -584,6 +629,40 @@ $env:TMP=$env:TEMP
 **7. 未完成与限制** — 两类修复只影响后续导入，不自动补历史孤立来源关系。真实网站／OCR／Office格式、失败恢复页面和Android分享未验，无新APK；本轮未运行前端。form-context及H04/H05、B消费H06、真机H08仍需对应确认及实现，RF-013整卡不标完成。CM的PR #16/#17保持独立，未修改或合并。提交与推送须用户另行确认本次具体diff。
 
 提交授权补记（2026-11-17）：用户明确要求“提交并推送”，授权将上述 `main.py`、11项回归测试及本记录共三个文件提交并推送至 `fix/RF-013-attachment-recovery`。上文未提交状态为验证阶段快照；实际提交号及远端状态以 Git 历史和推送结果为准。本次不创建 PR 或合并主线。
+
+#### 2026-11-17 form-context 样例与失败回归准备
+
+**1. 任务信息** — RF-011/013，负责人C。用户要求开始来源读取下一阶段，并在具体范围确认问题中明确选择“尚未确认，先准备接口样例和回归测试”。已fetch最新main `00d70a9`；核对H07修复 `eef559b` 的PR #18仍open、未合并。本轮从main创建分支，后按实际准备范围命名为 `docs/RF-013-form-context-preparation`，不包含PR #18代码。状态：可评审样例及RED回归准备完成，正式接口未确认、未实现；未提交或推送。
+
+**2. 技术实现** — 新增 `server/tests/test_form_context.py`，10项参数化后目标回归；新增 `evidence/C_20261117/form_context_samples.json`，四组请求／响应合成样例、可用性状态及待确认清单；更新 `C_RF013_source_handoff.md` 第6节和本条原RF任务续记。未改生产代码、API、数据库、其他成员文件、OpenAPI指纹、前端或Android；没有模型调用或新依赖。
+
+**3. 设计与关键决策** — 拟必传expected_revision；旧正文不伪造行定位；metadata不替代owner、当前批次及正式Document关系；缺失原件、解析失败和未取得原件分开。错误码、字段及整次引用拒绝策略都是供评审的目标，不把本轮准备当作批准。Document hash对应原件，不能当拼接行文本hash；下载后的原件hash仍需消费者核验。失败原件测试fixture显式建立正式关系，以独立检验读取契约，不假装主线已含PR #18修复。RED文件尚不适合作为通过门禁直接合入main。
+
+**4. 问题及解决** — 当前主线无form-context路由，10项测试均因目标路由返回404而未满足预期；没有删除断言、跳过用例或返回Mock结果消除失败。原有提案顶部保留历史描述，并新增11-17当前状态，区分已推送待评审的H07修复与尚未批准的读取接口。
+
+**5. 测试与验证** — Windows，既有 `.runtime/c-venv`，正常本机权限；TEMP/TMP指向忽略目录 `.runtime/c-form-context-20261117/tmp`。实际执行：
+
+```powershell
+.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_form_context.py -q -p no:cacheprovider --tb=short --disable-warnings
+```
+
+实际 **10 failed、5 warnings，3.33s，退出1**，均为无路由的RED结果。目标覆盖legacy_text/hash/无伪行、真实行引用与同名文件隔离、必传版本与stale、账户隔离、四类伪造关系拒绝、缺失原件及失败原件区分、重复读取及数据库零写入。未运行正式接口、全量后端、前端、网络/模型、并发或Android验收；旧235项通过属于PR #18，不套用于本分支。
+
+补充静态核对：实际用Python读取JSON并验证4组ID唯一、GET/no-store、合成正文SHA-256、原件size/hash及行归属，均通过；这是样例一致性检查，不是接口执行。`scripts/check-docs.py`（214个本地目标）、`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8份副本一致）及 `git diff --check` 均通过，退出0。未修改 `server/app` 或 `docs/testing/api-contract.sha256`。
+
+**6. 运行证据** — 本分支真实测试源码、合成样例和本次命令输出。四组JSON是期望响应，标识符和request_id是合成占位，不是实际运行回执或EvidenceRef。没有提交、PR、APK、截图或共享日志；原始Codex会话分享／导出待C保存。
+
+**7. 未完成与限制** — 需B与A/B确认URL／DTO、读取用途、错误与引用失败策略、缓存及OpenAPI增量；确认后才能实现服务／路由，并补父引用、并发快照及无网络/模型调用边界。历史缺关联数据不自动修复；H06填表消费及H08真机仍未执行。PR #18与本轮独立；未合并或改写其分支，也未修改CM #16/#17。提交推送须用户另行授权具体文件范围。
+
+#### 2026-11-22 开工复核
+
+1. **任务信息** — C，RF-011/013，`docs/RF-013-form-context-preparation`，基线 `3bcd0d7`。完成现有来源链的两项边界验证，公共接口待确认。
+2. **技术实现** — 更新目标测试，使用 H07 合入后上传 API 实际建立的失败原件关系；更新来源移交评审稿。未修改正式业务代码。
+3. **设计与关键决策** — 建议读取事务提供单次一致视图，版本字段只作批次版本检查；跨次填表复核依赖逐表来源身份、指纹及状态。父来源缺失与越界父引用分开处理，方案待 B/A/B 评审。
+4. **遇到的问题及解决** — 隔离探针在模拟附件获取时读到 1 条来源，获取完成后同一 revision 有 2 条。删除父来源成功后仍可读到带原父 ID 的子来源。将这两个现有行为列为评审和回归输入。
+5. **测试与验证** — Windows 既有 `.runtime/c-venv`，隔离 SQLite、合成附件与测试临时目录。`pytest` 定向运行临时边界探针、`test_import_recovery_guards.py`、`test_notice_handoff_baseline.py`，共 15 passed、5 warnings。`pytest server/tests/test_form_context.py -q -p no:cacheprovider --tb=no --disable-warnings` 为 10 failed、5 warnings，目标路由仍缺。未跑全量、Office 或真机。
+6. **运行证据** — 本次测试回执与[来源移交评审稿](C_RF013_source_handoff.md)。一次性边界探针已移除，未提交或推送，无 APK。原始 Codex 会话分享或导出待保留。
+7. **未完成与限制** — B 确认逐表复核和父来源缺失的消费规则，A/B 确认公共接口、异常、版本承诺及允许改动后实施。状态码、恢复写入和 OpenAPI 基准尚待确认。
 
 ## RF-001｜C 模块走读子项
 
