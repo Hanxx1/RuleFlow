@@ -62,3 +62,33 @@ describe('CM-006 课程时间与恢复样例', () => {
     expect(exportWorkspace(current)).toBe(before);
   });
 });
+
+it('单次调课和停课同步改变周网格与本机排程占用', () => {
+  const [mon, wed] = courseRules();
+  const followingMonday = '2026-11-16';
+  const replacement = parseTimetableText(
+    '合成线代 周一 08:00-09:00 第1-1周', monday, '2026-11-22',
+  ).courses[0];
+  const moved = [{...mon, cancelledDates: [monday]}, wed, replacement];
+  const cancelled = [moved[0], {...wed, cancelledDates: [wednesday]}, replacement];
+  const days = [monday, wednesday, followingMonday];
+  const task = {id: 'demo-task', duration_minutes: 60, evidence_ids: ['block:client:task']};
+
+  for (const [courses, expectedGrid, firstSlot] of [
+    [[mon, wed], [[[540, 600, mon.evidence.id]], [[840, 900, wed.evidence.id]], [[540, 600, mon.evidence.id]]], '08:00'],
+    [moved, [[[480, 540, replacement.evidence.id]], [[840, 900, wed.evidence.id]], [[540, 600, mon.evidence.id]]], '09:00'],
+    [cancelled, [[[480, 540, replacement.evidence.id]], [], [[540, 600, mon.evidence.id]]], '09:00'],
+  ] as const) {
+    const rules = [...courses];
+    const grid = layoutDays(expandCourses(rules, monday, followingMonday), days);
+    expect(grid.errors).toEqual([]);
+    expect(grid.days.map(day => day.segments.map(s => [s.start, s.end, s.item.evidence_ids[0]]))).toEqual(expectedGrid);
+    const slot = localSchedule([task], rules, monday, monday).suggestions[0];
+    expect(Date.parse(slot.starts_at)).toBe(Date.parse(monday + 'T' + firstSlot + ':00+08:00'));
+    // Make the Wednesday class the first potential conflict for the planner.
+    const busy = [{starts_at: wednesday + 'T08:00:00+08:00', ends_at: wednesday + 'T14:00:00+08:00'}];
+    const wedSlot = localSchedule([task], rules, wednesday, wednesday, busy).suggestions[0];
+    const expectedHour = courses === cancelled ? '14' : '15';
+    expect(Date.parse(wedSlot.starts_at)).toBe(Date.parse(wednesday + 'T' + expectedHour + ':00:00+08:00'));
+  }
+});
