@@ -1,0 +1,72 @@
+{
+  "kind": "proposed_contract_samples_not_runtime_results",
+  "schema_version": 1,
+  "warning": "合成评审样例；标识符不是正式 EvidenceRef；接口尚未确认或实现。hash 仅为对应合成原文的预期 SHA-256。",
+  "cases": [
+    {
+      "id": "H04-legacy-text",
+      "request": {"method": "GET", "path": "/api/v1/import-batches/sample-batch/form-context", "query": {"expected_revision": 2}, "authentication": "当前账户 Bearer 会话；样例不含令牌"},
+      "response": {
+        "status": 200,
+        "headers": {"Cache-Control": "no-store"},
+        "body": {
+          "data": {
+            "schema_version": 1, "batch_id": "sample-batch", "batch_revision": 2, "case_id": null,
+            "sources": [
+              {"source_id": "sample-text", "kind": "text", "status": "ready", "error_code": null, "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "legacy_text", "text": "Synthetic notice", "lines": [], "document_ref": null, "parent_source_id": null, "availability": "readable"}
+            ]
+          },
+          "request_id": "sample-request-not-a-runtime-receipt"
+        }
+      },
+      "expected": "返回已存正文；不生成Document、行、Evidence或Case，不升级来源状态。"
+    },
+    {
+      "id": "H01-document-lines",
+      "request": {"method": "GET", "path": "/api/v1/import-batches/sample-file-batch/form-context", "query": {"expected_revision": 1}},
+      "response": {
+        "status": 200, "headers": {"Cache-Control": "no-store"},
+        "body": {
+          "data": {
+            "schema_version": 1, "batch_id": "sample-file-batch", "batch_revision": 1, "case_id": null,
+            "sources": [
+              {"source_id": "sample-file", "kind": "file", "status": "ready", "error_code": null, "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "document_lines", "text": "Synthetic notice", "lines": [{"line_id": "sample-stored-line", "document_id": "sample-document", "line_number": 1, "text": "Synthetic notice", "page": null, "locator": null}], "document_ref": {"kind": "document", "id": "sample-document", "revision": 1, "sha256": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "name": "notice.txt", "mime": "text/plain", "size": 16}, "parent_source_id": null, "availability": "readable"}
+            ]
+          },
+          "request_id": "sample-request-not-a-runtime-receipt"
+        }
+      },
+      "expected": "Document引用须有当前owner及批次来源的正式关系；line_id来自真实已存行。本样例ID仅是待替换的合成占位符。"
+    },
+    {
+      "id": "H05-stale",
+      "request": {"method": "GET", "path": "/api/v1/import-batches/sample-batch/form-context", "query": {"expected_revision": 1}},
+      "precondition": "当前批次revision为2",
+      "response": {"status": 409, "headers": {"Cache-Control": "no-store"}, "body": {"detail": {"code": "IMPORT_BATCH_STALE", "message": "来源已变化，请重新读取"}}},
+      "expected": "保留客户端编辑，拒绝陈旧快照；服务端零写入。错误码及文案待评审。"
+    },
+    {
+      "id": "H05-invalid-reference",
+      "request": {"method": "GET", "path": "/api/v1/import-batches/sample-batch/form-context", "query": {"expected_revision": 2}},
+      "precondition": "metadata的document_id与当前来源的正式关系不符、关系缺失，或Document属于其他owner",
+      "response": {"status": 409, "headers": {"Cache-Control": "no-store"}, "body": {"detail": {"code": "SOURCE_REFERENCE_INVALID", "message": "来源引用待核对，请重新选择或上传"}}},
+      "expected": "建议整次拒绝，不能按metadata补关系或返回其他批次原文；整次拒绝策略与错误码均待确认。"
+    }
+  ],
+  "availability_proposal": [
+    {"value": "readable", "meaning": "有可读已存正文／行；有Document时当前原件存在。读取快照不保证随后下载成功。"},
+    {"value": "parse_failed", "meaning": "Document解析失败但原件仍在且正式关系有效；保留error_code和document_ref，text为null、lines为空。"},
+    {"value": "original_missing", "meaning": "Document和正式关系仍在，原件文件缺失；保留引用与可用历史行，不能宣称原件可下载。此态优先于parse_failed。"},
+    {"value": "not_acquired", "meaning": "没有取得Document的失败来源；document_ref为null、text为null、lines为空。并不为未授权获取的附件候选新建source。"}
+  ],
+  "pending_decisions": [
+    "URL、必传非负expected_revision、schema_version类型和字段名",
+    "IMPORT_BATCH_STALE／SOURCE_REFERENCE_INVALID错误包络及整次拒绝策略",
+    "历史metadata有document_id但正式关系缺失时拒绝，不自动修库；需另定历史处理方案",
+    "父来源同owner／同批次校验，非法父引用的拒绝语义",
+    "数据库一致快照边界；文件可用性与随后鉴权下载之间仍可能变化",
+    "content_hash对应存储对象：legacy_text为UTF-8已存正文，document_lines为Document原件hash；客户端下载后另验原件hash",
+    "B接入时的用途、字段消费、同通知多表恢复与指纹冲突交互；本轮不实现",
+    "正式接口及成功响应模型评审后，再明确OpenAPI增量并批准更新指纹"
+  ]
+}
