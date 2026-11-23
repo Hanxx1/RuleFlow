@@ -1,5 +1,17 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-011/013｜来源边界测试与接口验收准备（2026-11-23）
+
+1. **任务信息** — C；用户明确「尚未确认，先做测试与接口准备」。复用干净独立 clone `RuleFlow-CM003-delete-preview`，分支 `docs/RF-013-source-boundary-tests`，基线 `ce3ecd4`。完成准备子项，公共接口待确认；未提交、推送或创建 PR。
+2. **技术实现** — 新增 `server/tests/test_source_handoff_boundaries.py` 五项现有行为测试；在 [来源移交评审稿](C_RF013_source_handoff.md) 补父引用／快照／零写入验收矩阵。未改生产代码、API、schema、迁移或 OpenAPI 基准。原工作区 RF-015 草案及未跟踪 RED 测试保留原状。
+3. **设计与关键决策** — 将一次性版本／父来源探针转为可复现基线；区分现有局限与未来协议目标。现有读取检查同时比较数据库内容与 total_changes，阻止写后恢复掩盖写入；请求回执 ID 不作为业务一致性对象。事务并发测试需独立连接，不能从 fetch 回调观察推断通过。
+4. **遇到的问题及解决** — 独立 clone 的公网 fetch 因本机代理不可达失败；从本轮已 fetch 的原本地仓库取最新 origin/main 对象，正常权限克服 MSYS 沙箱错误后快进至 ce3ecd4。沙箱 pytest 无输出，中止后正常权限使用同一隔离测试环境。首轮 17 passed、2 failed，原因是测试比较包含动态 request_id 的整个响应；改为比较 data，保留数据库及网络／解析禁止断言，重跑通过。未修改业务代码掩盖失败。
+5. **测试与验证** — Windows，复用原仓库 `.runtime/c-venv/Scripts/python.exe`；TEMP/TMP 仅当前进程指向本工作区忽略目录 `.runtime/rf013-boundary/tmp`，隔离内存 SQLite、合成账户／文本及模拟 fetch，无真实公网／模型调用。命令：`python -X utf8 -m pytest server/tests/test_source_handoff_boundaries.py server/tests/test_import_recovery_guards.py server/tests/test_notice_handoff_baseline.py -q -p no:cacheprovider --tb=short --disable-warnings`，实际 **19 passed、5 warnings，3.86s，退出0**。新增五项覆盖版本集合变化、父删除后原件及授权、三个读取路径零写入／零抓取／零解析／零分析。文档与路径检查结果见下方补记。未跑全量、前端、真实并发、form-context、Office 或 Android。
+6. **运行证据** — 本分支测试源码及评审矩阵、本次真实命令输出。补充检查：`scripts/check-docs.py` 通过（241 个本地目标，未检查外链），`scripts/check-paths.py` 和 `git diff --check` 通过。无新 APK、提交或 PR。测试临时目录仅本机可用；原始 Codex 会话分享／导出待保留。
+7. **未完成与限制** — 新接口未实现；父引用缺失／非法引用错误策略、版本承诺、缓存及 DTO 待 B/A/B 确认。H06 填表与 H08 真机未执行。现有行为通过不代表新接口、跨次快照或正式业务整卡验收；本轮结果不覆盖原工作区 10 项 RED 测试。
+
+提交授权补记（2026-11-23）：用户明确要求「提交并推送」。授权范围为本次边界测试、来源移交评审稿和本记录共三个文件，推送至 `docs/RF-013-source-boundary-tests`，附 PR DES。上方未提交状态为验证阶段快照，最终提交号和推送状态以 Git 回执为准；本次不创建或合并 PR。
+
 ## 2026-11-22｜远端同步、进度复核与下一阶段建议
 
 ### 1. 任务信息
