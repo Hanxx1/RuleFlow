@@ -30,14 +30,14 @@ INSERTS = {
 }
 
 
-@pytest.mark.parametrize("scenario", ["complete", "missing_edge", "changed_file"])
+@pytest.mark.parametrize("scenario", ["complete", "missing_edge", "changed_file", "completed_task_copies"])
 def test_legacy_task_link_checker(tmp_path, scenario):
     baseline = json.loads((EVIDENCE / "legacy-task-links.json").read_text(encoding="utf-8-sig"))
     rows = baseline["rows"]
     task = rows["tasks"][0]
     edge_id = rows["task_edges"][0]["id"]
     item, = rows["vault_items"]
-    database = tmp_path / "sample.sqlite"
+    database = tmp_path / "linked.sqlite"
     vault = tmp_path / "vault"
     file = vault / item["owner_id"] / item["content_key"]
     file.parent.mkdir(parents=True)
@@ -70,3 +70,7 @@ def test_legacy_task_link_checker(tmp_path, scenario):
                             cwd=tmp_path, capture_output=True, text=True, check=False)
     assert result.returncode == (1 if expected else 0), (result.stdout, result.stderr)
     assert json.loads(result.stdout) == {"differences": expected}
+
+    if scenario == "completed_task_copies":
+        probe = EVIDENCE.parent / "D_20261121" / "check_completed_task.py"
+        subprocess.run([sys.executable, probe, tmp_path], cwd=tmp_path, check=True)
