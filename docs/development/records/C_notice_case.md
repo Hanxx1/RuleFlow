@@ -1,5 +1,39 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-011/013｜C 侧类型化读取客户端（2026-11-24）
+
+### 1. 任务信息
+
+C，用户要求继续下一阶段开发。新分支 `feat/RF-013-form-context-client`，基于已推送HTTP提交 `f1bf3b4`。fetch复核main仍为 `9a2bd41`，没有假定HTTP已合并。状态：客户端读取与响应校验本地实现／自测通过，待评审，未提交或推送；H06联调未完成。
+
+### 2. 技术实现
+
+新增 `mobile/src/features/imports/formContext.ts`：完整响应类型、`readFormContext`、`parseFormContext`与安全错误类。复用core/http而不修改公共传输层，URI编码批次ID，版本非负整数校验，显式no-store；不保存正文。响应校验范围含来源唯一性、Document版本/hash格式、真实行归属与顺序／正文、原件／解析枚举、父引用及null语义。新增同目录30项测试，更新来源移交使用说明。本切片不接B页面，不修改共享API／DTO、Provider或数据库。
+
+### 3. 设计与关键决策
+
+先交付C读取模块供B对接，不代做B的要求绑定、逐表保值或导出判断；不提前实施尚待共同确认的候选迁移。非法响应拒绝且错误不含原文；HTTP错误保留status/code，网络失败无Demo回退。结构校验不是原件字节核验，不增加新依赖。父引用仅校验批次返回集合内存在及非自身，服务端仍负责owner授权。
+
+### 4. 遇到的问题及解决
+
+沙箱fetch因本机代理不可达失败，正常权限单次清空该命令代理后成功；无全局设置变更。未出现客户端测试或构建失败。手写样例不足以证明后端兼容，因此另从实际接口生成合成响应，加载实际TS模块核验通过。
+
+### 5. 测试与验证
+
+Windows，现有Node/Vitest/Vite和 `.runtime/c-venv`。实际执行：`npm.cmd --prefix mobile test -- src/features/imports/formContext.test.ts` 为30 passed；`npm.cmd --prefix mobile test` 为27文件195 passed；`npm.cmd --prefix mobile run build` 的vue-tsc及生产构建通过（213 modules）。保留Vite CJS弃用提示，未升级依赖。
+
+实际兼容探针：Python将DATABASE_PATH设为内存，Document/Vault根指向忽略目录 `.runtime/form-context-client`，通过TestClient注册合成账户，创建批次、旧文本、TXT行、缺失原件、空解析和损坏PDF，生成3组真实HTTP响应；只导出data不含凭据。Node使用现有Vite的ssrLoadModule加载实际客户端，对全部3组调用parseFormContext成功。不是固定Mock响应或真实TCP／浏览器请求。未改后端生产代码，本轮未重复跑后端全量；该结果不套用为B双表、Office、真机或真实模型验证。
+
+### 6. 运行证据
+
+30项测试源码、本会话实际输出；本机合成响应 `.runtime/form-context-client/responses.json`（忽略、不提交，非团队共享证据）。基于HTTP提交f1bf3b4，未创建新提交、PR或APK。原始Codex会话分享／导出待保留。
+
+### 7. 未完成与限制
+
+HTTP依赖尚未合入main，客户端本身尚无页面消费者；B消费回核、接入与H06逐表保值联调仍待B实施，H08真机由A组织。无正式草稿、候选持久化或迁移；不代表整卡完成。原有任务表本地修改保持不变，不纳入本切片。最终文档／路径／Demo及差异检查见本会话回执。
+
+提交授权补记：用户随后要求“提交并推送”。仅提交客户端、30项测试及两份C文档共4个文件，排除原任务表修改；沿 `feat/RF-013-form-context-client` 推送。该分支包含前置HTTP提交f1bf3b4，合并顺序为HTTP接口先、客户端后；不代为创建或合并PR。最终提交／推送以Git回执为准，以上未提交状态为开发阶段历史快照。
+
 ## RF-011/013｜只读来源 HTTP 接入（2026-11-24）
 
 ### 1. 任务信息
