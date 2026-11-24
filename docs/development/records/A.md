@@ -347,3 +347,18 @@ BUILD SUCCESSFUL in 6m 39s
 - 历史正文仅将一处个人项目绝对路径替换为 `<PROJECT_ROOT>`，不改变历史事实；原始备份保留原文。通用 JDK/SDK 环境路径、公开文档链接、提交 SHA 和 APK 哈希作为技术证据保留。
 - 检查未发现真实账号邮箱、密码、Token/Cookie 值、设备序列号或私人业务资料。文中的 token 等为技术名称，三星为历史环境品牌描述，不是唯一设备标识；未引入原始日志、数据库或上传资料。
 - 本轮仅恢复和追加 A.md，未改 B/C/D 记录、业务代码或原始备份。独立分支 `docs/RF-006-restore-a-record` 从已合入 PR #20 的 `704a620` 工作分支建立；尚未提交或推送，待 A 检查差异后确认。
+
+## 2026-11-24 · RF-051 服务端停写备份与隔离恢复
+
+- **负责人及基线**　A。`git fetch origin` 更新远端跟踪引用至 `9a2bd4199eeef389be98724a46a5e79cf4c9ad8a`。执行 `git worktree add --no-track -b feat/RF-051-server-data-backup ../rf051-server-data-backup origin/main`，核实新工作树 HEAD 与该 SHA 一致、状态干净后开工。原 UX-A04 工作树的 5 个已改文件、1 个未跟踪测试和另一工作树均保留。成果位于任务分支工作区，待交叉评审，无提交或 PR。
+- **交付**　`scripts/server-data-backup.py` 提供 backup、verify、restore。操作人确保单实例停写，工具使用 SQLite backup 读取含已提交 WAL 的状态，保存 Document 与 Vault 两棵原件树，核验完整性、外键及 owner/key 对应的文件。Document 对照入库摘要；Vault 核对入库大小并从本次备份建立摘要。暂存结果经核验后发布到新位置。运维说明补齐 `document_uploads`、自定义 Document 根目录、权限和隔离读回步骤。服务端 API、数据库结构和 Workspace 行为均沿用现有实现。
+- **实际演练**　Windows、Python 3.11.9，复用已有后端虚拟环境。通过现有接口创建两个合成账户、两份 Document（含一份解析失败的原件）和一份关联旧 Case Task 的 Vault 原件。用 CLI 备份、核验并恢复，移走源库和原件后，恢复实例按旧 ID 返回相同原件字节和两条证据行，任务材料关联保留，另一账户读取三个原件及 Case 资源均返回 404。其余用例覆盖已提交 WAL、空原件根、源文件丢失或同大小变更、Vault 副本同大小篡改、已有目标、路径重叠、文件硬链接、目录联接、清单越界键及坏外键。
+- **验证命令与结果**　在任务工作树 `server/` 下以 Python `-B -X utf8` 调用 pytest，实参为 `-q -p no:cacheprovider --tb=short --basetemp <本轮专建私有临时目录>/pytest tests/test_server_data_backup.py tests/test_notice_migration_baseline.py tests/test_legacy_task_link_checker.py`。父目录由 `tempfile.TemporaryDirectory` 在仓库外创建并在最终演练后清理。最终 **15 passed，5 warnings，15.88s**（RF-051 新增 9 项，C/D 既有兼容用例 6 项）。警告来自现有 FastAPI/Starlette 生命周期和测试客户端。验证证据为上述可复跑测试及本次命令输出，备份、上传及凭据不入库。
+- **调试记录**　沙箱首次 pytest 长时间无输出，已中断并切换本机权限。首次本机执行中，合成 Task 的 Vault 请求漏传所属 Case，默认临时目录的上级又含 Git 仓库标记；分别补齐现有接口要求并改用仓库外临时目录。后续 Windows 演练因空闲 SQLite 句柄尚未释放而无法移走源库，在测试夹具回收空闲连接后复跑通过，保留物理移走源数据的断言。
+- **范围与后续验收**　本轮完成 RF-051 的本地工具及合成恢复演练。Docker/Linux 和真实部署卷、生产 ACL、停机与切换、HTTPS 及真实账号均未验收；未运行全量回归，未构建 APK。RF-051 整卡继续开放，由 B 或相关负责人交叉审查，部署操作人待资源就绪后验证实际卷恢复与服务读回。
+
+### RF-051 提交前补核：脱敏副本与清单元数据
+
+- A 在同一工作树、同一源码基线补充 `validate_database()`。沿用 Document 目录清单，按 `document_derivatives.owner_id/id` 查找副本，并对照该条记录的 SHA-256。备份、核验和恢复均执行此检查。必要业务表、迁移版本记录和核验所需字段必须可读，迁移 10 起要求脱敏副本表存在。
+- 新生成的 v2 清单记录 UTC 备份时间及库中实际登记的最高迁移版本；运行服务的源码提交无法从卷可靠确定，记录为 null。v1 清单沿用其现有字段，读取时也执行新增的数据核验。部署说明已同步。
+- 仅运行 `tests/test_server_data_backup.py`，沿用前节的 Python、pytest 选项及仓库外临时目录，结果 **14 passed，5 warnings，28.53s**。新增 5 个用例覆盖通过现有接口生成的合成 PDF 脱敏副本恢复、缺件和同大小篡改、清单时间与迁移版本核验、v1 兼容，以及缺表、缺摘要字段和空迁移记录。临时数据已清理，5 条警告均来自既有 FastAPI/Starlette。RF-051 的生产卷及 Linux/Docker 验收仍待执行。
