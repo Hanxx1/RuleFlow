@@ -1,8 +1,8 @@
-"""C-internal source inspection; not wired to an HTTP API or public DTO.
+"""Read-only source inspection shared by the form-context HTTP endpoint.
 
 The caller supplies an authenticated owner, an existing SQLite connection and
 the original-file root. No import, parser, model, write or download is invoked.
-Public error/status mapping remains subject to the RF-011/013 contract review.
+HTTP error/status mapping lives in api.form_context.
 """
 from __future__ import annotations
 

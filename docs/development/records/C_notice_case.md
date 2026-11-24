@@ -1,5 +1,45 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-011/013｜只读来源 HTTP 接入（2026-11-24）
+
+### 1. 任务信息
+
+C；目标为将已实现内部来源快照接入正式只读接口。分支 `feat/RF-013-form-context-http`，基线 `9a2bd41`（#36已合并）。状态：本地实现与后端验证通过，待评审；未提交、推送或创建PR。用户转达A同意公共范围后明确要求“开始开发”；据此实施限定范围，不代记B本人最终消费回核。
+
+### 2. 技术实现
+
+新增 `server/app/api/form_context.py`，提供 `GET /api/v1/import-batches/{batch_id}/form-context`，main仅装配路由；复用 `read_source_snapshot`，调整服务说明。新增路由类将成功、业务错误、鉴权及参数错误统一设置no-store，不改全局中间件。版本必传且非负，404／409沿detail包络；成功沿data/request_id并加schema_version=1。正常文件数据库连接在finally关闭；内存测试连接保留。读取不调用database初始化或业务写入。
+
+将原本地未跟踪的10项HTTP RED目标更新为原件／正文双状态，补10项缓存、父引用及零副作用回归，共20项HTTP测试。更新来源移交说明与OpenAPI基准。原有SPRINT_01_TASKS本地修改不属于本次改动，不覆盖、不纳入交付。
+
+### 3. 设计与关键决策
+
+一次数据库一致快照加消费端逐表复核；不改来源写入事务。同revision可能增加来源，原件存在与解析成功分别表达。非法关系整次拒绝，普通失败逐来源返回；真实行与legacy_text分开，不造Evidence。逐表要求绑定、草稿保留、导出决定仍由B负责。OpenAPI更新前移除唯一新增GET路径后重新计算完整指纹，确认与旧接受基准一致，无其他契约变化；新指纹为 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`，供PR评审。
+
+### 4. 遇到的问题及解决
+
+沙箱fetch因本机代理连接失败，获工具批准以正常权限单次清空该命令代理后成功，不改全局配置。沙箱定向测试持续无输出，中止后在正常权限、项目隔离TEMP/TMP下重跑通过；未删除或跳过失败断言。最新main已含内部服务，直接从最新主线建分支，无需重复实现。
+
+### 5. 测试与验证
+
+Windows，既有 `.runtime/c-venv`；TEMP/TMP仅当前进程指向 `.runtime/form-context-http/tmp`，合成账户、隔离库和临时原件，无真实模型调用。实际执行：
+
+- `.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_form_context.py server/tests/test_notice_source_snapshot.py -q -p no:cacheprovider --tb=short --disable-warnings`：41 passed、5 warnings，7.18秒。
+- `.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests -q -p no:cacheprovider --tb=short --disable-warnings`：283 passed、5 warnings，41.46秒。包含原10项HTTP目标，不再排除该文件；覆盖现有通知、权限、原件及Review等回归。
+- `scripts/check-api-contract.py`、`scripts/check-docs.py`（251个本地目标）、`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8份副本）和 `git diff --check`：通过。新增未跟踪文件另行检查文本格式及实际内容；外链未验证。
+
+HTTP通过TestClient运行；未跑真实TCP启动、前端、Office、真实模型或Android／真机。未把后端读取成功记为B填表联调通过。
+
+### 6. 运行证据
+
+本会话实际Git、测试和检查命令回执，新增路由与测试源码；无新提交／PR或APK。A确认及用户开工指令见本会话，原始Codex会话分享链接或导出待保留。
+
+### 7. 未完成与限制
+
+B最终字段消费回核及H06双表实际联调未完成，H08依赖A组织真机；不代称A/B共同签认。HTTP不保证之后下载的原件可用，B下载后另核hash。正式草稿恢复、迁移、历史引用自动修复、候选存储和B页面不在本切片；保留为本地改动等待内容确认及PR评审，不自动提交或合并。
+
+提交授权补记：用户随后明确要求“提交并推送”。本次仅提交路由、装配、服务说明、HTTP测试、契约指纹及两份C文档共7个文件，排除原有任务表修改。提交及推送结果以本会话Git回执为准；附PR DES，不创建或合并PR。上方本地未提交状态保留为开发验证阶段快照。
+
 ## RF-015｜候选来源与独立 Task 迁移对照（2026-11-22）
 
 1. **任务信息** — C，基线 `3bcd0d7`，分支 `docs/RF-015-migration-review`。完成 C 侧对照草案，2026-11-23 继续补来源兼容基线及评审拆分，D/B/A 评审待确认。fetch 后远端 main 为 `ce3ecd4`，差异仅为 C 文档与样例，生产源码一致；为保留现有草案未切换或覆盖工作区。未提交或推送。

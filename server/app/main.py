@@ -35,6 +35,7 @@ from .services.schedule_drafts import snapshot as schedule_snapshot,create_draft
 from .settings import SETTINGS
 from .bootstrap import database
 from .api.common import stamp, data, owned, schedule_item_json
+from .api.form_context import router as form_context_router
 from .schemas import (CaseIn, CasePatch, FactIn, TaskIn, PatchTask, TextImport, UrlImport, ImportBatchIn, EdgeIn, MaterialIn, SyncChange, SyncPush, ProfileIn, AccountSettingsPatch, ScheduleItemIn, ScheduleItemPatch, SchedulePreferencesIn, CalendarBlockIn, SchedulePreviewIn, DraftCommitIn, AttachmentImportIn, TaskPlanningIn, ScheduleSeriesIn, ScheduleLockIn, ProfileInterestsIn, VaultPatch, ReviewConfirmation, KnowledgeTextIn, KnowledgeSearchIn, KnowledgeConsent, RedactIn)
 from .services.fact_history import normalize_validity,record_fact,expired
 from .services.interests import bind_interest,soft_relevance
@@ -47,6 +48,7 @@ app=FastAPI(title='Zhishi RuleFlow API',version='2.0.0')
 origins=[x.strip() for x in os.getenv('CORS_ORIGINS','http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost').split(',') if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=origins,allow_credentials=False,allow_methods=['*'],allow_headers=['Authorization','Content-Type'])
 app.include_router(auth_router,prefix='/api/v1/auth')
+app.include_router(form_context_router)
 
 
 def load(name):return json.loads((DEMO/name).read_text(encoding='utf-8'))
