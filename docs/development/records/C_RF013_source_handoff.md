@@ -1,5 +1,36 @@
 # 有绪 CampusWeave｜RF-013 通知来源与填表移交准备
 
+## 2026-11-24 C 侧类型化读取客户端（本地待评审）
+
+新增 `mobile/src/features/imports/formContext.ts`，供后续B消费接入：
+
+```ts
+import {readFormContext, FormContextInvalid} from '../../features/imports/formContext';
+// 由页面在用户主动使用工作区时调用；不在后台自动读取。
+const context = await readFormContext(batchId, expectedRevision);
+```
+
+复用现有鉴权／刷新／错误传递机制，每次请求明确cache=no-store，不缓存或持久化正文。成功后校验schema_version、批次／版本、来源唯一性、原件与解析状态、文档与行归属、正文与真实行一致、父引用存在及空值语义。无效响应抛出不含原文的FormContextInvalid；HTTP错误继续保留ApiError的status/code；网络失败不回退到Demo。此处只检查响应结构与相互引用，不重算原件字节hash、不替代服务端授权或B下载后的hash复核。
+
+没有接B页面、创建要求绑定或决定允许导出，未实现输入保留和正式草稿恢复。B仍应在页面按来源身份消费，保留编辑并处理版本／引用／网络错误；不得只因本客户端接受响应就继续导出。该分支基于HTTP提交f1bf3b4，须先合入其接口分支，或在接口合并后重新同步。
+
+30项客户端回归通过；另从真实FastAPI接口以合成账户／原件生成3组响应，经Vite加载实际客户端校验通过，含旧文本、真实行、原件缺失、空解析及未取得原件。该兼容检查是TestClient与Node的组合，不代表浏览器网络、B工作区联调或Android验收。
+
+## 2026-11-24 正式 HTTP 接入（本地待评审）
+
+以下更新优先于本文历史“路由未实现”描述。用户转达 A 对 URL、读取范围、权限、版本、异常、缓存及限定修改范围的确认，并随后明确指令“开始开发”。本次据此实施限定接口，不代记 B 本人已回核，不代表双表联调或整卡验收。
+
+- `GET /api/v1/import-batches/{batch_id}/form-context?expected_revision=<非负整数>`，沿现有 Bearer 鉴权与 `data/request_id` 包络，响应 `schema_version=1`。
+- 必传版本；先按 owner 查批次，再检查版本。不存在／其他账户为404，stale为409 `IMPORT_BATCH_STALE`，非法正式关系或父引用为409 `SOURCE_REFERENCE_INVALID`；沿现有 `detail` 错误包络。401、422及上述响应均为 `Cache-Control: no-store`，只作用于本路由。
+- 输出批次ID／版本、可空case_id及sources；来源身份为source_id，含name/kind/status及可空安全error_code。无合法Document时document_ref为null；合法引用在原件缺失时仍保留，含id/revision/sha256/name/mime/size/kind。
+- text_origin为document_lines／legacy_text或null，content_hash为Document原件hash或粘贴正文UTF-8 hash，无对应内容时null。没有正文时text为null（已存空粘贴文本可保留空串），无真实行时lines为空数组；保留真实行ID、顺序和已有定位字段，不伪造Evidence。
+- original.state为present/missing/not_acquired/not_applicable/unverified；extraction.state为available/failed/empty/not_acquired；各自error_code正常为null。二者分开判断，present不保证之后下载成功。
+- parent_reference_state为none/valid/missing；仅valid返回parent_source_id，其他为null。非法父引用整次拒绝；已删父来源不掩盖子附件原件状态。
+- 同次数据库读取一致，不改来源写入事务；同revision仍可能新增来源。B按source_id、Document版本/hash、相关通知依据及状态逐表复核，实际下载另核字节hash。要求绑定、输入保留与导出决定由B消费端实现。
+- 新路由不初始化数据库、不抓取、不解析、不调用模型、不生成Case/Evidence/Task或草稿；没有迁移、B页面、正式恢复或Android改动。HTTP定向回归与内部服务共41项通过，完整后端结果见C记录。
+
+OpenAPI已静态核实：移除新增GET路径后的完整指纹与原接受基准相同，只有该路径新增；据本次授权更新基准供PR评审。B最终消费回核、双表实际联调和真机仍待完成。
+
 2026-11-09；负责人 C；基线 `ce597a1`；分支 `docs/RF-013-source-handoff`。
 性质：现有 API 集成验证与 C/B 接口提案，未实现正式移交入口，RF-013/RF-011 整卡未完成。
 
