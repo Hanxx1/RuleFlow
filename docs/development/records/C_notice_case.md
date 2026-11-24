@@ -12,6 +12,26 @@
 
 提交授权补记（2026-11-23）：用户明确要求「提交并推送」。授权范围为本次边界测试、来源移交评审稿和本记录共三个文件，推送至 `docs/RF-013-source-boundary-tests`，附 PR DES。上方未提交状态为验证阶段快照，最终提交号和推送状态以 Git 回执为准；本次不创建或合并 PR。
 
+**2026-11-24 PR #30 冲突处理补记：** C；复用原任务分支 `docs/RF-013-source-boundary-tests`，将主线 `dbc514d` 同步至 PR。唯一冲突为本记录顶部双方追加，完整保留 RF-011/013 与 RF-015 记录及共同历史；没有手动修改生产代码、公共接口、数据库或其他成员记录。相对主线仍为原 PR 的三个文件，未扩大功能范围。
+
+验证：Windows，既有 `.runtime/c-venv`，TEMP/TMP 仅本次进程指向本工作区 `.runtime/rf013-boundary/tmp`。沙箱 pytest 持续无输出，已中止；正常本机权限执行同一命令 `python -X utf8 -m pytest server/tests/test_source_handoff_boundaries.py server/tests/test_import_recovery_guards.py server/tests/test_notice_handoff_baseline.py server/tests/test_notice_migration_baseline.py -q -p no:cacheprovider --tb=short --disable-warnings`，**21 passed、5 warnings，3.97s，退出0**。`scripts/check-docs.py`（247 个本地目标，外链未检）、`scripts/check-paths.py` 和暂存 diff 检查通过。证据为实际命令回执及仓库测试源码；未跑全量、前端、Office 或 Android，无 APK；公共接口仍待原有评审，不代表整卡完成。提交和推送状态以 Git 回执为准；不合并 PR。原始 Codex 会话分享／导出待保留。
+
+## RF-015｜候选来源与独立 Task 迁移对照（2026-11-22）
+
+1. **任务信息** — C，基线 `3bcd0d7`，分支 `docs/RF-015-migration-review`。完成 C 侧对照草案，2026-11-23 继续补来源兼容基线及评审拆分，D/B/A 评审待确认。fetch 后远端 main 为 `ce3ecd4`，差异仅为 C 文档与样例，生产源码一致；为保留现有草案未切换或覆盖工作区。未提交或推送。
+2. **技术实现** — 在 [RF-002 契约](C_RF002_contract.md) 补充表、外键、旧数据验收、条件化合并顺序及11月23日边界矩阵。新增 `server/tests/test_notice_migration_baseline.py` 两项测试：合成通知旧／批次入口数据的数据库及原件副本、现有初始化重放后的20表逐行比对、Review门禁和原件权限；跨Case原行独立Evidence及幂等绑定。保留既有本地任务表改动和 RF-011/013 目标回归，二者不纳入本切片。未改业务代码或迁移。
+3. **设计与关键决策** — 建议候选映射与旧单 Case 关系并存，RF-015 优先复用现有 Evidence；如须重建共享表，由 A/B 确认单一负责人。共享附件关系单列评审，复用 D 已有 Task 验收基线。
+4. **遇到的问题及解决** — 除 Case 文档行和知识来源外，`import_sources.evidence_id` 也直接引用 `evidence.id`。已纳入对照。11月23日实测一份两行Document对应两条Evidence，而来源单值仅引用首条，明确不能从这个单值丢弃完整映射。公网fetch因本机代理不可达失败，正常权限单次绕过代理成功；未改全局配置。新增测试未出现业务失败。
+5. **测试与验证** — Windows 既有 `.runtime/c-venv`，定向运行 `test_document_lines.py`、`test_document_api.py`、`test_import_recovery_guards.py`、`test_notice_handoff_baseline.py`、`test_review_api.py`、`test_legacy_case_task.py`、`test_legacy_task_link_checker.py`，36 passed、5 warnings。现有 schema 用 `DATABASE_PATH=:memory:` 初始化后查询 `PRAGMA foreign_key_list`，确认 Evidence 和 Task 各有三条直接外键；空库 `foreign_key_check` 零行。未运行新迁移、全量回归或真机。
+6. **运行证据** — 本轮命令回执、对照草案、新增测试源码和 D 已提交的旧库基线。11月23日测试只写入 `.runtime/rf015-baseline/tmp` 下合成测试临时数据；不提交数据库或原件。无新 APK、提交或 PR。原始 Codex 会话待保留。
+7. **未完成与限制** — D 核拟改表及依据作用域，B 核引用消费，A/B 确认共享迁移归属和合并顺序。确认后在隔离副本实施并验证，当前没有分配迁移编号或签认。11月23日合成数据基于当前schema，现有初始化重放不代表历史schema升级、新候选迁移或并发备份通过；未跑全量、前端、候选API、模型或真机。
+
+**11月23日测试补记（第5项）：**Windows、既有 `.runtime/c-venv`，TEMP/TMP仅当前进程指向 `.runtime/rf015-baseline/tmp`。首次新增基线与D旧Task／关联测试共6 passed、5 warnings；增加独立原件目录复制后，实际运行 `.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_notice_migration_baseline.py server/tests/test_legacy_case_task.py server/tests/test_legacy_task_link_checker.py server/tests/test_review_api.py server/tests/test_document_api.py server/tests/test_document_lines.py server/tests/test_notice_handoff_baseline.py server/tests/test_import_recovery_guards.py -q -p no:cacheprovider --tb=short --disable-warnings`，**38 passed、5 warnings，9.54s，退出0**。数据库完整性、外键、20表含JSON引用逐行比较、原件hash及未确认Review门禁均通过。`scripts/check-docs.py`（245个本地目标）、`scripts/check-paths.py`及`git diff --check`通过，外链未检。不是含未跟踪RF-013 RED文件的工作区全量测试。
+
+提交授权补记（2026-11-23）：用户明确要求「提交并推送」。本次仅提交RF-002契约中的RF-015评审草案、本记录和新增通知兼容基线测试三个文件，分支 `docs/RF-015-migration-review`；原任务表修改及RF-013 RED测试排除。上方未提交状态为验证阶段快照，最终提交和推送状态以Git回执为准。同步主线时保留双方C记录，附PR DES，不创建或合并PR，不实施新迁移。
+
+主线同步补记：任务提交 `2b176e7` 后合入 `origin/main` 的 `ce3ecd4`；仅本记录顶部追加内容冲突，保留RF-015及主线进度复核两节。生产源码和测试未改变，未重复运行已通过的38项定向测试；同步后 `check-docs.py`（247个本地目标）、`check-paths.py`及暂存差异检查通过。远端推送结果以Git回执为准。
+
 ## 2026-11-22｜远端同步、进度复核与下一阶段建议
 
 ### 1. 任务信息

@@ -162,3 +162,55 @@ flowchart LR
 **供 D 复用的合成样例（预期，未执行）**。同一通知 L1 要求先核对材料再提交，L2 写明提交截止为 2026-11-20 17:00 +08:00，L3 要求核对成绩资格。确认 Review 后生成 T1 核对材料、T2 提交，T1→T2。用户估计 T1 需 90 分钟，为 T1 只安排了 30 分钟。仅选 T2 时，预览和提交均应提示前置耗时不足。缺少成绩时保留 UNKNOWN 和对应待补字段。时长依据来自用户，截止依据来自 L2。
 
 **与 B 的 RF-028 移交提议（待 B 确认）**。B 分支 `62ec31a` 已按附件分配规则。对于已保存的通知，建议 C 提供当前用户获准读取的来源及版本、原文行和附件 Document 引用，B 用用户选中的原件及模板指纹确认适配版本。共享原件的两个 Case 各持自己的 Evidence。引用失效或附件版本变化时提示重新核对，待双方核实旧纯文本无 Document 的处理方式。
+
+### 11 月 20 日 RF-015 与 RF-038/039 迁移核对
+
+Q01/Q02 的核心语义已形成共识，沿用上表。通知候选确认后映射为各 Case 的依据；独立 Task 的依据限定到当前任务，同一 owner 的其他任务也不能借用。接下来只核对表、迁移负责人和依赖顺序。
+
+| 现有表或关系 | C 侧 RF-015 建议 | D 侧 RF-038/039 涉及的范围 |
+|---|---|---|
+| `evidence` | 候选到各 Case 的映射引用 Evidence ID。建议 RF-015 在新增关系中保存映射，避免两边分别重建此表 | 现有 `case_id` 必填。独立任务需要支持无 Case、绑定当前 Task 及按作用域读取；实际字段或关系表由 D 列出。此处是主要潜在 DDL 冲突 |
+| `tasks` | 保留旧 Task ID、状态和 Case；候选存储无需改此表 | 当前 `case_id` 必填。D 负责独立创建所需的归属和来源兼容，复用旧任务测试核对状态更新 |
+| `import_case_sources`、`case_attachment_documents` | C 负责旧批次到 Case 的兼容和同一原件跨 Case 的关系。核对现有主键能否表达一对多，再确定新增映射或调整约束 | 当前未识别 D 对这两张表的改表需求；如需读取作业原句，先核对引用和归属 |
+
+**供 A/B 确认的顺序**：C/D 先分别列出拟改表、外键和旧数据检查项。若 RF-015 采用独立映射表，可与 D 的旧任务兼容验证并行；若两边都需改 `evidence`，建议由 D 集中提交共享表迁移，C 核验旧 Case 依据和文档行引用，再接依赖新结构的映射。最终由 A/B 协调确认实际范围和先后，D 回写[公共决策表](D_public_interface_questions.md)。本节未分配迁移编号。
+
+### 11 月 22 日 RF-015 迁移对照与验收输入（C 草案）
+
+核对基线 `3bcd0d7`，D 侧以已有 [Q01/Q02/Q10 和迁移影响清单](D_public_interface_questions.md) 为准。下表用于范围和顺序评审，列出的关系名为业务用途，具体表名、约束和迁移编号待确认。
+
+| 范围 | RF-015 建议 | RF-038/039 与兼容检查 |
+|---|---|---|
+| 候选、来源、Case 映射 | 新增候选存储及版本、候选处理结果和来源到 Case Evidence 的映射。确认前仅存来源引用；RF-016 确认后，各 Case 分别获得自己的 Evidence。校验同 owner、批次与文档行归属，拒绝过期版本。 | 候选存储可与 D 的兼容基线并行准备。独立 Task 使用自己的依据作用域，接入前核对 D 的读取契约。 |
+| `import_batches`、`import_case_sources`、`source_documents` | 保留旧批次的单值 `case_id` 和旧导入映射。新多 Case 关系由新增映射表达。`import_case_sources` 的主键是 `import_id`，它与 `import_batches` 不是同一入口。`source_documents` 继续保存来源到原件的关联。 | 升级副本逐项比较旧 ID、owner、Case、来源状态和已存 Evidence ID。旧粘贴正文没有行引用时保持原状。 |
+| `evidence` 与直接引用 | RF-015 建议引用既有 Case Evidence，保持 ID 和 Case 归属，不重建该表。内存实例确认 `import_sources.evidence_id`、`evidence_lines.evidence_id`、`knowledge_evidence_sources.evidence_id` 均为直接外键，删除行为为 `NO ACTION`。 | 如果 D 的方案需要重建 `evidence`，上述三条外键及旧证据的 Document/行关系须一起验收。规则、材料、Task、截止与附件中的依据字段或 JSON 还要做业务对照，`foreign_key_check` 不覆盖它们。 |
+| `case_attachment_documents` | 现有主键 `document_id` 阻止跨 Case 复用同一补充附件。共享功能建议采用 owner＋Case＋Document 的关系键，保持每个 Case 的证据归属，并同步核对 Case 资源读取、原件删除保护、重复关联。 | D 未提出修改此表。此项可按共享附件实际依赖单独评审。旧附件关系及原件哈希应保持；解绑一个 Case 后，另一 Case 的引用仍可读取且原件仍受保护。 |
+| `tasks` 与关联 | RF-015 不改 Task 结构，继续保留现有 Review 门禁及 Case Task ID。 | 内存实例确认 `task_material_links`、`vault_task_links`、`schedule_items` 指向 `tasks.id`。复用 D 的 11 表基线核对状态、材料、Vault、正式日程、任务依赖及排程设置，再按最终方案验证独立 Task。 |
+
+**建议合并顺序。** A/B 先确认 Q01/Q02/Q10 和实际改表归属。若 RF-015 的候选基础仅新增独立关系，且无需调整 `evidence`，其可独立评审和合并。若须改 `evidence`，建议单一迁移负责人提交共享表变更，C/D 分别签认旧通知与 Task 兼容，由依赖该结构的映射和接口随后落地。共享附件约束变更按确认过的依赖进入对应 PR。
+
+**升级验收草案。** 复制隔离旧库，同时保留配套 Document 原件和 Vault 文件。升级前后比对旧批次/来源/Case/证据/文档行键、owner、原文、引用和文件哈希，以及 D 的 Task 关系基线。运行 `PRAGMA integrity_check` 和 `PRAGMA foreign_key_check`，并回放旧通知 Review 门禁、旧 Task 状态更新和原件读取。新路径需覆盖一来源两候选、同原件两 Case 各自 Evidence、越权及过期零写入、重试无重复记录和事务失败回滚。D 请核对依赖的证据作用域及拟改表，B 请核对填表和资料的引用消费，A/B 确认合并顺序。尚未运行候选迁移。
+
+### 11 月 23 日 RF-015 迁移前实测与实施边界
+
+继续复用 `docs/RF-015-migration-review` 及原草案。本地基线 `3bcd0d7`；fetch 后远端 main 为 `ce3ecd4`，两者仅 C 文档／样例不同，生产源码与主线一致。原工作区的任务表补记和 RF-013 RED 测试保持原状，不纳入本切片。Q10 在 D 的唯一公共表中仍待确认，以下不是新的共同签认或迁移授权。
+
+新增 [C 来源兼容基线](../../../server/tests/test_notice_migration_baseline.py)，与 D 的 [旧 Task 基线](../../../server/tests/test_legacy_case_task.py)及[关联校验测试](../../../server/tests/test_legacy_task_link_checker.py)配套：
+
+| 检查 | 实际范围与结果 | 不能据此声称 |
+|---|---|---|
+| 两类现有导入关系 | 用真实旧文件入口和批次文本＋文件入口建立合成通知。批次分析后 `case_id`、来源 Evidence 与 Document 行关系均真实产生；多行 Document 有两条 Evidence，source 单值仅指首条 | 已有候选持久化或旧批次已自动升级为多候选 |
+| 副本初始化重放 | 文件 SQLite backup，加上独立目录中的原件复制；重放现有 database 两次，逐行比较 20 张显式表（含迁移记录、Review、规则／材料／Task 与 JSON 引用），完整性及外键检查通过 | 新 RF-015／RF-038 迁移已通过；备份过程并发一致性已验；比较范围包含所有业务表 |
+| 读取与门禁 | 副本原件内容／hash 与原件一致，其他账户读取拒绝；两类通知未确认 Review 时创建 Task 均为409，最后表快照仍一致 | 新候选确认事务、真实模型或真机闭环通过 |
+| 原件跨 Case 的依据绑定 | 调用现有 bind_document：两个 Case 使用同两条原行，各有不同 Evidence ID；重复绑定不增记录 | `case_attachment_documents` 已支持共享附件；服务层绑定不等于补充附件 API 共享能力 |
+
+**拟交付与合并边界（供 D/B/A/B 核对）：**
+
+1. RF-015 基础只计划新增候选集合／版本、来源快照及结果映射；确认前不创建正式 Case、Evidence 或 Task。不回填虚构候选分析版本，不将现有 source 单 Evidence ID 当完整行映射。候选表实际字段、主键、外键及快照指纹仍待确认；不分配迁移编号。
+2. RF-038/039 的 Task 可空 Case、依据作用域及内容版本由 D 提拟改 DDL。若只读现有 Case Evidence，RF-015 可独立；若引用新作用域字段或需重建 Evidence，则先合单一负责人提交的共享迁移，再合依赖结构的关系／接口。双方不能各自重建 Evidence。
+3. 共享补充附件关系单列小切片：确认现有 document_id 主键的变更、资源读取、解绑及原件保护后实施；不能将本轮 bind_document 用例算作该项验收。
+4. RF-016 的确认事务、操作回执、失败回滚及 Review 失效必须作为后续明确切片；若 RF-015 只落存储，不预写「已确认」或伪资源 ID。新旧响应由 Q10 评审，不任取首个 Case 给旧客户端。
+
+**待团队提供的具体结论：**D 列 Task/Evidence 实际拟改字段／关系及插入顺序、是否重建共享表；B 核对来源和完整 Evidence 映射的消费及失效处理；A/B 确认共享迁移负责人、拆分范围、回滚方式和合并先后，并由 D 回写唯一公共表。现有初始化重放基线可以先审，不替代上述确认。
+
+本轮定向 38 项通过；未执行新迁移、真实旧库升级、并发备份、候选 API 或全量回归。未来迁移实码就绪后，须对复制的迁移前数据运行升级，并再次核对上述关系和 D 的 Task/Vault 基线；本轮合成数据创建于当前 schema，不能冒充历史 schema 升级样本。

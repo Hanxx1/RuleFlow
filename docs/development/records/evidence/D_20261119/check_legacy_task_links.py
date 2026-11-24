@@ -18,8 +18,9 @@ KEYS = {
 }
 
 
-def check(database, vault):
-    baseline = json.loads(BASELINE.read_text(encoding="utf-8-sig"))
+def check(database, vault, baseline=None):
+    if baseline is None:
+        baseline = json.loads(BASELINE.read_text(encoding="utf-8-sig"))
     differences = []
     for suffix in ("-wal", "-journal"):
         sidecar = Path(str(database) + suffix)
