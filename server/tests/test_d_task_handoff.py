@@ -1,3 +1,5 @@
+import json
+
 from helpers import account, client, confirm_import, head
 
 
@@ -36,3 +38,29 @@ def test_skip_reopen_recomputes_pending_and_preserves_done():
     status(second, 'done')
     status(first, 'todo')
     assert successor()['status'] == 'done'
+
+
+def test_vault_rename_with_single_selection_payload_reproduces_lost_link():
+    headers, case, first, second = task_pair()
+    url = '/api/v1/vault/items'
+    response = client.post(url, headers=headers, data={
+        'consent':'true', 'name':'original.txt', 'case_ids':json.dumps([case]),
+        'task_ids':json.dumps([first, second])
+    }, files={'file':('original.txt', b'shared proof', 'text/plain')})
+    assert response.status_code == 200
+    item_url = url+'/'+response.json()['data']['id']
+
+    def linked(task):
+        return [x['id'] for x in client.get(url, headers=headers, params={'task_id':task}).json()['data']]
+
+    assert linked(first) == linked(second) and len(linked(first)) == 1
+    # Control: metadata-only PATCH preserves both links.
+    assert client.patch(item_url, headers=headers, json={'name':'control.txt'}).status_code == 200
+    assert linked(first) == linked(second)
+    # Replay the payload captured from VaultView when only the name was edited.
+    result = client.patch(item_url, headers=headers, json={
+        'name':'renamed.txt', 'category':'other', 'case_ids':[case], 'task_ids':[first]
+    })
+    assert result.status_code == 200
+    assert len(linked(first)) == 1 and linked(second) == []
+    assert client.get(item_url+'/content', headers=headers).content == b'shared proof'
