@@ -1,4 +1,5 @@
 import {indexedWorkspace} from '../services/clientWorkspace';
+import {clearExperiences} from '../features/experience/archive';
 import {clearOwnerFormDrafts} from '../features/formDemo/savedDraftSession';
 import {defineStore} from 'pinia';import {api,auth,clearSession} from '../core/http';
 export type AccountUser={id:string;email:string};
@@ -7,10 +8,14 @@ export const useAccountStore=defineStore('account',{state:()=>({user:null as Acc
     const owner=this.user?.id
     try{await auth.logout()}
     finally{
+      this.user=null;
       try{
         if(owner) {
           try{clearOwnerFormDrafts(owner)}
-          finally{await indexedWorkspace.remove(owner)}
+          finally{
+            try{await indexedWorkspace.remove(owner)}
+            finally{await clearExperiences(owner)}
+          }
         }
       }finally{
         clearSession();this.user=null;this.devices=[];this.settings=null;this.completeness=null

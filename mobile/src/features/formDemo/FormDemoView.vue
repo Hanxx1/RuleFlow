@@ -6,7 +6,10 @@ import {useImportDraftStore} from '../imports/draftStore'
 import NoticeIntake from './NoticeIntake.vue'
 import SavedNoticeIntake from './SavedNoticeIntake.vue'
 import AccountProfileFill from './AccountProfileFill.vue'
+import AccountAwardFill from './AccountAwardFill.vue'
+import {loadExperiences} from '../experience/archive'
 import {reviewAccountProfile,staleProfileLabels,type ProfileCandidate} from './accountFormProfile'
+import {awardCandidates,currentAward,retainAwardUses,type AwardUse} from './accountAwardFill'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
 import {clearFormDrafts,readDraftReference,readFormDrafts,recoverableFields,saveFormDraft,type SavedFormDraft} from './savedFormDrafts'
 import {avatarUrl,buildForm} from './exportForm'
@@ -44,7 +47,10 @@ const imageVersion = ref(0)
 const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
 const profileFields = ref<Record<string,ProfileCandidate>>({})
-const drafts = new Map<string,{values:FormValues;photo:string;name:string;profileFields?:Record<string,ProfileCandidate>}>()
+const awardUses = ref<AwardUse[]>([])
+const awardSources = computed(()=>Object.fromEntries(awardUses.value.flatMap(use=>
+  Object.keys(use.fields).map(id=>[id,use.source]))))
+const drafts = new Map<string,{values:FormValues;photo:string;name:string;profileFields?:Record<string,ProfileCandidate>;awardUses?:AwardUse[]}>()
 const attachmentProgress = ref<Record<string,'editing'|'exported'>>({})
 const exporting = ref(false)
 const priorDraftKey = ref('')
@@ -71,7 +77,10 @@ const priorDrafts = computed(()=>{
 })
 const priorValues = computed(()=>drafts.get(priorDraftKey.value)?.values ||
   savedDrafts.value.find(item=>item.key===priorDraftKey.value)?.values || {})
-const comparableFields = computed(()=>scenarioFields(scenario.value).filter(field=>priorValues.value[field.id]?.trim()))
+const priorAwardFields = computed(()=>new Set((drafts.get(priorDraftKey.value)?.awardUses || [])
+  .flatMap(use=>Object.keys(use.fields))))
+const comparableFields = computed(()=>scenarioFields(scenario.value)
+  .filter(field=>priorValues.value[field.id]?.trim() && !priorAwardFields.value.has(field.id)))
 const draftFieldLabels = computed(()=>recoverableFields(scenario.value).map(field=>field.label))
 
 
@@ -103,6 +112,7 @@ function changed() {
   for (const key of Object.keys(profileFields.value)) {
     if (values.value[key]!==profileFields.value[key].value) delete profileFields.value[key]
   }
+  awardUses.value = retainAwardUses(awardUses.value,values.value)
   draftMessage.value = ''
   confirmValues.value = false
   if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
@@ -111,7 +121,8 @@ function changed() {
 }
 
 function rememberDraft(key: string) {
-  drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value,profileFields:{...profileFields.value}})
+  drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value,
+    profileFields:{...profileFields.value},awardUses:awardUses.value})
 }
 
 function clearDrafts() {
@@ -125,6 +136,7 @@ function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
   const draft = drafts.get(draftKey)
   values.value = draft ? {...draft.values} : resolveDemoProfile(next,profile.value)
   profileFields.value = {...draft?.profileFields}
+  awardUses.value = draft?.awardUses || []
   photo.value = draft?.photo || ''
   photoInput.value = undefined
   imageVersion.value++
@@ -217,7 +229,8 @@ function saveDraftProgress() {
   draftError.value = ''
   draftMessage.value = ''
   try {
-    const manualValues = Object.fromEntries(Object.entries(values.value).filter(([id])=>!profileFields.value[id]))
+    const manualValues = Object.fromEntries(Object.entries(values.value)
+      .filter(([id])=>!profileFields.value[id] && !awardSources.value[id]))
     const saved = saveFormDraft(ownerId,savedBatchId,key,scenario.value,manualValues,draftRevision.value)
     draftRevision.value = saved.revision
     savedDrafts.value = [...savedDrafts.value.filter(item=>item.key!==key),saved]
@@ -269,6 +282,22 @@ function clearProfileFields() {
     if (values.value[id]===profileFields.value[id].value) delete values.value[id]
   }
   profileFields.value = {}
+  changed()
+}
+
+function fillFromAccountAward(use:AwardUse) {
+  const ids = Object.keys(use.fields)
+  if (exporting.value || ids.some(id=>values.value[id]?.trim())) return
+  Object.assign(values.value,use.fields)
+  awardUses.value = [...awardUses.value,use]
+  completion.value = [...new Set([...completion.value,...ids])]
+  changed()
+  message.value = '已带入奖项「'+use.entry.title+'」，请核对本次申报要求。'
+}
+
+function clearAwardFields() {
+  for (const id of Object.keys(awardSources.value)) delete values.value[id]
+  awardUses.value = []
   changed()
 }
 
@@ -441,6 +470,7 @@ async function download() {
   const version = formVersion
   const accountId = account.user?.id
   const sources = Object.values(profileFields.value)
+  const awards = awardUses.value
   const stillConfirmed = ()=>mounted && version===formVersion && account.user?.id===accountId &&
     intake.value===selection && confirmValues.value
   exporting.value = true
@@ -449,12 +479,20 @@ async function download() {
       await selection.verifyExport()
       if (!stillConfirmed()) return
     }
-    if (sources.length && accountId) {
-      const workspace = await loadWorkspace(accountId)
+    if ((sources.length || awards.length) && accountId) {
+      const [workspace,entries] = await Promise.all([
+        sources.length ? loadWorkspace(accountId) : undefined,
+        awards.length ? loadExperiences(accountId) : [],
+      ])
       if (!stillConfirmed()) return
-      const current = reviewAccountProfile(workspace,scenario.value,selection?.caseId || '',{})
-      const stale = staleProfileLabels(sources,current.candidates)
-      if (stale.length) throw Error('已从画像带入的字段需要重新核对（'+stale.join('、')+'）。请清除相关带入值后重新带入，也可手工填写。')
+      if (workspace) {
+        const current = reviewAccountProfile(workspace,scenario.value,selection?.caseId || '',{})
+        const stale = staleProfileLabels(sources,current.candidates)
+        if (stale.length) throw Error('已从画像带入的字段需要重新核对（'+stale.join('、')+'）。请清除相关带入值后重新带入，也可手工填写。')
+      }
+      const available = awardCandidates(entries)
+      const stale = [...new Set(awards.filter(use=>!currentAward(use.entry,available)).map(use=>use.entry.title))]
+      if (stale.length) throw Error('已带入奖项需要重新核对（'+stale.join('、')+'）。请清除旧带入值后重新带入，也可手工填写。')
     }
     const result = buildForm(scenario.value,{...values.value},photo.value,filename.value,!props.fromNotice)
     const url = URL.createObjectURL(result.blob)
@@ -592,6 +630,9 @@ function displayed(value: string, sensitive?: boolean) {
         <button v-if="Object.keys(profileFields).length" type="button" :disabled="exporting" @click="clearProfileFields">
           清除画像带入值
         </button>
+        <AccountAwardFill v-if="savedBatchId && intake && account.signedIn && scenario.id==='scholarship'"
+          :key="intake.id" :values="values" :disabled="saving || exporting" @apply="fillFromAccountAward"/>
+        <button v-if="awardUses.length" type="button" :disabled="exporting" @click="clearAwardFields">清除奖项带入值</button>
         <p v-if="!groups.length">本次没有资料缺项。可预览，或打开整表修改。</p>
         <fieldset v-for="group in groups" :key="group.title" :disabled="saving || !ready || exporting">
           <legend>{{ group.title }}</legend>
@@ -610,6 +651,10 @@ function displayed(value: string, sensitive?: boolean) {
               <details v-if="profileFields[field.id]">
                 <summary>已从个人画像带入</summary>
                 <small v-for="source in profileFields[field.id].refs" :key="source.id">{{ source.quote }} · {{ source.id }}<br></small>
+              </details>
+              <details v-if="awardSources[field.id]">
+                <summary>已从本机经历带入</summary>
+                <small>{{ awardSources[field.id].quote }} · 版本 {{ awardSources[field.id].revision }} · {{ awardSources[field.id].id }}</small>
               </details>
               <small>{{ savedBatchId && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
