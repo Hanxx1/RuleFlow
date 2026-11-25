@@ -1,9 +1,14 @@
 import {profileKey} from './demoProfile'
+import {reasonField,type ReasonVersion} from './reasonDraft'
 import {scenarioFields,scenarios,type FormValues,type Scenario} from './scenarios'
 import {draftIdentity,draftStorageKey,type DraftStorage} from './savedDraftSession'
 
-export type SavedFormDraft = {key:string;scenarioId:string;revision:number;values:FormValues}
+export type SavedReason = {value:string;accepted?:ReasonVersion}
+export type SavedFormDraft = {key:string;scenarioId:string;revision:number;values:FormValues;reason?:SavedReason}
 export type DraftReference = {batchId:string;sourceId:string;documentId:string;documentRevision:number;sha256:string}
+export class DraftRevisionConflict extends Error {
+  constructor() { super('草稿保存版本已变化。当前输入仍在，请核对已保存版本。') }
+}
 
 export function readDraftReference(key: string): DraftReference | undefined {
   try {
@@ -28,6 +33,35 @@ function pickValues(scenario: Scenario,values: Record<string,unknown>): FormValu
   }))
 }
 
+const isRecord = (value:unknown): value is Record<string,unknown> =>
+  Boolean(value && typeof value==='object' && !Array.isArray(value))
+const validText = (value:unknown,limit:number): value is string =>
+  typeof value==='string' && value.length<=limit && Boolean(value.trim())
+
+function savedReason(scenario:Scenario,value:unknown): SavedReason | undefined {
+  if (value===undefined) return
+  if (!reasonField(scenario) || !isRecord(value) || !validText(value.value,4000)) {
+    throw Error('理由为空、过长或不适用此原件，无法保存。')
+  }
+  const accepted = value.accepted
+  if (accepted===undefined) return {value:value.value}
+  if (!isRecord(accepted) || !validText(accepted.text,4000) || !Array.isArray(accepted.awards) ||
+      accepted.awards.length>(scenario.id==='scholarship' ? 4 : 0)) throw Error('理由依据无法核对。')
+  const seen = new Set<string>()
+  const awards = accepted.awards.map((award:unknown)=>{
+    if (!isRecord(award) || !isRecord(award.entry) || !isRecord(award.source)) throw Error('理由依据无法核对。')
+    const {id,revision,title} = award.entry
+    const {quote} = award.source
+    if (typeof id!=='string' || !draftIdentity.test(id) || seen.has(id) ||
+        typeof revision!=='number' || !Number.isSafeInteger(revision) || revision<1 ||
+        !validText(title,240) || !validText(quote,600) ||
+        award.source.id!=='block:client:'+id || award.source.revision!==revision) throw Error('理由依据无法核对。')
+    seen.add(id)
+    return {entry:{id,revision,title},source:{id:'block:client:'+id,revision,quote}}
+  })
+  return {value:value.value,accepted:{text:accepted.text,awards}}
+}
+
 export function readFormDrafts(owner: string,batch: string,storage: DraftStorage = sessionStorage): SavedFormDraft[] {
   const raw = storage.getItem(draftStorageKey(owner,batch))
   if (raw===null) return []
@@ -41,18 +75,23 @@ export function readFormDrafts(owner: string,batch: string,storage: DraftStorage
           !Number.isSafeInteger(item.revision) || item.revision<1 || seen.has(item.key) ||
           typeof item.values!=='object' || !item.values || Array.isArray(item.values)) throw Error()
       seen.add(item.key)
-      return {key:item.key,scenarioId:template.id,revision:item.revision,values:pickValues(template,item.values)}
+      const reason = savedReason(template,item.reason)
+      return {key:item.key,scenarioId:template.id,revision:item.revision,values:pickValues(template,item.values),
+        ...(reason ? {reason} : {})}
     })
   } catch { throw Error('保存的草稿无法读取。可清除本批次保存记录后重新保存填写内容。') }
 }
 
 export function saveFormDraft(owner: string,batch: string,key: string,scenario: Scenario,values: FormValues,
-                              expectedRevision: number,storage: DraftStorage = sessionStorage) {
+                              expectedRevision: number,options: {storage?:DraftStorage;reason?:SavedReason} = {}) {
+  const storage = options.storage ?? sessionStorage
   if (readDraftReference(key)?.batchId!==batch) throw Error('原件版本待核对，请重新打开表单。')
   const records = readFormDrafts(owner,batch,storage)
   const previous = records.find(item=>item.key===key)
-  if ((previous?.revision ?? 0)!==expectedRevision) throw Error('草稿保存版本已变化，请重新打开表单核对。')
-  const next = {key,scenarioId:scenario.id,values:pickValues(scenario,values),revision:expectedRevision+1}
+  if ((previous?.revision ?? 0)!==expectedRevision) throw new DraftRevisionConflict()
+  const reason = savedReason(scenario,options.reason)
+  const next:SavedFormDraft = {key,scenarioId:scenario.id,values:pickValues(scenario,values),revision:expectedRevision+1,
+    ...(reason ? {reason} : {})}
   try {
     storage.setItem(draftStorageKey(owner,batch),JSON.stringify([...records.filter(item=>item.key!==key),next]))
   } catch { throw Error('浏览器未能保存草稿，当前填写内容仍在。') }

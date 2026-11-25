@@ -73,7 +73,8 @@ async function run() {
 
   const browser = await chromium.launch({channel:'msedge',headless:true})
   try {
-    const page = await browser.newPage({viewport:{width:480,height:930},acceptDownloads:true})
+    const context = await browser.newContext({viewport:{width:480,height:930},acceptDownloads:true})
+    const page = await context.newPage()
     page.setDefaultTimeout(10000)
     const errors = []
     const writes = []
@@ -86,7 +87,8 @@ async function run() {
     await page.getByRole('button',{name:'提交',exact:true}).click()
     await page.waitForURL(url=>!url.pathname.startsWith('/auth'))
     page.on('request',request=>{
-      if (/\/api\//.test(request.url()) && !['GET','OPTIONS'].includes(request.method())) writes.push(request.method())
+      if (/\/api\//.test(request.url()) && !request.url().includes('/auth/') &&
+          !['GET','OPTIONS'].includes(request.method())) writes.push(request.method())
     })
     // Navigate within the SPA after a normal sign-in (access tokens are in memory).
     const navigate = location => page.locator('#app').evaluate((root,target)=>
@@ -173,6 +175,14 @@ async function run() {
     const confirm = async()=>{
       if (!await preview.count()) await edit.getByRole('button',{name:'预览填写内容',exact:true}).click()
       await preview.getByLabel('我确认这份文件的填写值和文件名').check()
+    }
+    const reopen = async credentials=>{
+      await page.reload()
+      await page.getByRole('link',{name:'登录后继续填表'}).click()
+      await page.locator('input[type=email]').fill(credentials.email)
+      await page.locator('input[type=password]').fill(credentials.password)
+      await page.getByRole('button',{name:'提交',exact:true}).click()
+      await page.waitForURL(url=>url.pathname===`/imports/${batch}/forms`)
     }
     const download = async (expected,entry,values)=>{
       await confirm()
@@ -359,6 +369,11 @@ async function run() {
     await allFields()
     assert.equal(await editReason.inputValue(),finalReason)
     await edit.getByText('查看修改前的本机稿',{exact:true}).waitFor()
+    await confirm()
+    await editReason.fill(finalReason+'。')
+    assert.equal(await preview.getByLabel('我确认这份文件的填写值和文件名').isChecked(),false)
+    assert.equal(await preview.getByRole('button',{name:/确认并下载/}).isDisabled(),true)
+    await editReason.fill(finalReason)
     const aFile = await download('顾景禾_00003180_奖学金.xlsx','xl/worksheets/sheet1.xml',
       ['顾景禾','00003180','已更正学院','手填专业',awardTitle,awardIssuer,finalReason])
     assert.ok(aFile.parts['xl/worksheets/sheet2.xml'])
@@ -366,6 +381,36 @@ async function run() {
     console.log('PASS confirmed award fits empty row; edited source cancels apply/export, manual values survive, actual XLSX matches')
     console.log('PASS scholarship draft keeps manual version, requires explicit source selection, and XLSX contains the exact final reason')
     console.log('PASS saved entry, two named targets, formal lines, drafts and XLSX download')
+    const saveReason = aDraft.getByRole('checkbox',{name:/同时保存/})
+    assert.equal(await saveReason.isChecked(),false)
+    await saveReason.check()
+    await aDraft.getByRole('button',{name:'保存当前草稿'}).click()
+    await aDraft.getByText('已保存当前原件的草稿字段。',{exact:true}).waitFor()
+    const [storedReason] = await page.evaluate(()=>Object.entries(sessionStorage)
+      .filter(([key])=>key.startsWith('campusweave:form-draft:v1:')).flatMap(([,raw])=>JSON.parse(raw)))
+    assert.equal(storedReason.reason.value,finalReason)
+    assert.equal(storedReason.reason.accepted.text,generatedReason)
+    assert.equal(storedReason.reason.accepted.awards[0].entry.title,awardTitle)
+    for (const key of ['identity','phone','photo','confirm','filename','reason']) assert.equal(key in storedReason.values,false)
+    assert.equal('confirmation' in storedReason,false)
+    const independentTab = await page.context().newPage()
+    await independentTab.goto(base+'/home')
+    assert.equal(await independentTab.evaluate(()=>Object.keys(sessionStorage)
+      .some(key=>key.startsWith('campusweave:form-draft:v1:'))),false)
+    await independentTab.close()
+    await reopen({email,password})
+    await open(aName)
+    await allFields()
+    assert.equal(await editReason.inputValue(),finalReason)
+    await edit.getByText('查看修改前的本机稿',{exact:true}).waitFor()
+    await edit.getByRole('button',{name:'预览填写内容',exact:true}).click()
+    assert.equal(await preview.getByLabel('我确认这份文件的填写值和文件名').isChecked(),false)
+    await fill({...examples.scholarship,name:'顾景禾',studentId:'00003180',reason:finalReason})
+    await reviseAward('复核后的颁奖单位')
+    await blocked('申请理由引用的奖项已变化')
+    assert.equal(await editReason.inputValue(),finalReason)
+    await aDraft.screenshot({path:path.join(out,'原件草稿恢复.png')})
+    console.log('PASS opt-in reason and evidence survive refresh; no old export consent or cross-tab writes; stale archived reason blocks export')
 
     const unchangedFile = b.metadata.document_id
     const stored = path.resolve(documentRoot,owner,unchangedFile)
@@ -374,7 +419,7 @@ async function run() {
     const original = await readFile(stored)
     assert.deepEqual(original,replacement)
     await open(bName)
-    await allFields()
+    await fill({...examples.photo,name:'周映宁',studentId:'00004291',reason:docxReason})
     try {
       const edited = Buffer.from(original)
       edited[edited.length-1]^=1
@@ -413,12 +458,18 @@ async function run() {
     assert.equal(await edit.locator('#name').inputValue(),'')
     await page.getByText('对照已移除或改版的草稿',{exact:true}).click()
     await page.getByRole('combobox',{name:/旧草稿/}).selectOption({index:1})
+    assert.equal(await editReason.inputValue(),'')
+    await page.getByText('查看旧理由（仅供对照）',{exact:true}).click()
+    await page.getByText(finalReason,{exact:true}).waitFor()
+    assert.equal(await page.getByRole('checkbox',{name:/申请理由 ·/}).count(),0)
     await page.getByRole('checkbox',{name:/姓名 · 顾景禾/}).check()
     await page.getByRole('button',{name:'带入选中的旧值'}).click()
     assert.equal(await edit.locator('#name').inputValue(),'顾景禾')
     assert.equal(await edit.locator('#studentId').inputValue(),'')
     await fill({...examples.scholarship,name:'顾景禾',studentId:'00003180'})
-    console.log('PASS same-name reupload starts blank, explicit field carry, unaffected DOCX exports')
+    page.once('dialog',dialog=>dialog.accept())
+    await aDraft.getByRole('button',{name:'清除本批次保存的草稿'}).click()
+    console.log('PASS same-name reupload starts blank, old reason remains comparison-only, explicit field carry, unaffected DOCX exports')
 
     await remove(notice)
     notice = await upload('更新通知.txt','text/plain',sourceText(170))
@@ -468,25 +519,42 @@ async function run() {
       reason:'遗失旧证，准备补办。'})
     await draftPanel.getByRole('button',{name:'保存当前草稿'}).click()
     await draftPanel.getByText('已保存当前原件的草稿字段。',{exact:true}).waitFor()
+    await page.evaluate(async ([ownerId,batchId])=>{
+      const {readFormDrafts,saveFormDraft} = await import('/src/features/formDemo/savedFormDrafts.ts')
+      const {scenarios} = await import('/src/features/formDemo/scenarios.ts')
+      const stored = readFormDrafts(ownerId,batchId)[0]
+      const scenario = scenarios.find(item=>item.id===stored.scenarioId)
+      saveFormDraft(ownerId,batchId,stored.key,scenario,{...stored.values,name:'较新的姓名'},stored.revision,
+        {reason:{value:'最新已保存理由。'}})
+    },[owner,batch])
+    await open(bName,{notice:alternate.id})
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'沈念秋')
+    await draftPanel.getByRole('button',{name:'保存当前草稿'}).click()
+    await draftPanel.getByRole('alert').filter({hasText:'草稿保存版本已变化'}).waitFor()
+    assert.equal(await edit.locator('#name').inputValue(),'沈念秋')
+    page.once('dialog',dialog=>dialog.accept())
+    await draftPanel.getByRole('button',{name:'读取已保存的版本'}).click()
+    assert.equal(await edit.locator('#name').inputValue(),'较新的姓名')
+    assert.equal(await edit.locator('#phone').inputValue(),'10000004796')
+    assert.equal(await editReason.inputValue(),'最新已保存理由。')
+    await draftPanel.getByRole('checkbox',{name:/同时保存/}).uncheck()
+    await fill({name:'沈念秋',reason:'遗失旧证，准备补办。'})
+    await draftPanel.getByRole('button',{name:'保存当前草稿'}).click()
+    await draftPanel.getByText('已保存当前原件的草稿字段。',{exact:true}).waitFor()
     const [[storedKey,record]] = await storedDrafts()
     assert.ok(storedKey.includes(owner))
     const [saved] = JSON.parse(record)
     assert.equal(saved.values.name,'沈念秋')
     assert.equal(saved.values.studentId,'00004796')
     for (const key of ['phone','identity','photo','reason','confirm']) assert.equal(key in saved.values,false)
+    assert.equal('reason' in saved,false)
+    console.log('PASS stale revision survives switching, refuses overwrite, and explicitly reloads saved data without dropping ineligible fields')
     for (const omitted of ['10000004796','遗失旧证','办理说明']) {
       assert.equal(record.includes(omitted),false,omitted)
     }
     await edit.locator('#name').fill('未保存修改')
     assert.equal(await draftPanel.getByText('已保存当前原件的草稿字段。',{exact:true}).count(),0)
-    const reopen = async credentials=>{
-      await page.reload()
-      await page.getByRole('link',{name:'登录后继续填表'}).click()
-      await page.locator('input[type=email]').fill(credentials.email)
-      await page.locator('input[type=password]').fill(credentials.password)
-      await page.getByRole('button',{name:'提交',exact:true}).click()
-      await page.waitForURL(url=>url.pathname===`/imports/${batch}/forms`)
-    }
     await reopen(other)
     await intake.getByRole('alert').waitFor()
     assert.equal(await edit.count(),0)
