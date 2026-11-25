@@ -1,5 +1,32 @@
 # 有绪 CampusWeave｜RF-013 通知来源与填表移交准备
 
+## 2026-11-25 C 侧原件读取与字节核验（本地待评审）
+
+基于最新主线 `efa9dd5`，新增 `mobile/src/features/imports/formOriginal.ts`，补齐 C 读取端从来源快照到实际原件的核验能力。之前的快照服务、HTTP 和类型化客户端已合入；下方各节“待合入／尚未实现”仅是对应日期的历史状态。
+
+```ts
+import {readFormContext} from '../../features/imports/formContext';
+import {readFormOriginal, FormOriginalError} from '../../features/imports/formOriginal';
+// 用户主动读取后，由 B 保存所选 source_id 和当次填写／要求快照。
+const context = await readFormContext(batchId, expectedRevision);
+const original = await readFormOriginal(context, selectedSourceId);
+// original 是核过大小和 SHA-256 的 Blob，不代表已核验模板或获准导出。
+```
+
+- 按 source_id 选定原件，调用前复制批次、版本及 Document 引用。下载前后均重读 form-context，核对同一 source 的 Document id/revision/sha256/size/mime/name；不以同名或相同 hash 接回另一 source。批次 stale 或权限错误沿现有 ApiError 传递。
+- 复用既有鉴权／刷新机制和 Document content API，核验实际下载大小、SHA-256 后才返回 Blob；原件替换、来源移除、内容不符或核验失败均不交付字节。form-context 请求显式 no-store，原件接口既有响应为 no-store；不改公共传输层、不写缓存或存储、不创建对象 URL。
+- 解析失败／空正文、父来源缺失不等于附件原件丢失。已存在或暂不可核验的原件可尝试实际下载并核字节；missing／not_acquired／not_applicable 不发起内容下载。缺少安全摘要能力或摘要执行失败时明确报错，不跳过核验。
+- C 侧安全错误为 `SOURCE_ORIGINAL_CHANGED`、`SOURCE_ORIGINAL_UNAVAILABLE`、`SOURCE_ORIGINAL_MISMATCH`、`SOURCE_INTEGRITY_UNAVAILABLE`，均不含原文、原件路径或字节。这些是本地客户端错误，不新增服务端状态码。
+- B 仍须核对通知／要求依赖、真实行、模板适配和导出确认；同批次新增无关来源不自动使本原件失效。该读取不会修改输入或草稿，也不能保证函数返回后来源不再变化。B 在账号切换或页面取消时须丢弃过时的异步结果；本函数不引入共享会话状态或最终导出锁。刷新／重新登录恢复仍按 RF-012。
+
+本地验证：新增 29 项测试；前端全量 224 项通过，类型检查与生产构建通过。可复现真实 TCP 脚本使用新建临时数据库、合成账户和 TXT 原件，加载实际 TS 模块调用隔离 FastAPI：
+
+```powershell
+node scripts/test-form-original-client.mjs .runtime/c-venv/Scripts/python.exe
+```
+
+可将参数替换为任何已安装 server requirements 的 Python，或设置 `CAMPUSWEAVE_TEST_PYTHON`。脚本只绑定回环随机端口，停服后清理本次唯一临时目录。五组检查通过：同名双来源逐份字节、跨账户拒绝、同大小篡改、缺原件但历史行可读、stale拒绝。该脚本不是 B 页面、真实 Office 表格、浏览器 CORS 或 Android 验收；H06/H08 仍未完成。没有新增依赖、共享 API、数据库或 B 页面修改。
+
 ## 2026-11-24 C 侧类型化读取客户端（本地待评审）
 
 新增 `mobile/src/features/imports/formContext.ts`，供后续B消费接入：
