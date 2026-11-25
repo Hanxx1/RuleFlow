@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {computed,onMounted,onBeforeUnmount,watch} from 'vue';
+import {reconcileReminders} from './core/native/reminders';
+import {ref,computed,onMounted,onBeforeUnmount,watch} from 'vue';
 import {RouterView,useRoute,useRouter} from 'vue-router';
 import {useAccountStore} from './stores/account';
 import {useCasesStore} from './features/cases/store';
@@ -8,6 +9,8 @@ import BottomNav from './components/BottomNav.vue';
 import {readShared,subscribeShared} from './core/native/share';
 
 const account=useAccountStore(),cases=useCasesStore(),dashboard=useDashboardStore();watch(()=>account.user?.id,()=>{cases.$reset();dashboard.$reset()});
+const reminderNotice=ref('');
+watch(()=>account.user?.id,async(owner,previous)=>{reminderNotice.value=await reconcileReminders(owner||'',previous)},{immediate:true});
 const route=useRoute();
 const router=useRouter();let sharedListener:{remove:()=>Promise<void>}|undefined,closed=false;
 async function showShared(){try{if((await readShared()).length&&!closed)await router.push({path:'/imports/new',query:{share:String(Date.now())}})}catch{/* Import screen exposes read errors when opened manually. */}}
@@ -18,6 +21,7 @@ const showNav=computed(()=>!route.path.startsWith('/auth/')&&route.path!=='/welc
 
 <template>
   <main :class="['app-shell',{'app-shell--with-nav':showNav}]">
+    <p v-if="reminderNotice" role="status">{{reminderNotice}}</p>
     <RouterView v-slot="{Component}"><Transition name="page-fade" mode="out-in"><component :is="Component"/></Transition></RouterView>
     <BottomNav v-if="showNav"/>
   </main>

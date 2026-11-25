@@ -9,6 +9,8 @@ import ClientCalendarPanel from '../../components/ClientCalendarPanel.vue';
 import {loadWorkspace} from '../../services/clientWorkspace';
 import {expandCourses} from '../../services/timetable';
 
+import {androidReminders,isReminderEnabled,saveReminder} from '../../core/native/reminders';
+const remind=ref(false),reminderReady=ref(true);
 const props=defineProps<{caseId:string;tasks:any[]}>();
 const account=useAccountStore();
 const calendarConsent=ref(false),cases=useCasesStore();
@@ -36,10 +38,55 @@ function displayDateTime(value:string){return new Intl.DateTimeFormat('zh-CN',{m
 function selectedRange(){let start=new Date(`${selected.value}T09:00:00`);if(selected.value===key(new Date())&&new Date()>start){start=new Date();start.setSeconds(0,0);start.setMinutes(Math.ceil(start.getMinutes()/30)*30)}const end=new Date(start);end.setHours(end.getHours()+1);return [inputValue(start),inputValue(end)]}
 function resetNotice(){error.value='';message.value=''}
 async function load(){if(!account.signedIn)return;loading.value=true;error.value='';try{const start=new Date(days.value[0].value);const end=new Date(start);end.setDate(end.getDate()+7);const params=new URLSearchParams({from:start.toISOString(),to:end.toISOString()});items.value=await api('/api/v1/schedule?'+params.toString())}catch(e:any){error.value=e?.message||'日程读取失败'}finally{loading.value=false}}
-function openNew(){resetNotice();editingId.value='';const [starts_at,ends_at]=selectedRange();form.value={title:'',kind:'busy',starts_at,ends_at,task_id:'',repeat_count:1};formOpen.value=true}
-function openEdit(item:any){resetNotice();editingId.value=item.id;form.value={title:item.title,kind:item.kind,starts_at:inputValue(new Date(item.starts_at)),ends_at:inputValue(new Date(item.ends_at)),task_id:item.task_id||'',repeat_count:1};formOpen.value=true}
-async function save(){working.value=true;resetNotice();try{const body={title:form.value.title.trim(),kind:form.value.kind,starts_at:new Date(form.value.starts_at).toISOString(),ends_at:new Date(form.value.ends_at).toISOString(),case_id:props.caseId||null,task_id:form.value.kind==='task'?form.value.task_id||null:null};await api(editingId.value?'/api/v1/schedule/items/'+editingId.value:Number(form.value.repeat_count)>1?'/api/v1/schedule/series':'/api/v1/schedule/items',{method:editingId.value?'PATCH':'POST',body:JSON.stringify(Number(form.value.repeat_count)>1?{...body,count:Number(form.value.repeat_count),timezone:'Asia/Shanghai'}:body)});formOpen.value=false;message.value=editingId.value?'安排已更新。':'安排已保存。';await load()}catch(e:any){error.value=e?.message||'日程保存失败'}finally{working.value=false}}
-async function remove(itemId=editingId.value){if(!itemId||!window.confirm('删除这条安排？'))return;working.value=true;try{await api('/api/v1/schedule/items/'+itemId,{method:'DELETE'});formOpen.value=false;message.value='安排已删除。';await load()}catch(e:any){error.value=e?.message||'删除失败'}finally{working.value=false}}
+function openNew(){remind.value=false;reminderReady.value=true;resetNotice();editingId.value='';const [starts_at,ends_at]=selectedRange();form.value={title:'',kind:'busy',starts_at,ends_at,task_id:'',repeat_count:1};formOpen.value=true}
+async function openEdit(item:any){remind.value=false;reminderReady.value=false;resetNotice();editingId.value=item.id;form.value={title:item.title,kind:item.kind,starts_at:inputValue(new Date(item.starts_at)),ends_at:inputValue(new Date(item.ends_at)),task_id:item.task_id||'',repeat_count:1};formOpen.value=true;
+  try {const enabled=await isReminderEnabled(account.user!.id,item.id);if(editingId.value===item.id){remind.value=enabled;reminderReady.value=true}}
+  catch {error.value='无法读取本机提醒设置，请重试。'}
+}
+async function save(){
+  const owner=account.user?.id;
+  if(!owner)return;
+  working.value=true;
+  resetNotice();
+  try{
+    const series=!editingId.value && Number(form.value.repeat_count)>1;
+    const body={
+      title:form.value.title.trim(),kind:form.value.kind,
+      starts_at:new Date(form.value.starts_at).toISOString(),
+      ends_at:new Date(form.value.ends_at).toISOString(),
+      case_id:props.caseId||null,task_id:form.value.kind==='task'?form.value.task_id||null:null
+    };
+    const path=editingId.value ? '/api/v1/schedule/items/'+editingId.value :
+      series ? '/api/v1/schedule/series' : '/api/v1/schedule/items';
+    const result=await api(path,{
+      method:editingId.value?'PATCH':'POST',
+      body:JSON.stringify(series?{...body,count:Number(form.value.repeat_count),timezone:'Asia/Shanghai'}:body)
+    });
+    if(owner!==account.user?.id)return;
+    formOpen.value=false;
+    message.value=editingId.value?'安排已更新。':'安排已保存。';
+    if(result.id && reminderReady.value){
+      const linked=props.tasks.find(t=>t.id===result.task_id);
+      message.value+=await saveReminder(owner,result,remind.value,['done','skipped'].includes(linked?.status));
+    } else if(result.id && androidReminders){
+      message.value+='本机提醒设置暂不可读，请重新打开安排核对。';
+    }
+    await load();
+  }catch(e:any){error.value=e?.message||'日程保存失败'}
+  finally{working.value=false}
+}
+async function remove(itemId=editingId.value){
+  const owner=account.user?.id;
+  if(!owner||!itemId||!window.confirm('删除这条安排？'))return;
+  working.value=true;
+  try{
+    await api('/api/v1/schedule/items/'+itemId,{method:'DELETE'});
+    formOpen.value=false;
+    message.value='安排已删除。'+await saveReminder(owner,{id:itemId,starts_at:''},false);
+    await load();
+  }catch(e:any){error.value=e?.message||'删除失败'}
+  finally{working.value=false}
+}
 async function makePreview(){if(!props.caseId)return;working.value=true;resetNotice();try{if(cases.selected?.relevance==='FALSE')throw Error('本机资料与资格条件不符，请先核对，不生成自动排程。');const start=new Date(),end=new Date(start);end.setDate(end.getDate()+14);const workspace=await loadWorkspace(account.user?.id||'offline');const blocks=expandCourses(workspace.courses,key(start),key(end));if(blocks.length&&!calendarConsent.value)throw Error('请明确确认发送本机课表占用时段');preview.value=await api('/api/v1/schedule/drafts',{method:'POST',body:JSON.stringify({case_id:props.caseId,window_end:end.toISOString(),timezone:'Asia/Shanghai',preferences:preferences.value,calendar_blocks:blocks.map(b=>({id:b.id,starts_at:b.starts_at,ends_at:b.ends_at,evidence_ids:b.evidence_ids})),calendar_consent:calendarConsent.value,calendar_revision:workspace.revision})});draftExpired.value=false;if(!preview.value.suggestions.length)message.value='当前没有可确认的排程建议。'}catch(e:any){error.value=e?.message||'排程预览失败'}finally{working.value=false}}
 async function confirmDraft(){if(draftExpired.value||!preview.value?.draft_id||!window.confirm('确认将整份排程草稿保存到当前账户？'))return;working.value=true;resetNotice();try{const workspace=await loadWorkspace(account.user?.id||'offline');if(preview.value.calendar_revision!==undefined&&preview.value.calendar_revision!==workspace.revision)throw Error('本机资料或课表已变化，请重新预览');await api('/api/v1/schedule/drafts/'+preview.value.draft_id+'/commit',{method:'POST',body:JSON.stringify({consent:true,calendar_revision:workspace.revision})});preview.value=null;message.value='整份排程已保存。';await load()}catch(e:any){if(e instanceof ApiError&&e.code==='DRAFT_EXPIRED')draftExpired.value=true;error.value=e?.message||'草稿确认失败，请重新预览'}finally{working.value=false}}
 async function toggleLock(item:any){working.value=true;resetNotice();try{await api('/api/v1/schedule/items/'+item.id+'/lock',{method:'POST',body:JSON.stringify({locked:!item.locked})});preview.value=null;await load()}catch(e:any){error.value=e.message}finally{working.value=false}}
@@ -64,6 +111,6 @@ watch(()=>props.caseId,()=>{preview.value=null;draftExpired.value=false;load()},
       <details class="surface-card"><summary>填写步骤耗时与拆分方式</summary><form class="form-card" @submit.prevent="savePlanning"><label>排程步骤<select v-model="planning.task_id" required aria-label="排程步骤"><option value="">请选择步骤</option><option v-for="task in tasks" :key="task.id" :value="task.id">{{task.title}}</option></select></label><label>估计耗时分钟<input v-model.number="planning.duration_minutes" type="number" min="1" max="1440" required></label><label><input v-model="planning.splittable" type="checkbox">允许分段安排</label><label>最小片段分钟<input v-model.number="planning.min_chunk_minutes" type="number" min="30" max="240" step="30"></label><label>最大片段分钟<input v-model.number="planning.max_chunk_minutes" type="number" min="30" max="240" step="30"></label><label>重要性（0至1）<input v-model.number="planning.importance" type="number" min="0" max="1" step="0.1"></label><label>执行偏好（0至1）<input v-model.number="planning.preference" type="number" min="0" max="1" step="0.1"></label><button class="button button--secondary" :disabled="working||!planning.task_id">保存步骤排程设置</button><p>用户估计会生成填写依据；已有安排须先移除再修改。</p></form></details><fieldset class="form-card"><legend>排程偏好（仅用于本次草稿）</legend><label>每天开始小时<input v-model.number="preferences.work_start_hour" type="number" min="0" max="22"></label><label>每天结束小时<input v-model.number="preferences.work_end_hour" type="number" min="1" max="23"></label><label>安排间缓冲分钟<input v-model.number="preferences.buffer_minutes" type="number" min="0" max="120"></label><label>每日任务分钟上限<input v-model.number="preferences.daily_max_minutes" type="number" min="30" max="1380"></label><p>课程及忙碌时段始终保留；耗时为估计，草稿须人工核对。</p></fieldset><div class="schedule-actions"><button class="button button--secondary" type="button" @click="openNew">添加安排</button><button class="button button--primary" type="button" :disabled="working||!caseId" @click="makePreview">{{working?'处理中…':'预览任务排程'}}</button></div>
       <section v-if="preview" class="schedule-preview"><header><div><span class="text-label">排程建议</span><h3>{{preview.suggestions.length}} 项可安排</h3></div><small>草稿状态变化后须重新预览</small><button class="button button--primary" :disabled="working||draftExpired||!preview.suggestions.length" @click="confirmDraft">{{draftExpired?'草案已过时':'确认整份排程'}}</button></header><article v-for="item in preview.suggestions" :key="item.task_id+item.starts_at"><div><b>{{item.title}}</b><small v-if="item.segment_count>1">第{{item.segment_index}}/{{item.segment_count}}段</small><small>{{displayDateTime(item.starts_at)}}—{{displayTime(item.ends_at)}} · {{item.scheduled_minutes}} 分钟</small></div></article><div v-if="preview.unscheduled.length" class="schedule-unscheduled"><b>未安排</b><p v-for="item in preview.unscheduled" :key="item.task_id">{{item.title}}：{{reasonLabels[item.reason]||item.detail}}</p></div></section>
     </template>
-    <AppBottomSheet :open="formOpen" :title="formTitle" @close="formOpen=false"><form class="form-card schedule-form" @submit.prevent="save"><label>标题<input v-model="form.title" required maxlength="200"></label><label>类型<select v-model="form.kind"><option value="busy">忙碌时间</option><option value="course">课程</option><option value="task">知事任务</option></select></label><label v-if="form.kind==='task'">关联步骤<select v-model="form.task_id" required><option value="">请选择步骤</option><option v-for="task in tasks" :key="task.id" :value="task.id">{{task.title}}</option></select></label><label v-if="!editingId&&form.kind!=='task'">连续每周次数<input v-model.number="form.repeat_count" type="number" min="1" max="13"></label><label>开始时间<input v-model="form.starts_at" type="datetime-local" required></label><label>结束时间<input v-model="form.ends_at" type="datetime-local" required></label><div class="button-row"><button v-if="editingId" class="button button--danger" type="button" :disabled="working" @click="remove()">删除</button><button class="button button--primary" :disabled="working">{{working?'保存中…':'保存'}}</button></div></form></AppBottomSheet>
+    <AppBottomSheet :open="formOpen" :title="formTitle" @close="formOpen=false"><form class="form-card schedule-form" @submit.prevent="save"><label>标题<input v-model="form.title" required maxlength="200"></label><label>类型<select v-model="form.kind"><option value="busy">忙碌时间</option><option value="course">课程</option><option value="task">知事任务</option></select></label><label v-if="form.kind==='task'">关联步骤<select v-model="form.task_id" required><option value="">请选择步骤</option><option v-for="task in tasks" :key="task.id" :value="task.id">{{task.title}}</option></select></label><label v-if="!editingId&&form.kind!=='task'">连续每周次数<input v-model.number="form.repeat_count" type="number" min="1" max="13"></label><label>开始时间<input v-model="form.starts_at" type="datetime-local" required></label><label v-if="androidReminders && form.repeat_count===1"><input type="checkbox" v-model="remind" :disabled="!reminderReady">在开始时通过本机通知提醒</label><label>结束时间<input v-model="form.ends_at" type="datetime-local" required></label><div class="button-row"><button v-if="editingId" class="button button--danger" type="button" :disabled="working" @click="remove()">删除</button><button class="button button--primary" :disabled="working">{{working?'保存中…':'保存'}}</button></div></form></AppBottomSheet>
   </section>
 </template>
