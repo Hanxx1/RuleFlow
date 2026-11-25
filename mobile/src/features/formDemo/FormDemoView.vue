@@ -7,9 +7,11 @@ import NoticeIntake from './NoticeIntake.vue'
 import SavedNoticeIntake from './SavedNoticeIntake.vue'
 import AccountProfileFill from './AccountProfileFill.vue'
 import AccountAwardFill from './AccountAwardFill.vue'
+import ApplicationReasonDraft from './ApplicationReasonDraft.vue'
 import {loadExperiences} from '../experience/archive'
 import {reviewAccountProfile,staleProfileLabels,type ProfileCandidate} from './accountFormProfile'
 import {awardCandidates,currentAward,retainAwardUses,type AwardUse} from './accountAwardFill'
+import {reasonAwards,type ReasonVersion} from './reasonDraft'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
 import {clearFormDrafts,readDraftReference,readFormDrafts,recoverableFields,saveFormDraft,type SavedFormDraft} from './savedFormDrafts'
 import {avatarUrl,buildForm} from './exportForm'
@@ -46,11 +48,15 @@ const problem = ref('')
 const imageVersion = ref(0)
 const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
+const acceptedReason = ref<ReasonVersion>()
+const reasonEditorKey = ref(0)
 const profileFields = ref<Record<string,ProfileCandidate>>({})
 const awardUses = ref<AwardUse[]>([])
+const reasonSources = computed(()=>reasonAwards(awardUses.value))
 const awardSources = computed(()=>Object.fromEntries(awardUses.value.flatMap(use=>
   Object.keys(use.fields).map(id=>[id,use.source]))))
-const drafts = new Map<string,{values:FormValues;photo:string;name:string;profileFields?:Record<string,ProfileCandidate>;awardUses?:AwardUse[]}>()
+const drafts = new Map<string,{values:FormValues;photo:string;name:string;
+  profileFields?:Record<string,ProfileCandidate>;awardUses?:AwardUse[];acceptedReason?:ReasonVersion}>()
 const attachmentProgress = ref<Record<string,'editing'|'exported'>>({})
 const exporting = ref(false)
 const priorDraftKey = ref('')
@@ -80,7 +86,8 @@ const priorValues = computed(()=>drafts.get(priorDraftKey.value)?.values ||
 const priorAwardFields = computed(()=>new Set((drafts.get(priorDraftKey.value)?.awardUses || [])
   .flatMap(use=>Object.keys(use.fields))))
 const comparableFields = computed(()=>scenarioFields(scenario.value)
-  .filter(field=>priorValues.value[field.id]?.trim() && !priorAwardFields.value.has(field.id)))
+  .filter(field=>priorValues.value[field.id]?.trim() && !priorAwardFields.value.has(field.id) &&
+    !(field.id==='reason' && drafts.get(priorDraftKey.value)?.acceptedReason?.awards.length)))
 const draftFieldLabels = computed(()=>recoverableFields(scenario.value).map(field=>field.label))
 
 
@@ -113,6 +120,7 @@ function changed() {
     if (values.value[key]!==profileFields.value[key].value) delete profileFields.value[key]
   }
   awardUses.value = retainAwardUses(awardUses.value,values.value)
+  if (!values.value.reason?.trim()) acceptedReason.value = undefined
   draftMessage.value = ''
   confirmValues.value = false
   if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
@@ -122,7 +130,7 @@ function changed() {
 
 function rememberDraft(key: string) {
   drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value,
-    profileFields:{...profileFields.value},awardUses:awardUses.value})
+    profileFields:{...profileFields.value},awardUses:awardUses.value,acceptedReason:acceptedReason.value})
 }
 
 function clearDrafts() {
@@ -144,6 +152,8 @@ function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
   vertical.value = 50
   nameOverride.value = draft?.name || ''
   reasonSuggestion.value = ''
+  acceptedReason.value = draft?.acceptedReason
+  reasonEditorKey.value++
   preview.value = false
   reveal.value = false
   showAll.value = false
@@ -415,6 +425,20 @@ function useReason() {
   changed()
 }
 
+function acceptReason(version:ReasonVersion) {
+  if (exporting.value) return
+  acceptedReason.value = version
+  values.value.reason = version.text
+  if (!completion.value.includes('reason')) completion.value.push('reason')
+  changed()
+}
+
+function confirmManualReason() {
+  if (!acceptedReason.value || values.value.reason===acceptedReason.value.text) return
+  acceptedReason.value = undefined
+  changed()
+}
+
 async function cropPhoto() {
   const file = photoInput.value
   if (!file) return
@@ -471,6 +495,7 @@ async function download() {
   const accountId = account.user?.id
   const sources = Object.values(profileFields.value)
   const awards = awardUses.value
+  const reasonAwardsUsed = acceptedReason.value?.awards ?? []
   const stillConfirmed = ()=>mounted && version===formVersion && account.user?.id===accountId &&
     intake.value===selection && confirmValues.value
   exporting.value = true
@@ -479,10 +504,10 @@ async function download() {
       await selection.verifyExport()
       if (!stillConfirmed()) return
     }
-    if ((sources.length || awards.length) && accountId) {
+    if ((sources.length || awards.length || reasonAwardsUsed.length) && accountId) {
       const [workspace,entries] = await Promise.all([
         sources.length ? loadWorkspace(accountId) : undefined,
-        awards.length ? loadExperiences(accountId) : [],
+        awards.length || reasonAwardsUsed.length ? loadExperiences(accountId) : [],
       ])
       if (!stillConfirmed()) return
       if (workspace) {
@@ -491,6 +516,8 @@ async function download() {
         if (stale.length) throw Error('已从画像带入的字段需要重新核对（'+stale.join('、')+'）。请清除相关带入值后重新带入，也可手工填写。')
       }
       const available = awardCandidates(entries)
+      const staleReasonSources = reasonAwardsUsed.filter(use=>!currentAward(use.entry,available))
+      if (staleReasonSources.length) throw Error('申请理由引用的奖项已变化。请核对后重新起草，或修改并确认手写理由。')
       const stale = [...new Set(awards.filter(use=>!currentAward(use.entry,available)).map(use=>use.entry.title))]
       if (stale.length) throw Error('已带入奖项需要重新核对（'+stale.join('、')+'）。请清除旧带入值后重新带入，也可手工填写。')
     }
@@ -656,10 +683,24 @@ function displayed(value: string, sensitive?: boolean) {
                 <summary>已从本机经历带入</summary>
                 <small>{{ awardSources[field.id].quote }} · 版本 {{ awardSources[field.id].revision }} · {{ awardSources[field.id].id }}</small>
               </details>
+              <template v-if="field.id==='reason' && acceptedReason">
+                <details>
+                  <summary>{{ values.reason===acceptedReason.text?'查看已采用的本机稿':'查看修改前的本机稿' }}</summary>
+                  <p class="reason-snapshot">{{ acceptedReason.text }}</p>
+                  <small v-for="item in acceptedReason.awards" :key="item.source.id">
+                    {{ item.source.quote }} · 版本 {{ item.source.revision }} · {{ item.source.id }}<br>
+                  </small>
+                </details>
+                <button v-if="acceptedReason.awards.length && values.reason!==acceptedReason.text" type="button"
+                  :disabled="exporting" @click="confirmManualReason">确认手写理由的事实并解除档案引用</button>
+              </template>
               <small>{{ savedBatchId && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>
         </fieldset>
+        <ApplicationReasonDraft v-if="fromNotice && intake" :key="reasonEditorKey"
+          :scenario="scenario" :awards="reasonSources" :value="values.reason || ''"
+          :disabled="saving || !ready || exporting" @apply="acceptReason"/>
         <section v-if="scenario.id==='scholarship' && (!fromNotice || persistAllowed)" class="award-archive" aria-label="演示经历档案">
           <h3>演示经历档案</h3>
           <p>保存已填的获奖组，下次可以填入空白奖项。填表时仍需核对年月、顺序和申报范围。</p>
@@ -671,8 +712,8 @@ function displayed(value: string, sensitive?: boolean) {
               <button type="button" class="text-button" :disabled="!nextAwardSlot(values)" @click="applyAward(award)">填入空白奖项</button>
             </li>
           </ul>
-          <button type="button" @click="suggestReason">起草申请理由</button>
-          <div v-if="reasonSuggestion">
+          <button v-if="!fromNotice" type="button" @click="suggestReason">起草申请理由</button>
+          <div v-if="!fromNotice && reasonSuggestion">
             <p>{{ reasonSuggestion }}</p>
             <button type="button" @click="useReason">使用这份理由</button>
           </div>
@@ -764,6 +805,7 @@ legend{font-weight:700;padding:0 .2rem}
 .photo-panel img,.preview-photo{width:90px;aspect-ratio:5/7;object-fit:cover;border:1px solid #dce5f0}
 .award-archive{border:1px solid #e0e7f0;border-radius:.65rem;padding:.65rem;margin-bottom:.8rem}
 .award-archive h3{margin:.15rem 0;font-size:1rem}
+.reason-snapshot{white-space:pre-wrap;overflow-wrap:anywhere}
 .file-name{overflow-wrap:anywhere}
 .feedback{position:sticky;bottom:4rem;padding:.65rem;border-radius:.5rem;background:#eef5ff}
 @media(max-width:480px){.fields{grid-template-columns:1fr}.form-demo{padding-inline:.7rem}}

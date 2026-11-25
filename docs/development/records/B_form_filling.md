@@ -62,6 +62,16 @@
 6. **运行证据** — `scripts/test-saved-notice-form-browser.cjs` 及独立工作区 `.runtime/saved-form-evidence/rf026-browser.log`、`rf026-demo.log`、`rf026-browser/` 中的截图和实际导出。测试数据为合成经历，空白原表为校方公开模板。
 7. **未完成与限制** — 目前奖项复用只接入已核验奖学金模板。同时持久保存的草稿不存档案带入值，恢复后由用户重新核对。现有 Workspace 备份不含档案，退出会清理。Vault 证明引用、AI 提取、长期历史导出索引及 Android 真机待验，未生成 APK。
 
+## RF-030｜本机起草申请理由与人工版本
+
+1. **任务信息** — B，`feat/RF-030-form-reason-drafts`，接续 `874021b`。本机起草、人工复核和原格式写回切片完成。
+2. **技术实现** — `ApplicationReasonDraft.vue` 和 `reasonDraft.ts` 在原表填写页提供独立预览。奖学金支持通用稿及选中的已确认获奖组，具体事项以用户填写的真实事由为基础。采用后按附件保留本机稿与最终手改值。
+3. **设计与关键决策** — 复用 `applyNotice` 合并原表和已绑定通知的字数要求，按 Unicode 字符计数。不足以起草时仍可手写。通用稿只表达申请和意向，选中的奖项引用原名称与本机档案版本，导出不重新生成。
+4. **问题及解决** — 生成后改动原理由会使旧预览无法直接替换。引用奖项失效会阻止采用或导出，原值保留。修改文字后可明确核对并确认手写理由。字符边界测试覆盖了刚好合规的 101 字与不足的 100 字。
+5. **测试与验证** — `npm.cmd --prefix mobile test` 共 241 项通过（新增 6 项），`npm.cmd --prefix mobile run build` 通过。Edge 使用校方学生证补办 DOCX 和国家奖学金 XLSX，分别验证事由缺项、35 字上限、独立预览及接受，和选用奖项、来源变化、保留手改、双表切换及实际导出文字。11 个离线场景通过。
+6. **运行证据** — `scripts/test-saved-notice-form-browser.cjs` 及本机 `.runtime/saved-form-evidence/rf030-browser.log`、`rf030-demo.log`、`rf030-browser/` 内的理由预览截图和两份导出。个人信息和经历均为合成数据。
+7. **未完成与限制** — 当前为本机规则起草。公共模型能力和 Privacy Guard 传输流程需评审，长期草稿及理由恢复按 RF-031 处理。本次未生成 APK。
+
 ## RF-032｜四份真实原表的离线填写演示
 
 1. **任务信息** — B，2026-11-07。四场景离线演示与电子文件验收完成，奖学金纸质版仍受限。分支 `feat/RF-032-offline-form-demo`。
