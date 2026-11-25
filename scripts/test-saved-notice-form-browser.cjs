@@ -1,0 +1,300 @@
+// Run against a fresh local development backend with DATABASE_PATH and DOCUMENT_UPLOAD_ROOT
+// matching the last two arguments. All accounts and filled values are synthetic.
+const assert = require('node:assert/strict')
+const {randomUUID} = require('node:crypto')
+const {execFileSync} = require('node:child_process')
+const {mkdir,readFile,writeFile} = require('node:fs/promises')
+const path = require('node:path')
+const {chromium} = require('playwright')
+const {unzipSync,strFromU8} = require('../mobile/node_modules/fflate')
+const data = require('../mobile/src/features/formDemo/templateData.json')
+
+const [replacementPath,out,db,documentRoot] = process.argv.slice(2)
+const base = process.env.FORM_DEMO_URL || 'http://127.0.0.1:5199'
+const backend = process.env.SAVED_FORM_API || 'http://127.0.0.1:8026'
+const python = process.env.SAVED_FORM_PYTHON || 'python'
+const xlsxMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+const docxMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const aName = '附件1_奖学金.xlsx'
+const bName = '附件2_补办.docx'
+const sourceText = limit => [
+  '联调用办理通知',
+  `附件1申请理由不超过${limit}字。`,
+  '附件1文件名为“姓名_学号_奖学金.xlsx”。',
+  '附件2申请理由不超过35字。',
+  '附件2文件名为“学号_姓名_补办.docx”。',
+  '申请人签字后交件。',
+].join('\n')
+
+async function call(url,{token,status=200,method='GET',body}={}) {
+  const json = body && !(body instanceof FormData)
+  const response = await fetch(backend+url,{method,headers:{
+    ...(token ? {Authorization:'Bearer '+token} : {}),
+    ...(json ? {'Content-Type':'application/json'} : {}),
+  },body:json ? JSON.stringify(body) : body})
+  assert.equal(response.status,status,`${method} ${url}`)
+  return (await response.json()).data
+}
+
+async function account() {
+  const email = 'rf028-'+randomUUID().slice(0,12)+'@example.com'
+  const password = randomUUID()
+  const registered = await call('/api/v1/auth/register',{method:'POST',body:{email,password}})
+  await call('/api/v1/auth/verify',{method:'POST',body:{token:registered.development_verification_token}})
+  const signedIn = await call('/api/v1/auth/login',{method:'POST',body:{email,password}})
+  return {email,password,token:signedIn.access_token,id:signedIn.user.id}
+}
+
+async function run() {
+  assert.ok(replacementPath && out && db && documentRoot,'需要原件、证据目录、隔离数据库及原件目录')
+  assert.equal(new URL(base).hostname,'127.0.0.1')
+  assert.equal(new URL(backend).hostname,'127.0.0.1')
+  await mkdir(out,{recursive:true})
+  const scholarship = Buffer.from(data['scholarship.xlsx'],'base64')
+  const replacement = await readFile(replacementPath)
+  const {id:owner,email,password,token} = await account()
+  const other = await account()
+  const {id:batch} = await call('/api/v1/import-batches',{token,method:'POST',body:{title:'双表联调'}})
+  const batchPath = '/api/v1/import-batches/'+batch
+  const upload = async (name,mime,raw) => {
+    const body = new FormData()
+    body.append('consent','true')
+    body.append('files',new File([raw],name,{type:mime}))
+    const [source] = await call(batchPath+'/sources/files',{token,method:'POST',body})
+    return source
+  }
+  const remove = source => call(batchPath+'/sources/'+source.id,{token,method:'DELETE'})
+  let notice = await upload('办理通知.txt','text/plain',sourceText(180))
+  let a = await upload(aName,xlsxMime,scholarship)
+  const b = await upload(bName,docxMime,replacement)
+  const batchRecord = await call(batchPath,{token})
+  await call(batchPath+'/form-context?expected_revision='+batchRecord.revision,{token:other.token,status:404})
+  await call(batchPath+'/form-context?expected_revision='+batchRecord.revision,{status:401})
+
+  const browser = await chromium.launch({channel:'msedge',headless:true})
+  try {
+    const page = await browser.newPage({viewport:{width:480,height:930},acceptDownloads:true})
+    page.setDefaultTimeout(10000)
+    const errors = []
+    const writes = []
+    const downloads = []
+    page.on('pageerror',error=>errors.push(error.message))
+    page.on('download',download=>downloads.push(download.suggestedFilename()))
+    await page.goto(base+'/auth/login')
+    await page.locator('input[type=email]').fill(email)
+    await page.locator('input[type=password]').fill(password)
+    await page.getByRole('button',{name:'提交',exact:true}).click()
+    await page.waitForURL(url=>!url.pathname.startsWith('/auth'))
+    page.on('request',request=>{
+      if (/\/api\//.test(request.url()) && !['GET','OPTIONS'].includes(request.method())) writes.push(request.method())
+    })
+    // Navigate within the SPA after a normal sign-in (access tokens are in memory).
+    await page.locator('#app').evaluate((root,id)=>
+      root.__vue_app__.config.globalProperties.$router.push('/imports/'+id+'/sources'),batch)
+    await page.getByRole('link',{name:'按已保存通知填表'}).click()
+    const intake = page.getByRole('region',{name:'已保存通知与附件'})
+    const edit = page.getByRole('region',{name:'填写表单'})
+    const form = page.getByRole('region',{name:'模板来源'})
+    const preview = page.getByRole('region',{name:'导出预览'})
+    const radio = source => intake.getByRole('radio',{name:new RegExp(source.replace('.', '\\.'))})
+    const refresh = async()=>{
+      const response = page.waitForResponse(response=>response.url().includes('/form-context?') && response.ok())
+      await intake.getByRole('button',{name:'重新读取来源'}).click()
+      await response
+      await intake.getByRole('button',{name:'重新读取来源'}).waitFor()
+    }
+    const pick = async name => radio(name).check()
+    const open = async (name,options={})=>{
+      await pick(name)
+      if (options.notice) await intake.getByRole('combobox',{name:/适用通知/}).selectOption(options.notice)
+      if (options.bind) {
+        for (const label of ['申请理由','文件名']) {
+          await intake.getByRole('combobox',{name:new RegExp('附件1'+label)}).selectOption(options.bind)
+        }
+      }
+      if (!options.draft) await intake.getByLabel('我已核对这份表的通知原文及提交要求').check()
+      await intake.getByRole('button',{name:'核验并填写选中原表'}).click()
+      await form.getByText('已选原件：'+name+'。',{exact:true}).waitFor()
+    }
+    const examples = await page.evaluate(async()=>{
+      const {exampleValues} = await import('/src/features/formDemo/scenarios.ts')
+      return {scholarship:exampleValues.scholarship,photo:exampleValues.photo}
+    })
+    const allFields = async()=>{
+      const button = edit.getByRole('button',{name:'显示并编辑整张表单'})
+      if (await button.count()) await button.click()
+    }
+    const fill = async values=>{
+      await allFields()
+      for (const [id,value] of Object.entries(values)) {
+        const field = edit.locator('#'+id)
+        if (!await field.count()) continue
+        if (await field.evaluate(element=>element.tagName)==='SELECT') await field.selectOption(value)
+        else await field.fill(value)
+      }
+    }
+    const confirm = async()=>{
+      if (!await preview.count()) await edit.getByRole('button',{name:'预览填写内容',exact:true}).click()
+      await preview.getByLabel('我确认这份文件的填写值和文件名').check()
+    }
+    const download = async (expected,entry,values)=>{
+      await confirm()
+      const waiting = page.waitForEvent('download')
+      await preview.getByRole('button',{name:/确认并下载/}).click()
+      const result = await waiting
+      assert.equal(result.suggestedFilename(),expected)
+      const output = path.join(out,expected)
+      await result.saveAs(output)
+      const parts = unzipSync(new Uint8Array(await readFile(output)))
+      const text = strFromU8(parts[entry]).replace(/<[^>]+>/g,'')
+      for (const value of values) assert.ok(text.includes(value),`${expected} 缺少 ${value}`)
+      return {parts,text}
+    }
+    const blocked = async message=>{
+      const before = downloads.length
+      await confirm()
+      await preview.getByRole('button',{name:/确认并下载/}).click()
+      await page.getByRole('alert').filter({hasText:message}).waitFor()
+      assert.equal(downloads.length,before)
+      assert.equal(await preview.getByLabel('我确认这份文件的填写值和文件名').isChecked(),false)
+    }
+
+    await open(aName)
+    await intake.getByText(/原文第 .* 行/).first().waitFor()
+    await fill({...examples.scholarship,name:'顾景禾',studentId:'00003180'})
+    await open(bName)
+    await fill({...examples.photo,name:'周映宁',studentId:'00004291',reason:'原学生证遗失，申请补办。'})
+    await open(aName)
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'顾景禾')
+    const aFile = await download('顾景禾_00003180_奖学金.xlsx','xl/worksheets/sheet1.xml',['顾景禾','00003180'])
+    assert.ok(aFile.parts['xl/worksheets/sheet2.xml'])
+    console.log('PASS saved entry, two named targets, formal lines, drafts and XLSX download')
+
+    const unchangedFile = b.metadata.document_id
+    const stored = path.resolve(documentRoot,owner,unchangedFile)
+    assert.match(owner,/^[a-z0-9-]+$/)
+    assert.match(unchangedFile,/^[a-z0-9-]+$/)
+    const original = await readFile(stored)
+    assert.deepEqual(original,replacement)
+    await open(bName)
+    await allFields()
+    try {
+      const edited = Buffer.from(original)
+      edited[edited.length-1]^=1
+      await writeFile(stored,edited)
+      await blocked('原件指纹不符')
+    } finally { await writeFile(stored,original) }
+    assert.equal(await edit.locator('#name').inputValue(),'周映宁')
+    console.log('PASS same-size on-disk byte change rejected at export, input preserved')
+
+    await pick(aName)
+    await intake.getByText('移除或补充本批次原件',{exact:true}).click()
+    page.once('dialog',dialog=>dialog.accept())
+    await intake.getByRole('button',{name:'移除所选附件'}).click()
+    await radio(aName).waitFor({state:'detached'})
+    await open(bName)
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'周映宁')
+    await intake.getByLabel('选择补充原件').setInputFiles({name:aName,mimeType:xlsxMime,buffer:scholarship})
+    const submit = intake.getByRole('button',{name:'上传补充原件'})
+    assert.equal(await submit.isDisabled(),true)
+    await intake.getByLabel('我已核对该文件的隐私并同意上传到当前账户').check()
+    page.once('dialog',dialog=>dialog.accept())
+    await submit.click()
+    await radio(aName).waitFor()
+    const afterReplace = await call(batchPath,{token})
+    const replacementSource = afterReplace.sources.find(source=>source.name===aName)
+    assert.notEqual(replacementSource.id,a.id)
+    a = replacementSource
+    await open(bName)
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'周映宁')
+    const bFile = await download('00004291_周映宁_补办.docx','word/document.xml',['周映宁','00004291','辅导员','照片'])
+    assert.ok(Object.keys(bFile.parts).every(name=>!name.startsWith('word/media/')))
+    await open(aName,{bind:a.id})
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'')
+    await page.getByText('对照已移除或改版的草稿',{exact:true}).click()
+    await page.getByRole('combobox',{name:/旧草稿/}).selectOption({index:1})
+    await page.getByRole('checkbox',{name:/姓名 · 顾景禾/}).check()
+    await page.getByRole('button',{name:'带入选中的旧值'}).click()
+    assert.equal(await edit.locator('#name').inputValue(),'顾景禾')
+    assert.equal(await edit.locator('#studentId').inputValue(),'')
+    await fill({...examples.scholarship,name:'顾景禾',studentId:'00003180'})
+    console.log('PASS same-name reupload starts blank, explicit field carry, unaffected DOCX exports')
+
+    await remove(notice)
+    notice = await upload('更新通知.txt','text/plain',sourceText(170))
+    await blocked('通知正文')
+    assert.equal(await edit.locator('#name').inputValue(),'顾景禾')
+    await refresh()
+    await open(aName)
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'顾景禾')
+    console.log('PASS changed notice invalidates confirmation and preserves input')
+
+    // Seed one formal same-owner/batch parent link in the isolated fixture. Deletion is via the real API.
+    execFileSync(python,['-c',[
+      'import json, sqlite3, sys',
+      'db, owner, batch, child, parent = sys.argv[1:]',
+      'with sqlite3.connect(db) as c:',
+      '    assert c.execute("select count(*) from import_sources where owner_id=? and batch_id=? and id in (?,?)",(owner,batch,child,parent)).fetchone()==(2,)',
+      '    row = c.execute("select metadata_json from import_sources where id=?",(child,)).fetchone()',
+      '    meta = json.loads(row[0]); meta["parent_source_id"] = parent',
+      '    c.execute("update import_sources set metadata_json=? where id=? and owner_id=? and batch_id=?",(json.dumps(meta),child,owner,batch))',
+    ].join('\n'),db,owner,batch,b.id,notice.id])
+    await refresh()
+    await open(bName)
+    await remove(notice)
+    await blocked('父来源待核对')
+    await refresh()
+    await open(bName,{draft:true})
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'周映宁')
+    await edit.getByRole('button',{name:'预览填写内容',exact:true}).click()
+    assert.equal(await preview.getByRole('button',{name:/确认并下载/}).isDisabled(),true)
+    await page.screenshot({path:path.join(out,'父来源待核对.png'),fullPage:true})
+    const alternate = await upload('补充办理说明.txt','text/plain',
+      '补充办理说明\n附件2文件名为“学号_姓名_补办.docx”。\n附件2申请理由不超过35字。\n申请人签字后交件。')
+    await refresh()
+    await open(bName,{notice:alternate.id})
+    await download('00004291_周映宁_补办.docx','word/document.xml',['周映宁','原学生证遗失'])
+    assert.deepEqual(errors,[])
+    assert.deepEqual(writes,['DELETE','POST'])
+    console.log('PASS lost parent permits draft only, explicitly confirmed alternate restores export, only explicit replacement wrote data')
+
+    const local = await browser.newPage()
+    local.setDefaultTimeout(10000)
+    await local.goto(base+'/forms/import')
+    const text = local.getByLabel('通知正文')
+    await text.waitFor()
+    await local.context().setOffline(true)
+    await text.fill('办事通知\n请分别提交两份表格，申请人签字。')
+    const picker = local.getByLabel(/选择申请表原件/)
+    const localFile = (name,buffer)=>({name,mimeType:xlsxMime,buffer})
+    await picker.setInputFiles([localFile('原件甲.xlsx',scholarship),localFile('原件乙.xlsx',scholarship)])
+    const inspect = () => local.getByRole('button',{name:'核对通知与附件'}).click()
+    const openLocal = async()=>{
+      await local.getByRole('radio',{name:/原件乙/}).check()
+      await local.getByLabel('我已核对通知原文和需人工办理的要求').check()
+      await local.getByRole('button',{name:'按此通知填写选中原表'}).click()
+      await local.getByRole('button',{name:'显示并编辑整张表单'}).click()
+    }
+    await inspect()
+    await openLocal()
+    await local.locator('#name').fill('秦知远')
+    const modified = Buffer.from(scholarship)
+    modified[modified.length-1]^=1
+    await picker.setInputFiles([localFile('原件乙.xlsx',scholarship),localFile('原件甲.xlsx',modified)])
+    await inspect()
+    await openLocal()
+    assert.equal(await local.locator('#name').inputValue(),'秦知远')
+    assert.equal(await local.getByRole('radio',{name:/原件甲/}).count(),0)
+    console.log('PASS offline reselection preserves unchanged B after a same-name change and reorder')
+  } finally {
+    await browser.close()
+  }
+}
+
+run().catch(error=>{console.error(error);process.exitCode=1})

@@ -78,3 +78,13 @@
 5. **测试与验证** — `npm.cmd --prefix mobile test` 共 96 项通过，生产构建通过。Edge 移动视口断网跑两条原有导入链及新的多附件链。多附件验收用合成 DOCX 通知、合成证明角色样本和两份真实原表，验证一次选文件、附件作用域、会话内隔离恢复、两份下划线文件名和独立阻断。11 场景离线浏览器回归通过。用 Python ZIP 与 XML 独立复读两份新导出，确认姓名、学号隔离、前导零、占位符清理和贴照原文与图片部件保留。
 6. **运行证据** — `scripts/test-notice-form-browser.cjs`、`scripts/test-form-demo-browser.cjs`。日志和下载位于 `%TEMP%/CampusWeave-Forms/workflow-rf028`，全部填写值均为合成资料。
 7. **未完成与限制** — 真实校方同一份通知带两张已核验原表的样本待补。已保存来源需与 C 对齐旧正文和 Document 引用；正式保存与刷新恢复待 RF-012。字体当前只提醒；陌生模板、版式预检、WPS 和 Android 真机待后续验收，本次无 APK。
+
+### 续记 · 已保存通知与逐表复核（2026-11-25）
+
+1. **任务信息** — B，`feat/RF-028-saved-notice-fill`，基线 `efa9dd5`。完成 1C 的来源读取、逐表草稿及导出复核。后端复用 C 已合入的 RF-013 接口。
+2. **技术实现** — 从批次来源页打开 `SavedNoticeIntake.vue`，通过现有类型化客户端读取来源。按真实原文行绑定逐表要求。试填与导出都核验下载原件的 SHA-256。附件移除和补充复用原批次动作及端侧隐私守卫。旧稿保留用于逐字段带入。本机入口也按唯一文件名和字节指纹恢复重选后未变化的文件。
+3. **设计与关键决策** — 草稿按批次、来源 ID 和原件版本区分，并随页面及账号隔离。签名、文件名和照片沿各自模板规则重新核对。导出前先重读来源，再下载并核验原件，最后复查来源关系。同 revision 的来源变化仍要比对。父来源缺失时可继续填写，确认有效通知后才恢复导出。
+4. **问题及解决** — 修复只换一张表就清空整组本机草稿的问题。重传的附件即使同名同字节也有新来源 ID。只把用户选中的旧值带入新版。首次浏览器探针因定位错误停在登录和表单字段，修正后复跑通过。
+5. **测试与验证** — `npm.cmd --prefix mobile test` 共 209 项通过，其中 14 项为本次新增。`npm.cmd --prefix mobile run build` 成功。隔离后端通过 `python -m pytest server/tests/test_form_context.py server/tests/test_notice_source_snapshot.py server/tests/test_source_handoff_boundaries.py -q -p no:cacheprovider` 共 46 项，5 条弃用警告。Edge 真实后端验证登录、逐表命名与正式行、双表保值、同大小字节篡改被拦截、授权重传、旧稿逐项带入、通知变化及父来源缺失。Edge 断网复验本地重选和原 11 个离线演示。openpyxl 和 OOXML 复读通过，覆盖前导零、隐藏代码表、审批单元格、贴照签字区和表格合并结构。
+6. **运行证据** — `scripts/test-saved-notice-form-browser.cjs <补办原件.docx> <输出目录> <隔离SQLite路径> <隔离原件目录>`。使用本地开发 API `127.0.0.1:8026` 与 Vite `127.0.0.1:5199`，Playwright 可通过 `NODE_PATH` 读取，`SAVED_FORM_PYTHON` 指向隔离 Python。工作区的 `.runtime/saved-form-evidence/browser.log` 记录六组回归。`browser/` 保存两份导出和父来源失效截图。[南科大公开补办原表](https://osa.sustech.edu.cn/affairs/283.html)与项目中已核验的奖学金原表搭配合成通知和合成账号。父来源关系在隔离库布置，删除走真实 API。所有文件及隔离账号数据留在 Git 外。
+7. **未完成与限制** — 离开页面或刷新后的正式草稿恢复归 RF-012。两份真实原表使用合成通知组合，真实同一校方通知的多附件仍待补测。此轮复读验证未包含 Word/WPS 打开或打印、学校提交、Android 真机及 APK。RF-029 陌生表适配和 RF-005 旧保真修复保留独立分支。

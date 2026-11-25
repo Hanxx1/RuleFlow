@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import {computed,onMounted,ref} from 'vue'
 import {useImportDraftStore} from '../imports/draftStore'
-import {analyzeNotice,applyNotice,matchAttachment,readNotice,suggestedTarget,type AttachmentMatch,type NoticeEvidence,type NoticeRequirements,type NoticeSelection} from './noticeIntake'
+import {analyzeNotice,applyNotice,matchAttachment,preserveAttachmentKeys,readNotice,suggestedTarget,type AttachmentMatch,type NoticeEvidence,type NoticeRequirements,type NoticeSelection} from './noticeIntake'
 
 type FileRole = 'form' | 'proof' | 'instructions' | 'school' | 'unknown'
-const props = defineProps<{busy:boolean; progress:Record<number,'editing'|'exported'>}>()
+const props = defineProps<{busy:boolean; progress:Record<string,'editing'|'exported'>}>()
 const emit = defineEmits<{
   (event:'invalidate'):void
-  (event:'reset'):void
   (event:'accept',value:NoticeSelection):void
 }>()
 const draft = useImportDraftStore()
@@ -15,6 +14,8 @@ const text = ref(draft.text)
 const source = ref('导入的通知正文')
 const files = ref<File[]>([...draft.files])
 const matches = ref<AttachmentMatch[]>([])
+const attachmentKeys = ref<string[]>([])
+let serial = 0
 const noticeIndex = ref<number>()
 const roles = ref<Record<number,FileRole>>({})
 const scopes = ref<Record<number,string>>({})
@@ -90,11 +91,18 @@ async function inventory() {
   loading.value = true
   try {
     if (files.value.length>10) throw Error('每次最多核对 10 个文件。')
-    matches.value = await Promise.all(files.value.map(async file=>{
+    const next = await Promise.all(files.value.map(async file=>{
       if (!/\.(docx|xlsx)$/i.test(file.name)) return {name:file.name}
       try { return await matchAttachment(file) } catch { return {name:file.name,error:'本机无法核验此文件。'} }
     }))
-    roles.value = Object.fromEntries(matches.value.flatMap((match,index)=>match.scenario?[[index,'form' as const]]:[]))
+    const keys = preserveAttachmentKeys(matches.value,attachmentKeys.value,next,()=>`local:${serial++}`)
+    const oldRoles = new Map(attachmentKeys.value.map((id,index)=>[id,roles.value[index]]))
+    roles.value = Object.fromEntries(next.flatMap((match,index)=>{
+      const role = oldRoles.get(keys[index]) || (match.scenario ? 'form' : undefined)
+      return role ? [[index,role]] : []
+    }))
+    matches.value = next
+    attachmentKeys.value = keys
     if (text.value.trim()) return
     const txt = noticeFiles.value.filter(item=>/\.txt$/i.test(item.name))
     const namedWord = noticeFiles.value.filter(item=>/(通知|公告|通告).*\.docx$/i.test(item.name))
@@ -130,8 +138,6 @@ function chooseAttachments(event: Event) {
   invalidate()
   noticeIndex.value = undefined
   files.value = next
-  matches.value = []
-  emit('reset')
   void inventory()
 }
 
@@ -170,7 +176,7 @@ function accept() {
   if (disabled.value || accepted.value || !candidate.value || candidate.value.conflict || !acknowledged.value ||
       unassigned.value || inspected.value?.competition) return
   accepted.value = true
-  emit('accept',{id:selected.value,scenario:candidate.value.scenario,requirements:candidate.value.requirements,
+  emit('accept',{id:attachmentKeys.value[selected.value],scenario:candidate.value.scenario,requirements:candidate.value.requirements,
     attachment:candidate.value.attachment,manualReviews:manualReviews.value})
 }
 </script>
@@ -201,7 +207,7 @@ function accept() {
         <li v-for="{match,index,role} in attachments" :key="index">
           <label v-if="match.scenario && role==='form'"><input type="radio" name="original" :checked="selected===index" :disabled="disabled" @change="pick(index)"> {{ match.name }} · {{ match.scenario.title }}</label>
           <p v-else>{{ match.name }} <template v-if="role==='unknown' || role==='form'">· {{ match.error || '待核对' }}</template></p>
-          <small v-if="match.scenario && role==='form'">{{ progress[index]==='exported'?'已导出':progress[index]==='editing'?'填写中':'原表已核验，可填写' }}</small>
+          <small v-if="match.scenario && role==='form'">{{ progress[attachmentKeys[index]]==='exported'?'已导出':progress[attachmentKeys[index]]==='editing'?'填写中':'原表已核验，可填写' }}</small>
           <label>附件用途
             <select :aria-label="'附件用途 · '+match.name" :value="role" :disabled="disabled" @change="changeRole(index,$event)">
               <option v-for="(label,key) in roleLabels" :key="key" :value="key">{{ label }}</option>

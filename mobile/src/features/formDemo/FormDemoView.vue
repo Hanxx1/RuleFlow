@@ -1,21 +1,22 @@
 <script setup lang="ts">
-import {computed,onMounted,ref,watch} from 'vue'
+import {computed,onBeforeUnmount,onMounted,ref,watch} from 'vue'
 import {useAccountStore} from '../../stores/account'
 import {useImportDraftStore} from '../imports/draftStore'
 import NoticeIntake from './NoticeIntake.vue'
+import SavedNoticeIntake from './SavedNoticeIntake.vue'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
 import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile,type FormProfileOwner} from './demoProfile'
 import {exampleValues,isCompetitionNotice,leaveDays,proposedFilename,reviewForm,scenarioFields,scenarios,validateFilename,type FormValues,type Scenario} from './scenarios'
 
-const props = defineProps<{fromNotice?:boolean}>()
+const props = defineProps<{fromNotice?:boolean;savedBatchId?:string}>()
 const account = useAccountStore()
 const importDraft = useImportDraftStore()
 const owner = ref<FormProfileOwner>(props.fromNotice?'local:notice':'demo:forms')
 const intake = ref<NoticeSelection>()
 const intakeKey = ref(0)
-const persistAllowed = computed(()=>!props.fromNotice || !account.signedIn)
+const persistAllowed = computed(()=>!props.savedBatchId && (!props.fromNotice || !account.signedIn))
 const profile = ref<DemoProfile>({revision:0,values:{},awards:[]})
 const ready = ref(false)
 const saving = ref(false)
@@ -39,7 +40,16 @@ const imageVersion = ref(0)
 const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
 const drafts = new Map<string,{values:FormValues;photo:string;name:string}>()
-const attachmentProgress = ref<Record<number,'editing'|'exported'>>({})
+const attachmentProgress = ref<Record<string,'editing'|'exported'>>({})
+const exporting = ref(false)
+const priorDraftKey = ref('')
+const carriedFields = ref<string[]>([])
+let formVersion = 0
+let mounted = true
+onBeforeUnmount(()=>{mounted=false})
+const priorDrafts = computed(()=>intake.value?.previousDrafts?.filter(item=>drafts.has(item.key)) || [])
+const priorValues = computed(()=>drafts.get(priorDraftKey.value)?.values || {})
+const comparableFields = computed(()=>scenarioFields(scenario.value).filter(field=>priorValues.value[field.id]?.trim()))
 
 
 const review = computed(()=>reviewForm(scenario.value,values.value,Boolean(photo.value)))
@@ -66,6 +76,7 @@ const days = computed(()=>leaveDays(values.value))
 const competition = computed(()=>isCompetitionNotice(notice.value))
 
 function changed() {
+  formVersion++
   confirmValues.value = false
   if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
   message.value = ''
@@ -129,18 +140,29 @@ async function switchOwner(next: FormProfileOwner) {
 onMounted(()=>void switchOwner(owner.value))
 
 function invalidateIntake() {
-  if (intake.value) rememberDraft('notice:'+intake.value.id)
+  if (intake.value) rememberDraft(intake.value.draftKey ?? 'notice:'+intake.value.id)
   intake.value = undefined
   preview.value = false
   changed()
 }
 
 function acceptIntake(selection: NoticeSelection) {
+  if (intake.value) invalidateIntake()
   intake.value = selection
-  select(selection.scenario,false,'notice:'+selection.id)
+  priorDraftKey.value = ''
+  carriedFields.value = []
+  select(selection.scenario,false,selection.draftKey ?? 'notice:'+selection.id)
 }
 
-watch(()=>props.fromNotice,enabled=>{
+function carryPreviousFields() {
+  const allowed = new Set(comparableFields.value.map(field=>field.id))
+  for (const id of carriedFields.value) if (allowed.has(id)) values.value[id]=priorValues.value[id]
+  carriedFields.value = []
+  showAll.value = true
+  changed()
+}
+
+watch([()=>props.fromNotice,()=>props.savedBatchId],([enabled])=>{
   invalidateIntake()
   intakeKey.value++
   void switchOwner(enabled?'local:notice':'demo:forms')
@@ -301,10 +323,20 @@ function useAvatar() {
   changed()
 }
 
-function download() {
-  if (!confirmValues.value || !ready.value || saving.value || filenameError.value ||
+async function download() {
+  if (!confirmValues.value || !ready.value || saving.value || exporting.value || count.value || filenameError.value ||
+      intake.value?.exportBlocked ||
       (props.fromNotice ? !intake.value : account.signedIn)) return
+  const selection = intake.value
+  const version = formVersion
+  const accountId = account.user?.id
+  exporting.value = true
   try {
+    if (selection?.verifyExport) {
+      await selection.verifyExport()
+      if (!mounted || version!==formVersion || account.user?.id!==accountId ||
+          intake.value!==selection || !confirmValues.value) return
+    }
     const result = buildForm(scenario.value,{...values.value},photo.value,filename.value,!props.fromNotice)
     const url = URL.createObjectURL(result.blob)
     const link = document.createElement('a')
@@ -318,7 +350,13 @@ function download() {
       ? generated+'。请打印后按校方要求贴照，再办理提交。'
       : generated+'，未向学校提交。'
   } catch (error) {
-    problem.value = error instanceof Error ? error.message : '导出失败，请重试。'
+    if (mounted && version===formVersion && account.user?.id===accountId) {
+      if (selection?.verifyExport) confirmValues.value = false
+      problem.value = error instanceof Error && !error.message.startsWith('无法连接在线服务')
+        ? error.message : '复核或导出失败，请检查网络后重试。'
+    }
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -330,19 +368,25 @@ function displayed(value: string, sensitive?: boolean) {
 <template>
   <main class="form-demo">
     <header class="intro">
-      <RouterLink :to="fromNotice?'/imports/new':'/me'">{{ fromNotice?'← 返回导入通知':'← 返回我的' }}</RouterLink>
+      <RouterLink :to="savedBatchId?`/imports/${savedBatchId}/sources`:fromNotice?'/imports/new':'/me'">{{ fromNotice?'← 返回导入通知':'← 返回我的' }}</RouterLink>
       <p class="eyebrow">有绪 CampusWeave · {{ fromNotice?'本机处理':'离线演示' }}</p>
       <h1>{{ fromNotice?'按通知填写附件':'智能填表' }}</h1>
       <RouterLink v-if="!fromNotice" to="/imports/new">导入自己的通知和附件</RouterLink>
       <p>{{ fromNotice?'先核对通知要求与申请表版本，再补齐资料并导出可编辑原格式文件。':'选择真实校园事务样例，补齐字段、预览并下载可编辑文件。请使用合成资料和图片。' }}</p>
     </header>
 
-    <section v-if="account.signedIn && !fromNotice" class="panel">
+    <section v-if="savedBatchId && !account.signedIn" class="panel">
+      <p>登录后可读取当前账户的已保存通知。</p>
+      <RouterLink to="/auth/login">登录</RouterLink>
+    </section>
+    <section v-else-if="account.signedIn && !fromNotice" class="panel">
       <p>这组样本仅在离线演示身份下开放。可从「我的」返回演示模式。</p>
     </section>
 
     <template v-else>
-      <NoticeIntake v-if="fromNotice" :key="intakeKey" :busy="!ready || saving" :progress="attachmentProgress" @invalidate="invalidateIntake" @reset="clearDrafts" @accept="acceptIntake"/>
+      <SavedNoticeIntake v-if="savedBatchId" :key="'saved:'+intakeKey" :batch-id="savedBatchId"
+        :busy="!ready || saving || exporting" :progress="attachmentProgress" @invalidate="invalidateIntake" @accept="acceptIntake"/>
+      <NoticeIntake v-else-if="fromNotice" :key="intakeKey" :busy="!ready || saving" :progress="attachmentProgress" @invalidate="invalidateIntake" @accept="acceptIntake"/>
       <details v-if="fromNotice && persistAllowed" class="panel">
         <summary>此浏览器的本机资料</summary>
         <p>只在选择保存补录时保存可复用字段，供此浏览器下次填写。</p>
@@ -369,13 +413,30 @@ function displayed(value: string, sensitive?: boolean) {
         <p>{{ scenario.provenance }} · <a :href="scenario.source" target="_blank" rel="noopener noreferrer">{{ scenario.school }}</a></p>
         <p>人工办理：{{ scenario.manual }}</p>
         <p v-if="scenario.printNote" class="warning">{{ scenario.printNote }}</p>
-        <p v-if="intake">已选原件：{{ intake.attachment }}。从已核对的通知提取约束后填写。</p>
+        <p v-if="intake">已选原件：{{ intake.attachment }}。</p>
+        <p v-if="intake?.exportBlocked" class="warning">{{ intake.exportBlocked }}</p>
         <p v-if="fromNotice && !persistAllowed">登录状态下，本次补录仅用于当前文件。</p>
         <div v-if="!fromNotice" class="actions">
           <button type="button"  :disabled="!ready || saving" @click="fillExamples">用合成资料补齐缺项</button>
           <button type="button"  :disabled="!ready || saving" @click="clearRemembered">清除本机演示资料</button>
         </div>
       </section>
+
+      <details v-if="priorDrafts.length" class="panel">
+        <summary>对照已移除或改版的草稿</summary>
+        <label class="field">旧草稿
+          <select v-model="priorDraftKey" :disabled="exporting" @change="carriedFields=[]">
+            <option value="">选择旧草稿</option>
+            <option v-for="item in priorDrafts" :key="item.key" :value="item.key">{{ item.name }}</option>
+          </select>
+        </label>
+        <p>仅带入勾选的字段。文件名、照片和先前的导出确认需重新核对。</p>
+        <label v-for="field in comparableFields" :key="field.id" class="toggle">
+          <input v-model="carriedFields" type="checkbox" :value="field.id" :disabled="exporting">
+          {{ field.label }} · {{ displayed(priorValues[field.id],field.sensitive) }}
+        </label>
+        <button type="button" :disabled="!carriedFields.length || exporting" @click="carryPreviousFields">带入选中的旧值</button>
+      </details>
 
       <details v-if="!fromNotice" class="panel">
         <summary>手上只有赛事通知？</summary>
@@ -395,7 +456,7 @@ function displayed(value: string, sensitive?: boolean) {
           <button type="button" @click="showAll=!showAll">{{ showAll ? '只显示补录字段' : '显示并编辑整张表单' }}</button>
         </div>
         <p v-if="!groups.length">本次没有资料缺项。可预览，或打开整表修改。</p>
-        <fieldset v-for="group in groups" :key="group.title" :disabled="saving || !ready">
+        <fieldset v-for="group in groups" :key="group.title" :disabled="saving || !ready || exporting">
           <legend>{{ group.title }}</legend>
           <div class="fields">
             <div v-for="field in group.fields" :key="field.id" class="field" :class="{wide:field.type==='long'}">
@@ -455,7 +516,7 @@ function displayed(value: string, sensitive?: boolean) {
 
         <label class="toggle"><input v-model="reveal" type="checkbox"> 显示敏感字段原值</label>
         <label class="field">文件名（不含扩展名）
-          <input :placeholder="suggestedStem" :value="nameOverride" @input="nameOverride=($event.target as HTMLInputElement).value; changed()">
+          <input :placeholder="suggestedStem" :value="nameOverride" :disabled="exporting" @input="nameOverride=($event.target as HTMLInputElement).value; changed()">
         </label>
         <p class="file-name">{{ filenamePreview }}</p>
         <p v-if="filenameError" class="warning">{{ filenameError }}</p>
@@ -476,8 +537,9 @@ function displayed(value: string, sensitive?: boolean) {
         </dl>
         <p v-if="scenario.photo==='physical'">照片框留空。打印后请按<a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方说明</a>粘贴照片。</p>
         <img v-if="scenario.photo==='embedded' && photo" class="preview-photo" :src="photo" alt="导出照片预览">
-        <label class="toggle"><input v-model="confirmValues" type="checkbox" :disabled="Boolean(count || filenameError) || !ready || saving"> 我确认这份文件的填写值和文件名</label>
-        <button type="button" class="primary" :disabled="!confirmValues || Boolean(count || filenameError) || !ready || saving" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
+        <label class="toggle"><input v-model="confirmValues" type="checkbox" :disabled="Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting"> 我确认这份文件的填写值和文件名</label>
+        <button type="button" class="primary" :disabled="!confirmValues || Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
+        <p v-if="exporting && savedBatchId" role="status">正在复核来源、通知要求及原件…</p>
       </section>
       </template>
       <p v-if="message" role="status" class="feedback">{{ message }}</p>
