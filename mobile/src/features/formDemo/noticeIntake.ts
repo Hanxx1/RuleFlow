@@ -9,6 +9,7 @@ export type NoticeTarget = {id: number | string; name: string; title?: string}
 export type NoticeSelection = {
   id: number | string; scenario: Scenario; requirements: NoticeRequirements; attachment: string; manualReviews: number
   draftKey?: string
+  currentDraftKeys?: string[]
   previousDrafts?: {key:string; name:string}[]
   exportBlocked?: string
   verifyExport?: () => Promise<void>

@@ -5,6 +5,7 @@ import {useImportDraftStore} from '../imports/draftStore'
 import NoticeIntake from './NoticeIntake.vue'
 import SavedNoticeIntake from './SavedNoticeIntake.vue'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
+import {clearFormDrafts,readDraftReference,readFormDrafts,recoverableFields,saveFormDraft,type SavedFormDraft} from './savedFormDrafts'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
 import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile,type FormProfileOwner} from './demoProfile'
@@ -44,12 +45,30 @@ const attachmentProgress = ref<Record<string,'editing'|'exported'>>({})
 const exporting = ref(false)
 const priorDraftKey = ref('')
 const carriedFields = ref<string[]>([])
+const savedDrafts = ref<SavedFormDraft[]>([])
+const draftRevision = ref(0)
+const draftError = ref('')
+const draftMessage = ref('')
 let formVersion = 0
 let mounted = true
 onBeforeUnmount(()=>{mounted=false})
-const priorDrafts = computed(()=>intake.value?.previousDrafts?.filter(item=>drafts.has(item.key)) || [])
-const priorValues = computed(()=>drafts.get(priorDraftKey.value)?.values || {})
+const priorDrafts = computed(()=>{
+  if (!intake.value?.currentDraftKeys) return []
+  const items = new Map((intake.value.previousDrafts || []).filter(item=>drafts.has(item.key))
+    .map(item=>[item.key,item.name]))
+  for (const item of savedDrafts.value) {
+    if (intake.value.currentDraftKeys.includes(item.key) || items.has(item.key)) continue
+    const reference = readDraftReference(item.key)
+    if (!reference) continue
+    const title = scenarios.find(scenario=>scenario.id===item.scenarioId)?.title
+    items.set(item.key,`${title} · ${reference.sha256.slice(0,8)} · ${reference.sourceId.slice(-6)}`)
+  }
+  return [...items.entries()].map(([key,name])=>({key,name}))
+})
+const priorValues = computed(()=>drafts.get(priorDraftKey.value)?.values ||
+  savedDrafts.value.find(item=>item.key===priorDraftKey.value)?.values || {})
 const comparableFields = computed(()=>scenarioFields(scenario.value).filter(field=>priorValues.value[field.id]?.trim()))
+const draftFieldLabels = computed(()=>recoverableFields(scenario.value).map(field=>field.label))
 
 
 const review = computed(()=>reviewForm(scenario.value,values.value,Boolean(photo.value)))
@@ -77,6 +96,7 @@ const competition = computed(()=>isCompetitionNotice(notice.value))
 
 function changed() {
   formVersion++
+  draftMessage.value = ''
   confirmValues.value = false
   if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
   message.value = ''
@@ -118,6 +138,10 @@ async function switchOwner(next: FormProfileOwner) {
   ready.value = false
   saving.value = false
   clearDrafts()
+  savedDrafts.value = []
+  draftRevision.value = 0
+  draftError.value = ''
+  draftMessage.value = ''
   profile.value = {revision:0,values:{},awards:[]}
   select(scenario.value,false)
   if (!persistAllowed.value) {
@@ -143,15 +167,71 @@ function invalidateIntake() {
   if (intake.value) rememberDraft(intake.value.draftKey ?? 'notice:'+intake.value.id)
   intake.value = undefined
   preview.value = false
+  draftMessage.value = ''
   changed()
 }
 
 function acceptIntake(selection: NoticeSelection) {
   if (intake.value) invalidateIntake()
+  loadSavedDrafts()
   intake.value = selection
   priorDraftKey.value = ''
   carriedFields.value = []
-  select(selection.scenario,false,selection.draftKey ?? 'notice:'+selection.id)
+  const key = selection.draftKey ?? 'notice:'+selection.id
+  const saved = savedDrafts.value.find(item=>item.key===key && item.scenarioId===selection.scenario.id)
+  draftRevision.value = saved?.revision ?? 0
+  const restored = saved && !drafts.has(key)
+  if (restored) drafts.set(key,{values:saved.values,photo:'',name:''})
+  select(selection.scenario,false,key)
+  if (restored) {
+    message.value = '已恢复此原件版本保存的草稿。请补齐本次资料并重新确认导出。'
+  }
+}
+
+function loadSavedDrafts() {
+  const {savedBatchId} = props
+  const ownerId = account.user?.id
+  if (!savedBatchId || !ownerId) return
+  draftError.value = ''
+  try {
+    savedDrafts.value = readFormDrafts(ownerId,savedBatchId)
+  } catch (error) {
+    savedDrafts.value = []
+    draftError.value = error instanceof Error ? error.message : '浏览器草稿无法读取。'
+  }
+}
+
+function saveDraftProgress() {
+  const {savedBatchId} = props
+  const ownerId = account.user?.id
+  const key = intake.value?.draftKey
+  if (!savedBatchId || !ownerId || !key || exporting.value) return
+  draftError.value = ''
+  draftMessage.value = ''
+  try {
+    const saved = saveFormDraft(ownerId,savedBatchId,key,scenario.value,values.value,draftRevision.value)
+    draftRevision.value = saved.revision
+    savedDrafts.value = [...savedDrafts.value.filter(item=>item.key!==key),saved]
+    draftMessage.value = '已保存当前原件的草稿字段。'
+  } catch (error) {
+    draftError.value = error instanceof Error ? error.message : '浏览器未能保存草稿。'
+  }
+}
+
+function clearDraftProgress() {
+  const {savedBatchId} = props
+  const ownerId = account.user?.id
+  if (!savedBatchId || !ownerId || exporting.value ||
+      !window.confirm('清除本批次在此标签页保存的草稿？当前填写内容会留在页面。')) return
+  try {
+    clearFormDrafts(ownerId,savedBatchId)
+    draftRevision.value = 0
+    savedDrafts.value = []
+    draftError.value = ''
+    draftMessage.value = '本批次保存的草稿已清除。'
+  } catch {
+    draftError.value = '浏览器未能清除保存的草稿。'
+  }
 }
 
 function carryPreviousFields() {
@@ -377,7 +457,7 @@ function displayed(value: string, sensitive?: boolean) {
 
     <section v-if="savedBatchId && !account.signedIn" class="panel">
       <p>登录后可读取当前账户的已保存通知。</p>
-      <RouterLink to="/auth/login">登录</RouterLink>
+      <RouterLink :to="{path:'/auth/login',query:{formBatch:savedBatchId}}">登录后继续填表</RouterLink>
     </section>
     <section v-else-if="account.signedIn && !fromNotice" class="panel">
       <p>这组样本仅在离线演示身份下开放。可从「我的」返回演示模式。</p>
@@ -415,11 +495,23 @@ function displayed(value: string, sensitive?: boolean) {
         <p v-if="scenario.printNote" class="warning">{{ scenario.printNote }}</p>
         <p v-if="intake">已选原件：{{ intake.attachment }}。</p>
         <p v-if="intake?.exportBlocked" class="warning">{{ intake.exportBlocked }}</p>
-        <p v-if="fromNotice && !persistAllowed">登录状态下，本次补录仅用于当前文件。</p>
+        <p v-if="fromNotice && !persistAllowed">本次补录按当前文件管理。</p>
         <div v-if="!fromNotice" class="actions">
           <button type="button"  :disabled="!ready || saving" @click="fillExamples">用合成资料补齐缺项</button>
           <button type="button"  :disabled="!ready || saving" @click="clearRemembered">清除本机演示资料</button>
         </div>
+      </section>
+
+      <section v-if="savedBatchId" class="panel" aria-label="原件草稿">
+        <h2>保存原件草稿</h2>
+        <p>可在此标签页刷新后，由同一账号重新登录续填。主动退出时清除保存记录。</p>
+        <p>可保存字段 · {{ draftFieldLabels.join('、') }}。其他内容请在本次填完或另行留存。</p>
+        <div class="actions">
+          <button type="button" :disabled="exporting" @click="saveDraftProgress">保存当前草稿</button>
+          <button v-if="savedDrafts.length || draftError" type="button" :disabled="exporting" @click="clearDraftProgress">清除本批次保存的草稿</button>
+        </div>
+        <p v-if="draftMessage" role="status">{{ draftMessage }}</p>
+        <p v-if="draftError" role="alert">{{ draftError }}</p>
       </section>
 
       <details v-if="priorDrafts.length" class="panel">
@@ -470,7 +562,7 @@ function displayed(value: string, sensitive?: boolean) {
                 :inputmode="field.type==='number'?'numeric':undefined" :aria-invalid="Boolean(review.errors[field.id])" autocomplete="off" @input="changed">
               <small v-if="field.hint">{{ field.hint }}</small>
               <small v-if="review.errors[field.id]" class="warning">{{ review.errors[field.id] }}</small>
-              <small>{{ persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
+              <small>{{ savedBatchId && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>
         </fieldset>

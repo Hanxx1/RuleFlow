@@ -198,7 +198,7 @@ async function openForm() {
       (binding.unresolved ? '请先确认通知要求分别适用哪些附件。'
         : !confirmed ? '请先核对适用于此表的通知要求，再确认导出。' : '')
     emit('accept',{
-      id:key,draftKey:key,previousDrafts,scenario:effective.scenario,attachment:source.name,
+      id:key,draftKey:key,currentDraftKeys:[...currentKeys],previousDrafts,scenario:effective.scenario,attachment:source.name,
       requirements:binding.requirements,
       manualReviews:binding.requirements.evidence.filter(item=>item.kind==='review').length,
       exportBlocked,
