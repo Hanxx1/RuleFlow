@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import {computed,onBeforeUnmount,onMounted,ref,watch} from 'vue'
 import {useAccountStore} from '../../stores/account'
+import {loadWorkspace} from '../../services/clientWorkspace'
 import {useImportDraftStore} from '../imports/draftStore'
 import NoticeIntake from './NoticeIntake.vue'
 import SavedNoticeIntake from './SavedNoticeIntake.vue'
+import AccountProfileFill from './AccountProfileFill.vue'
+import {reviewAccountProfile,staleProfileLabels,type ProfileCandidate} from './accountFormProfile'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
 import {clearFormDrafts,readDraftReference,readFormDrafts,recoverableFields,saveFormDraft,type SavedFormDraft} from './savedFormDrafts'
 import {avatarUrl,buildForm} from './exportForm'
@@ -40,7 +43,8 @@ const problem = ref('')
 const imageVersion = ref(0)
 const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
-const drafts = new Map<string,{values:FormValues;photo:string;name:string}>()
+const profileFields = ref<Record<string,ProfileCandidate>>({})
+const drafts = new Map<string,{values:FormValues;photo:string;name:string;profileFields?:Record<string,ProfileCandidate>}>()
 const attachmentProgress = ref<Record<string,'editing'|'exported'>>({})
 const exporting = ref(false)
 const priorDraftKey = ref('')
@@ -96,6 +100,9 @@ const competition = computed(()=>isCompetitionNotice(notice.value))
 
 function changed() {
   formVersion++
+  for (const key of Object.keys(profileFields.value)) {
+    if (values.value[key]!==profileFields.value[key].value) delete profileFields.value[key]
+  }
   draftMessage.value = ''
   confirmValues.value = false
   if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
@@ -104,7 +111,7 @@ function changed() {
 }
 
 function rememberDraft(key: string) {
-  drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value})
+  drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value,profileFields:{...profileFields.value}})
 }
 
 function clearDrafts() {
@@ -117,6 +124,7 @@ function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
   scenario.value = next
   const draft = drafts.get(draftKey)
   values.value = draft ? {...draft.values} : resolveDemoProfile(next,profile.value)
+  profileFields.value = {...draft?.profileFields}
   photo.value = draft?.photo || ''
   photoInput.value = undefined
   imageVersion.value++
@@ -209,7 +217,8 @@ function saveDraftProgress() {
   draftError.value = ''
   draftMessage.value = ''
   try {
-    const saved = saveFormDraft(ownerId,savedBatchId,key,scenario.value,values.value,draftRevision.value)
+    const manualValues = Object.fromEntries(Object.entries(values.value).filter(([id])=>!profileFields.value[id]))
+    const saved = saveFormDraft(ownerId,savedBatchId,key,scenario.value,manualValues,draftRevision.value)
     draftRevision.value = saved.revision
     savedDrafts.value = [...savedDrafts.value.filter(item=>item.key!==key),saved]
     draftMessage.value = '已保存当前原件的草稿字段。'
@@ -239,6 +248,27 @@ function carryPreviousFields() {
   for (const id of carriedFields.value) if (allowed.has(id)) values.value[id]=priorValues.value[id]
   carriedFields.value = []
   showAll.value = true
+  changed()
+}
+
+function fillFromAccountProfile(candidates: ProfileCandidate[]) {
+  if (exporting.value) return
+  const applied = candidates.filter(item=>!values.value[item.id]?.trim())
+  for (const item of applied) {
+    values.value[item.id] = item.value
+    profileFields.value[item.id] = item
+  }
+  if (!applied.length) return
+  completion.value = [...new Set([...completion.value,...applied.map(item=>item.id)])]
+  changed()
+  message.value = '已从当前账户的本机画像带入 '+applied.map(item=>item.label).join('、')+'。请核对本次填写值。'
+}
+
+function clearProfileFields() {
+  for (const id of Object.keys(profileFields.value)) {
+    if (values.value[id]===profileFields.value[id].value) delete values.value[id]
+  }
+  profileFields.value = {}
   changed()
 }
 
@@ -410,12 +440,21 @@ async function download() {
   const selection = intake.value
   const version = formVersion
   const accountId = account.user?.id
+  const sources = Object.values(profileFields.value)
+  const stillConfirmed = ()=>mounted && version===formVersion && account.user?.id===accountId &&
+    intake.value===selection && confirmValues.value
   exporting.value = true
   try {
     if (selection?.verifyExport) {
       await selection.verifyExport()
-      if (!mounted || version!==formVersion || account.user?.id!==accountId ||
-          intake.value!==selection || !confirmValues.value) return
+      if (!stillConfirmed()) return
+    }
+    if (sources.length && accountId) {
+      const workspace = await loadWorkspace(accountId)
+      if (!stillConfirmed()) return
+      const current = reviewAccountProfile(workspace,scenario.value,selection?.caseId || '',{})
+      const stale = staleProfileLabels(sources,current.candidates)
+      if (stale.length) throw Error('已从画像带入的字段需要重新核对（'+stale.join('、')+'）。请清除相关带入值后重新带入，也可手工填写。')
     }
     const result = buildForm(scenario.value,{...values.value},photo.value,filename.value,!props.fromNotice)
     const url = URL.createObjectURL(result.blob)
@@ -505,7 +544,7 @@ function displayed(value: string, sensitive?: boolean) {
       <section v-if="savedBatchId" class="panel" aria-label="原件草稿">
         <h2>保存原件草稿</h2>
         <p>可在此标签页刷新后，由同一账号重新登录续填。主动退出时清除保存记录。</p>
-        <p>可保存字段 · {{ draftFieldLabels.join('、') }}。其他内容请在本次填完或另行留存。</p>
+        <p>可保存的手填字段 · {{ draftFieldLabels.join('、') }}。画像值可在续填时重新核对带入，其他内容请在本次核对填写。</p>
         <div class="actions">
           <button type="button" :disabled="exporting" @click="saveDraftProgress">保存当前草稿</button>
           <button v-if="savedDrafts.length || draftError" type="button" :disabled="exporting" @click="clearDraftProgress">清除本批次保存的草稿</button>
@@ -547,6 +586,12 @@ function displayed(value: string, sensitive?: boolean) {
         <div class="actions">
           <button type="button" @click="showAll=!showAll">{{ showAll ? '只显示补录字段' : '显示并编辑整张表单' }}</button>
         </div>
+        <AccountProfileFill v-if="savedBatchId && intake && account.signedIn" :key="intake.id"
+          :scenario="scenario" :case-id="intake.caseId" :values="values" :disabled="saving || exporting"
+          @apply="fillFromAccountProfile"/>
+        <button v-if="Object.keys(profileFields).length" type="button" :disabled="exporting" @click="clearProfileFields">
+          清除画像带入值
+        </button>
         <p v-if="!groups.length">本次没有资料缺项。可预览，或打开整表修改。</p>
         <fieldset v-for="group in groups" :key="group.title" :disabled="saving || !ready || exporting">
           <legend>{{ group.title }}</legend>
@@ -562,6 +607,10 @@ function displayed(value: string, sensitive?: boolean) {
                 :inputmode="field.type==='number'?'numeric':undefined" :aria-invalid="Boolean(review.errors[field.id])" autocomplete="off" @input="changed">
               <small v-if="field.hint">{{ field.hint }}</small>
               <small v-if="review.errors[field.id]" class="warning">{{ review.errors[field.id] }}</small>
+              <details v-if="profileFields[field.id]">
+                <summary>已从个人画像带入</summary>
+                <small v-for="source in profileFields[field.id].refs" :key="source.id">{{ source.quote }} · {{ source.id }}<br></small>
+              </details>
               <small>{{ savedBatchId && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>

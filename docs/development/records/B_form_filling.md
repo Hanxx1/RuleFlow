@@ -42,6 +42,16 @@
 6. **运行证据** — `mobile/src/features/formDemo/savedFormDrafts.test.ts`、`scripts/test-saved-notice-form-browser.cjs` 和独立工作区的 `.runtime/saved-form-evidence/rf012-browser.log`、`rf012-demo.log`。合成测试账户及产物均在 Git 外。
 7. **未完成与限制** — 此切片支持同标签页续填，长期保存、不同标签页或设备恢复、正式画像复用与备份合并仍待 RF-012 后续评审。正式备份应先展示差异，默认保留当前值，按账户和 revision 校验，失效 Document 引用提示待核对。草稿没有改 Workspace、后端模型或迁移。Android 真机与 APK 未验。
 
+## RF-025｜从已确认的本机画像补录
+
+1. **任务信息** — B，`feat/RF-025-form-profile-prefill`，接续 `3786225`。已保存通知的画像读取、逐项带入和导出前复核切片完成。本轮未新增正式画像字段。
+2. **技术实现** — `AccountProfileFill.vue` 使用当前登录账户调用 `loadWorkspace`。通过 `resolvedFacts` 读取对应事项范围内的确认值。核对模板配置的适用学校后，提供院系、专业、班级和模板支持的学生类型。用户可查看画像原句及实际资料卡 ID，再勾选带入空项。
+3. **设计与关键决策** — 复用现有 Workspace v3、资料断言和有效期，不猜学校别名、学号、入学月份或历史学籍。带入后保留来源供本会话复核，手改时撤销该字段的画像来源。显式标签页草稿保存白名单手填值，续填时重新读取画像。
+4. **问题及解决** — 核对后、写入前画像变化时要求重新确认。导出前再次核对带入值及其依据，来源发生变化、失效或超出事项范围时暂停导出。关联事项变化也触发重新核对。用户可清除带入项，保留手工字段和草稿。
+5. **测试与验证** — `npm.cmd --prefix mobile test` 共 224 项通过，其中 8 项为画像新增测试。覆盖学校匹配、过期和冲突、事项范围、原表长度和枚举、来源与空项保护。`npm.cmd --prefix mobile run build` 通过。Edge 使用隔离后端和正式画像页，验证画像改动撤销旧确认、选中空项带入、手填值保留、导出拦截及画像带入值不写入可续填草稿。重新核对后读取导出的 XLSX，确认更正的院系和手填的专业都已写入。RF-028、RF-012 和 11 个离线演示同时通过。
+6. **运行证据** — `mobile/src/features/formDemo/accountFormProfile.test.ts`、`scripts/test-saved-notice-form-browser.cjs` 和独立工作区的 `.runtime/saved-form-evidence/rf025-browser.log`、`rf025-demo.log`。联调使用合成账户、画像值和真实校方原表。
+7. **未完成与限制** — 正式经历档案、跨学期画像归属、从表格确认回写画像及长期备份不在这一切片。姓名、学号、证件号码等继续手工补录，无 APK。
+
 ## RF-032｜四份真实原表的离线填写演示
 
 1. **任务信息** — B，2026-11-07。四场景离线演示与电子文件验收完成，奖学金纸质版仍受限。分支 `feat/RF-032-offline-form-demo`。

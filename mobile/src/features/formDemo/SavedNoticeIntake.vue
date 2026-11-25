@@ -198,7 +198,8 @@ async function openForm() {
       (binding.unresolved ? '请先确认通知要求分别适用哪些附件。'
         : !confirmed ? '请先核对适用于此表的通知要求，再确认导出。' : '')
     emit('accept',{
-      id:key,draftKey:key,currentDraftKeys:[...currentKeys],previousDrafts,scenario:effective.scenario,attachment:source.name,
+      id:key,draftKey:key,currentDraftKeys:[...currentKeys],caseId:latest.case_id,previousDrafts,
+      scenario:effective.scenario,attachment:source.name,
       requirements:binding.requirements,
       manualReviews:binding.requirements.evidence.filter(item=>item.kind==='review').length,
       exportBlocked,
@@ -206,8 +207,10 @@ async function openForm() {
         try {
           const latest = await loadSavedNotice(snapshot.batch_id)
           if (request!==version) throw Error('填写上下文已切换，请重新核对。')
-          const recheck = (next: FormContext) => recheckSavedForm(
-            next,source,key,selectedNotice?.source_id || '',binding.signature,scopes,exclusions)
+          const recheck = (next: FormContext) => {
+            if (next.case_id!==latest.case_id) throw Error('关联事项已变化。填写值已保留，请重新读取并核对。')
+            return recheckSavedForm(next,source,key,selectedNotice?.source_id || '',binding.signature,scopes,exclusions)
+          }
           const current = recheck(latest)
           await loadSavedOriginal(current)
           recheck(await loadSavedNotice(snapshot.batch_id))

@@ -10,6 +10,7 @@ export type NoticeSelection = {
   id: number | string; scenario: Scenario; requirements: NoticeRequirements; attachment: string; manualReviews: number
   draftKey?: string
   currentDraftKeys?: string[]
+  caseId?: string | null
   previousDrafts?: {key:string; name:string}[]
   exportBlocked?: string
   verifyExport?: () => Promise<void>
