@@ -1,5 +1,7 @@
+import {updateTaskReminders} from '../core/native/reminders';
 import {defineStore} from 'pinia';
 import {api,hasSession} from '../core/http';
+import {useAccountStore} from './account';
 import {useCasesStore} from '../features/cases/store';
 
 export type DashboardData={
@@ -21,5 +23,5 @@ export const useDashboardStore=defineStore('dashboard',{state:()=>({data:null as
     catch(error:any){this.error=error.message||'首页数据读取失败';throw error}
     finally{this.loading=false}
   },
-  async setTask(id:string,status:string){await api('/api/v1/tasks/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({status})});return this.load()},
+  async setTask(id:string,status:string){const owner=useAccountStore().user?.id;await api('/api/v1/tasks/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({status})});if(owner && owner===useAccountStore().user?.id){const notice=await updateTaskReminders(owner,id,status);if(notice)window.alert(notice);}return this.load()},
 }});
