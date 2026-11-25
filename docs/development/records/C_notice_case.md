@@ -1,6 +1,82 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-011/013｜C 侧类型化读取客户端（2026-11-24）
+
+### 1. 任务信息
+
+C，用户要求继续下一阶段开发。新分支 `feat/RF-013-form-context-client`，基于已推送HTTP提交 `f1bf3b4`。fetch复核main仍为 `9a2bd41`，没有假定HTTP已合并。状态：客户端读取与响应校验本地实现／自测通过，待评审，未提交或推送；H06联调未完成。
+
+### 2. 技术实现
+
+新增 `mobile/src/features/imports/formContext.ts`：完整响应类型、`readFormContext`、`parseFormContext`与安全错误类。复用core/http而不修改公共传输层，URI编码批次ID，版本非负整数校验，显式no-store；不保存正文。响应校验范围含来源唯一性、Document版本/hash格式、真实行归属与顺序／正文、原件／解析枚举、父引用及null语义。新增同目录30项测试，更新来源移交使用说明。本切片不接B页面，不修改共享API／DTO、Provider或数据库。
+
+### 3. 设计与关键决策
+
+先交付C读取模块供B对接，不代做B的要求绑定、逐表保值或导出判断；不提前实施尚待共同确认的候选迁移。非法响应拒绝且错误不含原文；HTTP错误保留status/code，网络失败无Demo回退。结构校验不是原件字节核验，不增加新依赖。父引用仅校验批次返回集合内存在及非自身，服务端仍负责owner授权。
+
+### 4. 遇到的问题及解决
+
+沙箱fetch因本机代理不可达失败，正常权限单次清空该命令代理后成功；无全局设置变更。未出现客户端测试或构建失败。手写样例不足以证明后端兼容，因此另从实际接口生成合成响应，加载实际TS模块核验通过。
+
+### 5. 测试与验证
+
+Windows，现有Node/Vitest/Vite和 `.runtime/c-venv`。实际执行：`npm.cmd --prefix mobile test -- src/features/imports/formContext.test.ts` 为30 passed；`npm.cmd --prefix mobile test` 为27文件195 passed；`npm.cmd --prefix mobile run build` 的vue-tsc及生产构建通过（213 modules）。保留Vite CJS弃用提示，未升级依赖。
+
+实际兼容探针：Python将DATABASE_PATH设为内存，Document/Vault根指向忽略目录 `.runtime/form-context-client`，通过TestClient注册合成账户，创建批次、旧文本、TXT行、缺失原件、空解析和损坏PDF，生成3组真实HTTP响应；只导出data不含凭据。Node使用现有Vite的ssrLoadModule加载实际客户端，对全部3组调用parseFormContext成功。不是固定Mock响应或真实TCP／浏览器请求。未改后端生产代码，本轮未重复跑后端全量；该结果不套用为B双表、Office、真机或真实模型验证。
+
+### 6. 运行证据
+
+30项测试源码、本会话实际输出；本机合成响应 `.runtime/form-context-client/responses.json`（忽略、不提交，非团队共享证据）。基于HTTP提交f1bf3b4，未创建新提交、PR或APK。原始Codex会话分享／导出待保留。
+
+### 7. 未完成与限制
+
+HTTP依赖尚未合入main，客户端本身尚无页面消费者；B消费回核、接入与H06逐表保值联调仍待B实施，H08真机由A组织。无正式草稿、候选持久化或迁移；不代表整卡完成。原有任务表本地修改保持不变，不纳入本切片。最终文档／路径／Demo及差异检查见本会话回执。
+
+提交授权补记：用户随后要求“提交并推送”。仅提交客户端、30项测试及两份C文档共4个文件，排除原任务表修改；沿 `feat/RF-013-form-context-client` 推送。该分支包含前置HTTP提交f1bf3b4，合并顺序为HTTP接口先、客户端后；不代为创建或合并PR。最终提交／推送以Git回执为准，以上未提交状态为开发阶段历史快照。
+
+## RF-011/013｜只读来源 HTTP 接入（2026-11-24）
+
+### 1. 任务信息
+
+C；目标为将已实现内部来源快照接入正式只读接口。分支 `feat/RF-013-form-context-http`，基线 `9a2bd41`（#36已合并）。状态：本地实现与后端验证通过，待评审；未提交、推送或创建PR。用户转达A同意公共范围后明确要求“开始开发”；据此实施限定范围，不代记B本人最终消费回核。
+
+### 2. 技术实现
+
+新增 `server/app/api/form_context.py`，提供 `GET /api/v1/import-batches/{batch_id}/form-context`，main仅装配路由；复用 `read_source_snapshot`，调整服务说明。新增路由类将成功、业务错误、鉴权及参数错误统一设置no-store，不改全局中间件。版本必传且非负，404／409沿detail包络；成功沿data/request_id并加schema_version=1。正常文件数据库连接在finally关闭；内存测试连接保留。读取不调用database初始化或业务写入。
+
+将原本地未跟踪的10项HTTP RED目标更新为原件／正文双状态，补10项缓存、父引用及零副作用回归，共20项HTTP测试。更新来源移交说明与OpenAPI基准。原有SPRINT_01_TASKS本地修改不属于本次改动，不覆盖、不纳入交付。
+
+### 3. 设计与关键决策
+
+一次数据库一致快照加消费端逐表复核；不改来源写入事务。同revision可能增加来源，原件存在与解析成功分别表达。非法关系整次拒绝，普通失败逐来源返回；真实行与legacy_text分开，不造Evidence。逐表要求绑定、草稿保留、导出决定仍由B负责。OpenAPI更新前移除唯一新增GET路径后重新计算完整指纹，确认与旧接受基准一致，无其他契约变化；新指纹为 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`，供PR评审。
+
+### 4. 遇到的问题及解决
+
+沙箱fetch因本机代理连接失败，获工具批准以正常权限单次清空该命令代理后成功，不改全局配置。沙箱定向测试持续无输出，中止后在正常权限、项目隔离TEMP/TMP下重跑通过；未删除或跳过失败断言。最新main已含内部服务，直接从最新主线建分支，无需重复实现。
+
+### 5. 测试与验证
+
+Windows，既有 `.runtime/c-venv`；TEMP/TMP仅当前进程指向 `.runtime/form-context-http/tmp`，合成账户、隔离库和临时原件，无真实模型调用。实际执行：
+
+- `.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests/test_form_context.py server/tests/test_notice_source_snapshot.py -q -p no:cacheprovider --tb=short --disable-warnings`：41 passed、5 warnings，7.18秒。
+- `.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests -q -p no:cacheprovider --tb=short --disable-warnings`：283 passed、5 warnings，41.46秒。包含原10项HTTP目标，不再排除该文件；覆盖现有通知、权限、原件及Review等回归。
+- `scripts/check-api-contract.py`、`scripts/check-docs.py`（251个本地目标）、`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8份副本）和 `git diff --check`：通过。新增未跟踪文件另行检查文本格式及实际内容；外链未验证。
+
+HTTP通过TestClient运行；未跑真实TCP启动、前端、Office、真实模型或Android／真机。未把后端读取成功记为B填表联调通过。
+
+### 6. 运行证据
+
+本会话实际Git、测试和检查命令回执，新增路由与测试源码；无新提交／PR或APK。A确认及用户开工指令见本会话，原始Codex会话分享链接或导出待保留。
+
+### 7. 未完成与限制
+
+B最终字段消费回核及H06双表实际联调未完成，H08依赖A组织真机；不代称A/B共同签认。HTTP不保证之后下载的原件可用，B下载后另核hash。正式草稿恢复、迁移、历史引用自动修复、候选存储和B页面不在本切片；保留为本地改动等待内容确认及PR评审，不自动提交或合并。
+
+提交授权补记：用户随后明确要求“提交并推送”。本次仅提交路由、装配、服务说明、HTTP测试、契约指纹及两份C文档共7个文件，排除原有任务表修改。提交及推送结果以本会话Git回执为准；附PR DES，不创建或合并PR。上方本地未提交状态保留为开发验证阶段快照。
+
 ## RF-011/013｜来源边界测试与接口验收准备（2026-11-23）
+
+> #30 的“接口未实现”记录对应 11 月 23 日的基线。主线 009bb69 已包含快照服务、HTTP 接口和类型化客户端，B 的逐表复核与导出联调仍待验证。
 
 1. **任务信息** — C；用户明确「尚未确认，先做测试与接口准备」。复用干净独立 clone `RuleFlow-CM003-delete-preview`，分支 `docs/RF-013-source-boundary-tests`，基线 `ce3ecd4`。完成准备子项，公共接口待确认；未提交、推送或创建 PR。
 2. **技术实现** — 新增 `server/tests/test_source_handoff_boundaries.py` 五项现有行为测试；在 [来源移交评审稿](C_RF013_source_handoff.md) 补父引用／快照／零写入验收矩阵。未改生产代码、API、schema、迁移或 OpenAPI 基准。原工作区 RF-015 草案及未跟踪 RED 测试保留原状。
@@ -31,6 +107,16 @@
 提交授权补记（2026-11-23）：用户明确要求「提交并推送」。本次仅提交RF-002契约中的RF-015评审草案、本记录和新增通知兼容基线测试三个文件，分支 `docs/RF-015-migration-review`；原任务表修改及RF-013 RED测试排除。上方未提交状态为验证阶段快照，最终提交和推送状态以Git回执为准。同步主线时保留双方C记录，附PR DES，不创建或合并PR，不实施新迁移。
 
 主线同步补记：任务提交 `2b176e7` 后合入 `origin/main` 的 `ce3ecd4`；仅本记录顶部追加内容冲突，保留RF-015及主线进度复核两节。生产源码和测试未改变，未重复运行已通过的38项定向测试；同步后 `check-docs.py`（247个本地目标）、`check-paths.py`及暂存差异检查通过。远端推送结果以Git回执为准。
+
+### 2026-11-24 续：与 D 核对实际重叠范围
+
+1. **任务信息** — C，RF-015 范围评审；复用适合的 `docs/RF-015-migration-review` 工作区，HEAD `56d6e27`。通过 GitHub 核 main 已到 `dbc514d`，原 #31 与 D 的 #35 均已合并；本轮追加尚未提交，不把旧 PR 合并写成新方案获批。
+2. **技术实现** — 更新 [C 契约文末](C_RF002_contract.md) 的四类候选关系字段／约束建议、旧表不改范围、共享附件子切片及接口归属。未改生产、Schema、迁移或 OpenAPI。
+3. **设计与关键决策** — 基础只新增候选集合／版本、候选核对状态、Case 结果及完整 Evidence 映射；复用 Case Evidence 模型，跨 Case 不复用 Evidence ID。D 的共享表重建仍会影响新映射外键，必须联合验升级副本；不指定实施者／编号／顺序。共享补充附件的旧关系迁移单列，保持原整卡需求。
+4. **遇到的问题及解决** — 最新 D 意见已给出 task_id／Case 互斥归属建议，旧“等待 D 首次列字段”描述不再适用。根据 #35 区分原句、原件与预览能力，并保留旧 ID、材料归属及正式 Task 的 Review 门禁。
+5. **测试与验证** — 本轮为文档与静态样例评审，**未执行产品功能测试。**文档／路径／样例和差异检查结果见本轮 RF-011/013 补记；没有运行正式迁移或升级副本测试。
+6. **运行证据** — 用户本会话的协调指令、[D 结构意见](https://github.com/Hanxx1/RuleFlow/pull/31#issuecomment-7091645977)、[#35](https://github.com/Hanxx1/RuleFlow/pull/35) 和 [C 给 D 的答复](https://github.com/Hanxx1/RuleFlow/pull/31#issuecomment-7119992978)。仅发布本次获授权的协调评论，未提交／推送本地修改，无新 APK；原始 Codex 会话分享／导出待保留。
+7. **未完成与限制** — D 回核实际 DDL、互斥约束、相互外键写入顺序和回滚；B 核引用消费；随后 A/B 审共享迁移归属、编号和合入顺序，D 回填唯一公共表。本地未切分支／更新主线，生产源码依据远端 compare 核查，无未推送工作被覆盖。
 
 ## 2026-11-22｜远端同步、进度复核与下一阶段建议
 
@@ -679,6 +765,28 @@ $env:TMP=$env:TEMP
 5. **测试与验证** — Windows 既有 `.runtime/c-venv`，隔离 SQLite、合成附件与测试临时目录。`pytest` 定向运行临时边界探针、`test_import_recovery_guards.py`、`test_notice_handoff_baseline.py`，共 15 passed、5 warnings。`pytest server/tests/test_form_context.py -q -p no:cacheprovider --tb=no --disable-warnings` 为 10 failed、5 warnings，目标路由仍缺。未跑全量、Office 或真机。
 6. **运行证据** — 本次测试回执与[来源移交评审稿](C_RF013_source_handoff.md)。一次性边界探针已移除，未提交或推送，无 APK。原始 Codex 会话分享或导出待保留。
 7. **未完成与限制** — B 确认逐表复核和父来源缺失的消费规则，A/B 确认公共接口、异常、版本承诺及允许改动后实施。状态码、恢复写入和 OpenAPI 基准尚待确认。
+
+#### 2026-11-24 B 消费反馈后的字段对照
+
+1. **任务信息** — C，RF-011/013，复用当前评审工作区 `docs/RF-015-migration-review`，HEAD `56d6e27`；这是相邻公共关系的文档核对，不进入业务实现。用户已转达 B 支持一次一致读取＋逐表复核；未变表保值、改版旧值仅供对照、普通失败逐表方向已接受。公共接口仍待最终审查。
+2. **技术实现** — 在 [来源移交第7节](C_RF013_source_handoff.md) 明确 B 的要求→目标 source_id 集合绑定、C 的真实来源／行职责；把提议的单一 availability 改为 original/extraction 两个状态对象并补父引用状态。调整原合成 JSON，保留四例并增加“解析失败但原件存在”和“原件丢失但历史行可读”两例。未改本地10项 RED 目标、B 页面或正式接口。
+3. **设计与关键决策** — 同字节两 source 不合草稿；重传新 source 不按 hash 自动继承。本机未上传文件身份仍由 B 处理。通知依赖变化保值但撤销导出确认；parent missing 不等于原件 missing；present 不是下载成功保证，客户端下载后核 hash。授权／正式关系错误整次拒绝，普通失败按表所需操作处理，解析失败不直接判不可填写。
+4. **遇到的问题及解决** — 旧 availability 把解析与原件可用性合成单态，与 B 消费不符，改为独立对象。旧提案与样例保留历史依据，新修订明确优先范围；#33 继续标缺陷复现，未写成已修复。
+5. **测试与验证** — **未执行产品功能测试。**Windows 既有 `.runtime/c-venv/Scripts/python.exe -X utf8 scripts/check-docs.py` 通过（249个本地目标，不检查外链）；同环境运行 `scripts/check-paths.py` 通过；`git diff --check` 通过。使用 stdlib JSON／hashlib 核对六例样例的独立状态枚举、来源／行归属、合成文本 hash、no-store 和无来源内容的错误体，全部通过；这是静态样例校验，不是新API响应测试。未调用新接口、Office、模型或真机，无新 APK。
+6. **运行证据** — 用户本会话转达意见、修订提案和六例合成 JSON、[C 给 B 的回核评论](https://github.com/Hanxx1/RuleFlow/pull/30#issuecomment-7119982970)。样例不是运行响应；评论已发布，不等于 B 已回复。原始会话证据待保留。
+7. **未完成与限制** — B 回核状态字段／绑定快照与新来源身份行为；A/B 与 C 审 URL、权限、错误、缓存、OpenAPI 及正式修改范围。刷新和重新登录恢复仍归 RF-012。原任务表10行补记和未跟踪 RED 测试保留；本轮未提交／推送或创建新分支。
+
+#### 2026-11-24 续：内部来源快照服务开发与回归
+
+1. **任务信息** — C，RF-011/013，用户要求「基于以上对接继续下一任务开发」。远端 B/D 尚无新增回核，正式公共审查仍未完成；选择不改共享文件／路由的内部服务切片。成功 fetch 后，从最新 main `dbc514d754b6197970b720451206f257751fd906` 创建本地 `feat/RF-013-source-snapshot-core`。原4份 C 文档／样例、本地任务表和 RED 文件原状带入，未覆盖；本轮未提交／推送或创建 PR。
+2. **技术实现** — 新增 `server/app/services/notice_source_snapshot.py`，`read_source_snapshot` 在单次数据库读取中校验 owner、batch revision、来源／Document／真实行和父关系，构造 C 内部读取结果。原件／解析状态独立，文件只 stat 不读取；保留页码与已有坐标，不返回路径或任意 metadata。新增 `server/tests/test_notice_source_snapshot.py` 21项，更新来源提案7.4。未改 main.py、共享模型、数据库表、Provider、B/D 页面、缓存中间件或 OpenAPI 指纹。
+3. **设计与关键决策** — SAVEPOINT 保持读取视图且不提交调用方外层事务；先校验全部关系，后探测合法原件。文件缺失和暂不可核验分别处理，正文可读不等于原件可下载。通过实际双连接 WAL 验证「单次一致读取」和「相同revision下两次来源集合不同」可同时发生。没有发布新HTTP契约，不用内部结构代替A/B审查。
+4. **遇到的问题及解决** — 沙箱 fetch 因本机代理不可达失败；获工具授权在正常本机权限使用同一 Git 命令拉取成功，未改全局Git或网络配置。沙箱pytest无输出，已中止、没有测试结论；正常本机权限下合成隔离测试通过。补齐既有行坐标保留后，再运行主线后端回归；没有删断言或改业务来消除失败。
+5. **测试与验证** — Windows、现有 `.runtime/c-venv` Python环境，进程 TEMP/TMP 指向 `.runtime/source-snapshot-core/tmp`。首轮内部服务20项通过、5 warnings；补坐标用例后的21项包含在以下最终回归中：`.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest server/tests --ignore=server/tests/test_form_context.py -q -p no:cacheprovider --tb=short --disable-warnings`，**263 passed、5 warnings，37.10s，退出0**。仅排除原有未跟踪HTTP RED目标文件（路由仍缺），未排除主线测试，因此不是含RED工作区全量通过。`check-api-contract.py` 指纹保持 `aa40e470df16fa9b2143aa452c92dab9debaa18467e3b9a7694cbeb95df838ed`；文档检查251个本地目标通过（不含外链）、路径及diff检查通过。未运行前端、真实模型、Office、Android或新迁移。
+6. **运行证据** — 新模块、21项测试及本轮命令回执；测试只用隔离数据库／临时原件，无真实个人资料。原任务表 SHA-256 `7505058CA3E850F2C2931D6D5FF955FBB62505AF2556BE1E6C9B6C0E65A65DC7`、RED文件 `27D006800279F59864FE1ECDFD96F99A9E2F850123F2E33467EAEBBF06470547` 前后相同。本轮无提交、PR或APK，原始Codex会话分享／导出待保留。
+7. **未完成与限制** — 内部服务尚未接正式入口，form-context API及原10项HTTP目标未完成；内部错误仍需批准的HTTP映射，缓存及OpenAPI变更须最终审查。当前函数要求项目既有sqlite3.Row连接、已认证owner与合法根目录，不能作为任意数据库／匿名读取入口。文件探测不保证后续下载成功、未锁定导出全过程；B的草稿重选修复和刷新恢复、RF-015持久化／D共享迁移均未实施。下一步在B回核并获A/B公共范围确认后接入路由及B消费者，不提前创建迁移。
+
+提交授权补记（2026-11-24）：用户明确要求「提交并推送」。本次提交内部来源快照服务、21项测试、C来源提案／六例样例、RF-015范围答复及本人记录，共6个文件；原 `SPRINT_01_TASKS.md` 改动与未跟踪 `test_form_context.py` 排除并保留。开发阶段的未提交描述保留为历史状态，最终commit和远端分支以Git回执为准。提供PR DES，不自动创建PR或合并。
 
 ## RF-001｜C 模块走读子项
 

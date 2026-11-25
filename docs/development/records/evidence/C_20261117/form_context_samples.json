@@ -13,7 +13,7 @@
           "data": {
             "schema_version": 1, "batch_id": "sample-batch", "batch_revision": 2, "case_id": null,
             "sources": [
-              {"source_id": "sample-text", "kind": "text", "status": "ready", "error_code": null, "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "legacy_text", "text": "Synthetic notice", "lines": [], "document_ref": null, "parent_source_id": null, "availability": "readable"}
+              {"source_id": "sample-text", "kind": "text", "status": "ready", "error_code": null, "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "legacy_text", "text": "Synthetic notice", "lines": [], "document_ref": null, "parent_source_id": null, "name": "粘贴通知", "original": {"state": "not_applicable", "error_code": null}, "extraction": {"state": "available", "error_code": null}, "parent_reference_state": "none"}
             ]
           },
           "request_id": "sample-request-not-a-runtime-receipt"
@@ -30,7 +30,7 @@
           "data": {
             "schema_version": 1, "batch_id": "sample-file-batch", "batch_revision": 1, "case_id": null,
             "sources": [
-              {"source_id": "sample-file", "kind": "file", "status": "ready", "error_code": null, "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "document_lines", "text": "Synthetic notice", "lines": [{"line_id": "sample-stored-line", "document_id": "sample-document", "line_number": 1, "text": "Synthetic notice", "page": null, "locator": null}], "document_ref": {"kind": "document", "id": "sample-document", "revision": 1, "sha256": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "name": "notice.txt", "mime": "text/plain", "size": 16}, "parent_source_id": null, "availability": "readable"}
+              {"source_id": "sample-file", "kind": "file", "status": "ready", "error_code": null, "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "document_lines", "text": "Synthetic notice", "lines": [{"line_id": "sample-stored-line", "document_id": "sample-document", "line_number": 1, "text": "Synthetic notice", "page": null, "locator": null}], "document_ref": {"kind": "document", "id": "sample-document", "revision": 1, "sha256": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "name": "notice.txt", "mime": "text/plain", "size": 16}, "parent_source_id": null, "name": "notice.txt", "original": {"state": "present", "error_code": null}, "extraction": {"state": "available", "error_code": null}, "parent_reference_state": "none"}
             ]
           },
           "request_id": "sample-request-not-a-runtime-receipt"
@@ -52,21 +52,43 @@
       "response": {"status": 409, "headers": {"Cache-Control": "no-store"}, "body": {"detail": {"code": "SOURCE_REFERENCE_INVALID", "message": "来源引用待核对，请重新选择或上传"}}},
       "expected": "建议整次拒绝，不能按metadata补关系或返回其他批次原文；整次拒绝策略与错误码均待确认。"
     }
+,
+    {"id": "H07-parse-failed-original-present", "request": {"method": "GET", "path": "/api/v1/import-batches/sample-file-batch/form-context", "query": {"expected_revision": 1}}, "response": {"status": 200, "headers": {"Cache-Control": "no-store"}, "body": {"data": {"schema_version": 1, "batch_id": "sample-file-batch", "batch_revision": 1, "case_id": null, "sources": [{"source_id": "sample-file", "kind": "file", "status": "failed", "error_code": "DOCUMENT_PARSE_FAILED", "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "document_lines", "text": null, "lines": [], "document_ref": {"kind": "document", "id": "sample-document", "revision": 1, "sha256": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "name": "notice.txt", "mime": "text/plain", "size": 16}, "parent_source_id": null, "name": "notice.txt", "original": {"state": "present", "error_code": null}, "extraction": {"state": "failed", "error_code": "DOCUMENT_PARSE_FAILED"}, "parent_reference_state": "none"}]}, "request_id": "sample-request-not-a-runtime-receipt"}}, "expected": "解析失败与原件存在独立；B实际下载、核验hash并识别模板后可继续填。此为合成响应，不是接口或真实格式测试结果。"},
+    {"id": "H03-original-missing-text-available", "request": {"method": "GET", "path": "/api/v1/import-batches/sample-file-batch/form-context", "query": {"expected_revision": 1}}, "response": {"status": 200, "headers": {"Cache-Control": "no-store"}, "body": {"data": {"schema_version": 1, "batch_id": "sample-file-batch", "batch_revision": 1, "case_id": null, "sources": [{"source_id": "sample-file", "kind": "file", "status": "ready", "error_code": null, "content_hash": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "text_origin": "document_lines", "text": "Synthetic notice", "lines": [{"line_id": "sample-stored-line", "document_id": "sample-document", "line_number": 1, "text": "Synthetic notice", "page": null, "locator": null}], "document_ref": {"kind": "document", "id": "sample-document", "revision": 1, "sha256": "1b2f715994ec0f398efc3e3d46921751f962a812326936c8e9399abdcc5ecb83", "name": "notice.txt", "mime": "text/plain", "size": 16}, "parent_source_id": null, "name": "notice.txt", "original": {"state": "missing", "error_code": "DOCUMENT_CONTENT_MISSING"}, "extraction": {"state": "available", "error_code": null}, "parent_reference_state": "none"}]}, "request_id": "sample-request-not-a-runtime-receipt"}}, "expected": "原件缺失仍可显示获准历史原行；暂停依赖原件的导出，不清除其他表草稿。"}
   ],
-  "availability_proposal": [
-    {"value": "readable", "meaning": "有可读已存正文／行；有Document时当前原件存在。读取快照不保证随后下载成功。"},
-    {"value": "parse_failed", "meaning": "Document解析失败但原件仍在且正式关系有效；保留error_code和document_ref，text为null、lines为空。"},
-    {"value": "original_missing", "meaning": "Document和正式关系仍在，原件文件缺失；保留引用与可用历史行，不能宣称原件可下载。此态优先于parse_failed。"},
-    {"value": "not_acquired", "meaning": "没有取得Document的失败来源；document_ref为null、text为null、lines为空。并不为未授权获取的附件候选新建source。"}
-  ],
+  "review_revision": "2026-11-24-C-proposal-pending-B-and-AB",
+  "read_state_proposal": {
+    "original.state": [
+      "present",
+      "missing",
+      "not_acquired",
+      "not_applicable",
+      "unverified"
+    ],
+    "extraction.state": [
+      "available",
+      "failed",
+      "empty",
+      "not_acquired"
+    ],
+    "parent_reference_state": [
+      "none",
+      "valid",
+      "missing"
+    ],
+    "warning": "替代单一availability；不是数据库状态。present仅表示读取时观察到文件存在，实际下载仍鉴权并由B校验字节hash；无can_export布尔保证。"
+  },
+  "consumer_binding_proposal": {
+    "identity": "当前owner分区内batch_id + source_id；同名或相同hash不合并来源",
+    "requirement_binding": "B以要求来源source_id及版本/hash和真实line_id（如有），显式绑定目标附件source_id集合；共用要求可选多表，编号不明确由用户选择。不是C自动产生的正式DTO字段。",
+    "recheck": "同revision也重读；逐表核附件关系、原件、通知和规则。要求变化保值但撤销导出确认；移除重传的新source不自动继承旧值。"
+  },
   "pending_decisions": [
-    "URL、必传非负expected_revision、schema_version类型和字段名",
-    "IMPORT_BATCH_STALE／SOURCE_REFERENCE_INVALID错误包络及整次拒绝策略",
-    "历史metadata有document_id但正式关系缺失时拒绝，不自动修库；需另定历史处理方案",
-    "父来源同owner／同批次校验，非法父引用的拒绝语义",
-    "数据库一致快照边界；文件可用性与随后鉴权下载之间仍可能变化",
-    "content_hash对应存储对象：legacy_text为UTF-8已存正文，document_lines为Document原件hash；客户端下载后另验原件hash",
-    "B接入时的用途、字段消费、同通知多表恢复与指纹冲突交互；本轮不实现",
-    "正式接口及成功响应模型评审后，再明确OpenAPI增量并批准更新指纹"
+    "B回核要求绑定快照所需字段，以及original/extraction/parent_reference_state的消费；用户已接受第4/6项方向，尚无公共接口最终签认",
+    "A/B与C审URL、必传非负expected_revision、最终字段/枚举、401/404/422及两种409包络、no-store范围与OpenAPI修改",
+    "一次数据库一致读取不保证同revision来源集合固定，也不保证稍后原件下载成功；文件暂不可核验不能误报missing",
+    "缺失父来源返回空父ID并提示待核对；跨owner或batch的父引用整次拒绝，不泄露内容或ID",
+    "历史正式关系缺失不自动修库；普通坏附件逐表处理，授权/正式关系非法整次拒绝",
+    "当前页保留与RF-012刷新/重新登录恢复分别验收；首版无正式草稿存储增量"
   ]
 }

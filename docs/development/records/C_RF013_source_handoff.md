@@ -1,7 +1,40 @@
 # 有绪 CampusWeave｜RF-013 通知来源与填表移交准备
 
+## 2026-11-24 C 侧类型化读取客户端（本地待评审）
+
+新增 `mobile/src/features/imports/formContext.ts`，供后续B消费接入：
+
+```ts
+import {readFormContext, FormContextInvalid} from '../../features/imports/formContext';
+// 由页面在用户主动使用工作区时调用；不在后台自动读取。
+const context = await readFormContext(batchId, expectedRevision);
+```
+
+复用现有鉴权／刷新／错误传递机制，每次请求明确cache=no-store，不缓存或持久化正文。成功后校验schema_version、批次／版本、来源唯一性、原件与解析状态、文档与行归属、正文与真实行一致、父引用存在及空值语义。无效响应抛出不含原文的FormContextInvalid；HTTP错误继续保留ApiError的status/code；网络失败不回退到Demo。此处只检查响应结构与相互引用，不重算原件字节hash、不替代服务端授权或B下载后的hash复核。
+
+没有接B页面、创建要求绑定或决定允许导出，未实现输入保留和正式草稿恢复。B仍应在页面按来源身份消费，保留编辑并处理版本／引用／网络错误；不得只因本客户端接受响应就继续导出。该分支基于HTTP提交f1bf3b4，须先合入其接口分支，或在接口合并后重新同步。
+
+30项客户端回归通过；另从真实FastAPI接口以合成账户／原件生成3组响应，经Vite加载实际客户端校验通过，含旧文本、真实行、原件缺失、空解析及未取得原件。该兼容检查是TestClient与Node的组合，不代表浏览器网络、B工作区联调或Android验收。
+
+## 2026-11-24 正式 HTTP 接入（本地待评审）
+
+以下更新优先于本文历史“路由未实现”描述。用户转达 A 对 URL、读取范围、权限、版本、异常、缓存及限定修改范围的确认，并随后明确指令“开始开发”。本次据此实施限定接口，不代记 B 本人已回核，不代表双表联调或整卡验收。
+
+- `GET /api/v1/import-batches/{batch_id}/form-context?expected_revision=<非负整数>`，沿现有 Bearer 鉴权与 `data/request_id` 包络，响应 `schema_version=1`。
+- 必传版本；先按 owner 查批次，再检查版本。不存在／其他账户为404，stale为409 `IMPORT_BATCH_STALE`，非法正式关系或父引用为409 `SOURCE_REFERENCE_INVALID`；沿现有 `detail` 错误包络。401、422及上述响应均为 `Cache-Control: no-store`，只作用于本路由。
+- 输出批次ID／版本、可空case_id及sources；来源身份为source_id，含name/kind/status及可空安全error_code。无合法Document时document_ref为null；合法引用在原件缺失时仍保留，含id/revision/sha256/name/mime/size/kind。
+- text_origin为document_lines／legacy_text或null，content_hash为Document原件hash或粘贴正文UTF-8 hash，无对应内容时null。没有正文时text为null（已存空粘贴文本可保留空串），无真实行时lines为空数组；保留真实行ID、顺序和已有定位字段，不伪造Evidence。
+- original.state为present/missing/not_acquired/not_applicable/unverified；extraction.state为available/failed/empty/not_acquired；各自error_code正常为null。二者分开判断，present不保证之后下载成功。
+- parent_reference_state为none/valid/missing；仅valid返回parent_source_id，其他为null。非法父引用整次拒绝；已删父来源不掩盖子附件原件状态。
+- 同次数据库读取一致，不改来源写入事务；同revision仍可能新增来源。B按source_id、Document版本/hash、相关通知依据及状态逐表复核，实际下载另核字节hash。要求绑定、输入保留与导出决定由B消费端实现。
+- 新路由不初始化数据库、不抓取、不解析、不调用模型、不生成Case/Evidence/Task或草稿；没有迁移、B页面、正式恢复或Android改动。HTTP定向回归与内部服务共41项通过，完整后端结果见C记录。
+
+OpenAPI已静态核实：移除新增GET路径后的完整指纹与原接受基准相同，只有该路径新增；据本次授权更新基准供PR评审。B最终消费回核、双表实际联调和真机仍待完成。
+
 2026-11-09；负责人 C；基线 `ce597a1`；分支 `docs/RF-013-source-handoff`。
 性质：现有 API 集成验证与 C/B 接口提案，未实现正式移交入口，RF-013/RF-011 整卡未完成。
+
+**2026-11-24 评审补充：**用户转达 B 的消费意见并接受未变表保留输入、改版表旧值仅供对照及普通失败逐表处理的方向。C 的字段调整见文末第7节；替代早期以单一 `availability` 判定可填写性的建议。URL、最终字段、权限、错误、缓存与 OpenAPI 修改范围仍待 A/B 公共审查；H07 修复已合入，不再是待修前置。
 
 **最新准备进展（2026-11-17）：**用户明确选择“尚未确认，先准备接口样例和回归测试”。本轮以最新 main `00d70a9` 创建 `docs/RF-013-form-context-preparation`，仅新增合成接口样例和10项目标回归，更新本说明与 C 工作记录；没有实现接口或修改 OpenAPI 基准。H07最小修复已另行提交为 `eef559b`，对应 [PR #18](https://github.com/Hanxx1/RuleFlow/pull/18)，本轮核对仍 open、未合并；以下11-10描述为历史快照，不能当作当前PR状态。
 
@@ -150,6 +183,8 @@ B 请确认逐表复核是否足以支持填表期间的编辑保留，以及父
 
 ### 11 月 23 日：可重复边界测试与接口验收准备
 
+> #30 的“接口未实现”记录对应 11 月 23 日的基线。主线 009bb69 已包含快照服务、HTTP 接口和类型化客户端，B 的逐表复核与导出联调仍待验证。
+
 用户确认「尚未确认，先做测试与接口准备」。基线 `ce3ecd4`，本轮没有实现 form-context、改变版本推进或父来源删除行为。新增 [现有来源边界测试](../../../server/tests/test_source_handoff_boundaries.py)，替代此前未保留的一次性探针：
 
 - 获取附件的合成 fetch 回调内读取批次，再与请求结束后的批次比较：同 revision 下来源由一条变两条。此测试是当前限制的观察基线，不是要求未来永远维持该行为，也不是并发事务一致性的证明。
@@ -168,3 +203,53 @@ B 请确认逐表复核是否足以支持填表期间的编辑保留，以及父
 | 成功、版本冲突、引用失败及拒权 | 不抓外链、不解析、不调用模型，不新增或更新业务数据 | 对新接口逐路径补零写入和 no-store 检查；现有读取基线不自动证明新路由 |
 
 定向回归实际 19 passed（新增 5 项＋原恢复／移交 14 项），具体环境、首次失败和限制见 C 工作记录。没有将缺失路由的目标测试放入本分支默认通过门禁，也未跳过主线用例。原工作区的 10 项 RED 测试保留原状；获确认后再补父引用、快照及异常目标并与实码一起评审。
+
+## 7. 2026-11-24 B 消费意见后的 C 侧调整（待最终公共评审）
+
+依据为用户在本会话转达的 B 意见及用户体验方向选择，不代签 A/B 的公共接口批准。远端核查 main 为 `dbc514d`；[#30](https://github.com/Hanxx1/RuleFlow/pull/30) 的来源边界和已合并 [#33](https://github.com/Hanxx1/RuleFlow/pull/33) 的草稿缺陷复现继续复用。以下字段是待 B 回核的修订提议，未改正式 API、OpenAPI 或本地 RED 测试。
+
+### 7.1 来源身份与要求绑定
+
+- 当前账户分区内以 `batch_id + source_id` 标识一份附件，`document_ref.id + revision + sha256` 核对原件版本；同名或字节相同的两个来源仍是两份表。重排不改身份，移除后重新上传形成新 source 时不凭文件名或 hash 自动接回旧草稿；本机尚未上传的文件身份由 B 的页面方案解决，C 不伪造服务端 source_id。
+- C 提供来源 `name`（展示）、原文、真实行 ID、Document 引用、经校验的父子关系及各自状态。文件名或原文附件编号只是匹配提示，不是身份或授权依据。只返回批次中真实存在的来源，不为未取得的网页附件候选造 source。
+- B 从通知原文提取要求，在本次填写快照中保存「要求来源 source_id／版本或正文 hash／真实 line_id（如有）→目标附件 source_id 集合→用户核对结果」。这是 B 的消费模型建议，不新增 C 接口的自动规则归属字段，也不在本轮引入正式草稿存储。共用要求显式指向 A、B 两个 source；“附件一”对应不清时由用户选择，不能按数组序号推断。legacy_text 可显示原句与 hash，但无正式行引用的要求仍标待核对。
+- 逐表复核同时检查目标附件和其依赖的通知来源／要求绑定。共用通知变化时，保留受影响表输入、撤销导出确认并重新核对；只新增无关来源不自动清空其他表。原件版本改变、权限失效或复核请求失败则暂停该次导出。已获确认的页面保留方向不等于刷新／重新登录恢复获批；后者仍归 RF-012。
+
+### 7.2 原件与正文分开表达
+
+保留现有来源 `status/error_code` 表示导入处理情况；不能用它或单一 `availability` 决定能否填写。建议将读取 DTO 中的 `availability` 替换为下列对象，配合既有 `text_origin/text/lines/document_ref`；不改数据库状态枚举。
+
+| 提议字段 | 值与语义 |
+|---|---|
+| `original.state` | `present`：读取时观察到原件存在；`missing`：Document 有效但原件缺失；`not_acquired`：尚无原件；`not_applicable`：直接粘贴文本本来没有文件；`unverified`：存储暂时无法核验。`present` 不是下载成功或可导出的保证。 |
+| `original.error_code` | 缺失／暂时不可核验的安全原因，正常为空；不含磁盘路径。原件读取仍走现有鉴权 content API，B 在实际下载后核字节 hash。 |
+| `extraction.state` | `available`：有已存正文或真实行；`failed`：解析失败（含不支持的格式，具体原因见 error_code）；`empty`：解析未产出正文；`not_acquired`：尚无可解析输入。与原件存在与否独立。 |
+| `extraction.error_code` | 解析错误或空结果原因，正常为空；与原件读取错误分别保留。读取接口不重跑解析。 |
+| `parent_reference_state` | `none`：本来无父来源；`valid`：同 owner 同 batch 的父来源存在；`missing`：原父来源已删。仅 `valid` 返回 `parent_source_id`；非法父引用整次拒绝，不返回其标识符。 |
+
+例如：解析失败且原件存在＝`original.present + extraction.failed`，保留合法 document_ref；B 能下载、核验并识别模板时可继续填。原件缺失但历史原行仍在＝`original.missing + extraction.available`，允许展示获准原句，暂停依赖原件的导出。旧粘贴正文＝`original.not_applicable + extraction.available`，不错误提示原件丢失。父网页已删不等于附件原件缺失，不能用父状态覆盖附件状态。
+
+### 7.3 错误与继续操作边界
+
+| 场景 | C/B 对齐后的建议行为（最终错误包络待 A/B 审） |
+|---|---|
+| batch revision 不符 | `409 IMPORT_BATCH_STALE`，保留当前页输入，重读后逐表复核；不能只校验 revision。同版本新增来源仍须读到并检查依赖变化。 |
+| 当前用户无权读取批次 | 沿现有 401／404 门禁，不返回正文或来源信息。 |
+| 跨 owner／批次、伪造或缺失正式 Document 关系、非法父引用 | 建议整次 `409 SOURCE_REFERENCE_INVALID`；不返回部分来源内容或越界 ID，不自动修关系，保留页面输入并暂停依赖该响应的操作。授权错误不能降为普通坏附件。 |
+| 原件未取得／缺失、解析失败／格式不支持 | 整体读取可成功，逐来源返回两个独立状态；只限制受影响表所需的操作。解析失败不自动禁止使用有效且可核验的原件。 |
+| 父来源已删，子附件正式关系仍有效 | 返回 `parent_reference_state=missing`，可核验原件继续填写。若命名、字数或提交要求只能从丢失父通知核实，允许保留当前草稿，暂停按通知确认导出；不把旧确认当作当前有效。 |
+| 原件存储暂不可核验／复核请求失败 | 不把 I/O 或网络故障当成确认丢失；保留输入，暂停该次相关导出，允许之后重试核验。 |
+
+成功和明确业务错误建议 `no-store`；401／422 的覆盖范围、父状态字段名、最终枚举及错误码仍待 A/B 与 C 审定。一次数据库一致读取与稍后的文件下载之间仍存在变化窗口，首版不承诺原子锁定整个导出流程。
+
+**验收补充（预期，未执行）：**同字节双表不同 source、仅调序保留两表；只换 A 时 B 保留、A 旧值不自动带入；同 revision 获取中新来源；共用通知变化保值但撤销确认；解析失败仍可核原件；原件丢失仍可读历史行；坏附件逐表与非法引用整次拒绝；父来源缺失且要求不可核时阻断通知导出。#33 仅证明缺陷复现，修复后的断言由 B 随实际实现更新。现有样例 JSON 已按本节调整，均为提议而非运行结果。
+
+**待 B 回核：**要求绑定快照所需字段、移除重传的新身份处理，以及上述原件／解析／父引用状态能否覆盖页面操作。反馈后交 A/B 审最终读取接口范围，不在本轮扩充正式存储或来源写入事务。
+
+### 7.4 11 月 24 日继续开发：内部只读快照切片
+
+用户要求基于对接继续开发。先落地 C 内部 [notice_source_snapshot.py](../../../server/app/services/notice_source_snapshot.py) 的 `read_source_snapshot`，由调用方提供已认证 owner、SQLite连接、批次版本和原件根目录。该函数尚无正式路由消费者，不是已发布 DTO／错误协议，不改变本节最终公共评审边界。
+
+使用 SAVEPOINT 读取同一数据库视图，按 owner 校验批次及所有来源、正式原件关系、文档／行和父引用；全部关系通过后才检查文件。保留真实行ID、页码及已有坐标；旧粘贴正文不造行。原件仅探测文件状态、不读字节、不重新解析，present 不等于可下载保证。服务不提交或回滚调用方原有事务，不创建 Case/Evidence/Task，也不生成 B 的规则绑定或导出决定。
+
+[21项内部服务测试](../../../server/tests/test_notice_source_snapshot.py) 覆盖身份、状态、权限／引用、零写入及无抓取／解析／模型调用、调用方事务保护和真实双连接 WAL 读取：首次读取中另一连接在同 revision 新增来源，当前读取保持旧视图，下一次读取看到新增来源。正式 route、缓存头、错误状态映射和 OpenAPI 仍未接入；原10项 HTTP RED 目标保持不变，不拿服务通过当作它们已通过。实际命令和回归范围见 C 工作记录本日续记。
