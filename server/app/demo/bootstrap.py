@@ -68,7 +68,7 @@ def _seed_public_cases(connection,owner_id):
         notice=bundle['notice'];refs={b['id']:'block:'+_id(owner_id,b['id']) for b in bundle['blocks']}
         connection.execute('INSERT INTO cases(id,owner_id,title,category,status,relevance,deadline,created_at,updated_at,deadline_source,deadline_evidence_ids_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(case_id,owner_id,notice['title'],notice['category'],'demo','UNKNOWN',None,fixture_time,fixture_time,None,'[]'))
         for block in bundle['blocks']:
-            connection.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(refs[block['id']],owner_id,case_id,block['source_name'],block['text'],block['locator']+' '+block['source_url'],None,fixture_time))
+            connection.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(refs[block['id']],owner_id,case_id,block['source_name'],block['text'],block['locator']+' '+block['source_url'],None,fixture_time))
         for task in bundle['tasks']['nodes']:
             if not task['evidence_ids'] or any(ref not in refs for ref in task['evidence_ids']):raise ValueError('Public fixture lacks evidence')
             connection.execute('INSERT INTO tasks(id,owner_id,case_id,title,status,deadline,evidence_ids_json,created_at,updated_at,duration_minutes) VALUES(?,?,?,?,?,?,?,?,?,?)',(_id(owner_id,task['id']),owner_id,case_id,task['title'],'todo',None,json.dumps([refs[ref] for ref in task['evidence_ids']]),fixture_time,fixture_time,None))
@@ -138,7 +138,7 @@ def bootstrap_owner(owner_id: str) -> dict[str, str | bool]:
             evidence_id = "block:" + _id(owner_id, f"evidence:{block['id']}")
             evidence_ids[block["id"]] = evidence_id
             connection.execute(
-                "INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)",
+                "INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)",
                 (
                     evidence_id,
                     owner_id,
