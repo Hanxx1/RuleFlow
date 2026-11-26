@@ -163,7 +163,7 @@ def task_dtos(tasks,edges,owner_id:str,case_id:str):
   materials_by_task.setdefault(task_id,[]).append(material)
  files_by_task={task_id:[] for task_id in by}
  for row in file_links:
-  item=dict(row);task_id=item.pop('task_id');item['content_url']=f"/api/v1/vault/items/{item['id']}/content";files_by_task.setdefault(task_id,[]).append(item)
+  item=dict(row);task_id=item.pop('task_id');item['content_url']=f"/api/v1/tasks/{task_id}/vault/items/{item['id']}/content";files_by_task.setdefault(task_id,[]).append(item)
  result=[]
  for task in tasks:
   item=dict(task);item['evidence_ids']=json.loads(item.pop('evidence_ids_json'))
@@ -186,12 +186,17 @@ def vault_item_json(row):
  item['content_url']=f"/api/v1/vault/items/{item['id']}/content"
  return item
 
-def validate_vault_links(case_ids:list[str],task_ids:list[str],owner_id:str):
+def validate_vault_links(case_ids:list[str],task_ids:list[str],owner_id:str,connection=None):
  if len(set(case_ids))!=len(case_ids) or len(set(task_ids))!=len(task_ids):raise HTTPException(422,'关联 ID 不能重复')
- owned_cases={case_id:owned('cases',case_id,owner_id) for case_id in case_ids}
- owned_tasks={task_id:owned('tasks',task_id,owner_id) for task_id in task_ids}
+ def lookup(table,key,owner):
+  if connection is None:return owned(table,key,owner)
+  row=connection.execute(f'SELECT * FROM {table} WHERE id=? AND owner_id=?',(key,owner)).fetchone()
+  if row is None:raise HTTPException(404,'资源不存在')
+  return row
+ owned_cases={case_id:lookup('cases',case_id,owner_id) for case_id in case_ids}
+ owned_tasks={task_id:lookup('tasks',task_id,owner_id) for task_id in task_ids}
  for task_id,task in owned_tasks.items():
-  if task['case_id'] not in owned_cases:raise HTTPException(422,f'任务 {task_id} 必须关联其所属事项')
+  if task['case_id'] is not None and task['case_id'] not in owned_cases:raise HTTPException(422,f'任务 {task_id} 必须关联其所属事项')
 
 def parse_form_ids(value:str,field_name:str):
  try:parsed=json.loads(value)
@@ -352,7 +357,7 @@ def dashboard(user=Depends(current_user)):
  for row in material_rows:
   item=dict(row);task_id=item.pop('task_id');item['evidence_ids']=json.loads(item.pop('evidence_ids_json'));materials_by_task.setdefault(task_id,[]).append(item)
  for row in file_rows:
-  item=dict(row);task_id=item.pop('task_id');item['content_url']=f"/api/v1/vault/items/{item['id']}/content";files_by_task.setdefault(task_id,[]).append(item)
+  item=dict(row);task_id=item.pop('task_id');item['content_url']=f"/api/v1/tasks/{task_id}/vault/items/{item['id']}/content";files_by_task.setdefault(task_id,[]).append(item)
  today_tasks=[]
  for row in task_rows:
   if row['status'] not in {'todo','in_progress'}:continue
@@ -487,16 +492,22 @@ def patch_vault_item(item_id:str,body:VaultPatch,user=Depends(current_user)):
  if not fields:raise HTTPException(422,'至少提供一个材料字段')
  category=body.category if 'category' in fields else current['category']
  if category not in VAULT_CATEGORIES:raise HTTPException(422,'无效材料分类')
+ if 'name' in fields and body.name is None:raise HTTPException(422,'name 不能为 null')
  with conn() as c:
-  current_cases=[row['case_id'] for row in c.execute('SELECT case_id FROM vault_case_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id)).fetchall()]
-  current_tasks=[row['task_id'] for row in c.execute('SELECT task_id FROM vault_task_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id)).fetchall()]
- linked_cases=body.case_ids if body.case_ids is not None else current_cases;linked_tasks=body.task_ids if body.task_ids is not None else current_tasks;validate_vault_links(linked_cases,linked_tasks,user['id']);item_name=body.name if 'name' in fields else current['name']
- if item_name is None:raise HTTPException(422,'name 不能为 null')
- with conn() as c:
-  c.execute('UPDATE vault_items SET name=?,category=?,updated_at=? WHERE id=? AND owner_id=?',(item_name,category,stamp(),item_id,user['id']))
-  c.execute('DELETE FROM vault_case_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id));c.execute('DELETE FROM vault_task_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id))
-  for case_id in linked_cases:c.execute('INSERT INTO vault_case_links(owner_id,vault_item_id,case_id) VALUES(?,?,?)',(user['id'],item_id,case_id))
-  for task_id in linked_tasks:c.execute('INSERT INTO vault_task_links(owner_id,vault_item_id,task_id) VALUES(?,?,?)',(user['id'],item_id,task_id))
+  c.execute('BEGIN IMMEDIATE')
+  c.execute('UPDATE vault_items SET name=COALESCE(?,name),category=COALESCE(?,category),updated_at=? WHERE id=? AND owner_id=?',(body.name,body.category,stamp(),item_id,user['id']))
+  if body.case_ids is not None or body.task_ids is not None:
+   def linked_ids(table,column):
+    return [row[0] for row in c.execute(f'SELECT {column} FROM {table} WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id))]
+   cases=body.case_ids if body.case_ids is not None else linked_ids('vault_case_links','case_id')
+   tasks=body.task_ids if body.task_ids is not None else linked_ids('vault_task_links','task_id')
+   validate_vault_links(cases,tasks,user['id'],connection=c)
+   if body.case_ids is not None:
+    c.execute('DELETE FROM vault_case_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id))
+    c.executemany('INSERT INTO vault_case_links(owner_id,vault_item_id,case_id) VALUES(?,?,?)',[(user['id'],item_id,k) for k in cases])
+   if body.task_ids is not None:
+    c.execute('DELETE FROM vault_task_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id))
+    c.executemany('INSERT INTO vault_task_links(owner_id,vault_item_id,task_id) VALUES(?,?,?)',[(user['id'],item_id,k) for k in tasks])
  return data(vault_item_json(owned('vault_items',item_id,user['id'])))
 
 @app.delete('/api/v1/vault/items/{item_id}')
@@ -509,10 +520,70 @@ def delete_vault_item(item_id:str,user=Depends(current_user)):
 @app.get('/api/v1/vault/items/{item_id}/content')
 def get_vault_content(item_id:str,user=Depends(current_user)):
  item=owned('vault_items',item_id,user['id'])
- try:content=get_vault_content_provider().read(user['id'],item['content_provider'],item['content_key'])
+ return vault_content_response(item, user['id'])
+
+def vault_content_response(item, owner_id, download=False):
+ try:content=get_vault_content_provider().read(owner_id,item['content_provider'],item['content_key'])
  except FileNotFoundError:raise HTTPException(404,'材料内容不存在')
  filename=quote(item['name'],safe='')
- return Response(content=content,media_type=item['mime'],headers={'Content-Disposition':f"inline; filename*=UTF-8''{filename}",'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
+ disposition='attachment' if download else 'inline'
+ return Response(content=content,media_type=item['mime'],headers={'Content-Disposition':f"{disposition}; filename*=UTF-8''{filename}","Content-Security-Policy":"sandbox; default-src 'none'",'Cache-Control':'private, no-store','X-Content-Type-Options' :'nosniff'})
+
+def task_vault_row(connection, task_id, item_id, owner_id):
+ row=connection.execute("""
+  SELECT v.*, t.case_id FROM tasks t JOIN vault_items v ON v.owner_id=t.owner_id
+  WHERE t.id=? AND v.id=? AND t.owner_id=?
+ """,(task_id,item_id,owner_id)).fetchone()
+ if row is None:raise HTTPException(404,'资源不存在')
+ return row
+
+def task_vault_metadata(row,task_id):
+ item={key:row[key] for key in ('id','name','category','mime','size','created_at','updated_at')}
+ item['content_url']=f"/api/v1/tasks/{task_id}/vault/items/{item['id']}/content"
+ return item
+
+@app.put('/api/v1/tasks/{task_id}/vault/items/{item_id}')
+def attach_task_vault_item(task_id:str,item_id:str,user=Depends(current_user)):
+ owner=user['id']
+ with conn() as c:
+  c.execute('BEGIN IMMEDIATE')
+  item=task_vault_row(c,task_id,item_id,owner)
+  if item['case_id'] is not None:
+   case_link=c.execute("""SELECT 1 FROM vault_case_links l JOIN cases c
+    ON c.id=l.case_id AND c.owner_id=l.owner_id
+    WHERE l.owner_id=? AND l.vault_item_id=? AND l.case_id=?""",(owner,item_id,item['case_id'])).fetchone()
+   if case_link is None:raise HTTPException(422,'资料必须先关联任务所属事项')
+  c.execute("""INSERT INTO vault_task_links(owner_id,vault_item_id,task_id) VALUES(?,?,?)
+   ON CONFLICT(owner_id,vault_item_id,task_id) DO NOTHING""",(owner,item_id,task_id))
+ return data(task_vault_metadata(item,task_id))
+
+@app.delete('/api/v1/tasks/{task_id}/vault/items/{item_id}')
+def detach_task_vault_item(task_id:str,item_id:str,user=Depends(current_user)):
+ with conn() as c:
+  c.execute('BEGIN IMMEDIATE')
+  task_vault_row(c,task_id,item_id,user['id'])
+  removed=c.execute('DELETE FROM vault_task_links WHERE owner_id=? AND vault_item_id=? AND task_id=?',
+                    (user['id'],item_id,task_id)).rowcount
+ return data({'id':item_id,'unlinked':bool(removed)})
+
+@app.get('/api/v1/tasks/{task_id}/vault/items')
+def list_task_vault_items(task_id:str,user=Depends(current_user)):
+ owned('tasks',task_id,user['id'])
+ with conn() as c:
+  rows=c.execute("""SELECT v.* FROM vault_task_links l JOIN vault_items v
+   ON v.id=l.vault_item_id AND v.owner_id=l.owner_id
+   WHERE l.task_id=? AND l.owner_id=? ORDER BY v.created_at DESC,v.id""",(task_id,user['id'])).fetchall()
+ return data([task_vault_metadata(row,task_id) for row in rows])
+
+@app.get('/api/v1/tasks/{task_id}/vault/items/{item_id}/content')
+def get_task_vault_content(task_id:str,item_id:str,download:bool=False,user=Depends(current_user)):
+ with conn() as c:
+  row=c.execute("""SELECT v.* FROM vault_task_links l JOIN vault_items v
+   ON v.id=l.vault_item_id AND v.owner_id=l.owner_id JOIN tasks t
+   ON t.id=l.task_id AND t.owner_id=l.owner_id
+   WHERE l.owner_id=? AND l.task_id=? AND l.vault_item_id=?""",(user['id'],task_id,item_id)).fetchone()
+ if row is None:raise HTTPException(404,'资源不存在')
+ return vault_content_response(row,user['id'],download)
 
 @app.post('/api/v1/cases')
 def create_case(body:CaseIn,user=Depends(current_user)):
