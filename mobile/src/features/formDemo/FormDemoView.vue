@@ -11,13 +11,14 @@ import ApplicationReasonDraft from './ApplicationReasonDraft.vue'
 import {experienceSource,loadExperiences} from '../experience/archive'
 import {reviewAccountProfile,staleProfileLabels,type ProfileCandidate} from './accountFormProfile'
 import {awardCandidates,currentAward,retainAwardUses,type AwardUse} from './accountAwardFill'
-import {reasonAwards,reasonField,type ReasonVersion} from './reasonDraft'
+import {reasonAwards,type ReasonVersion} from './reasonDraft'
 import {exportGenericForm,mappedFields} from './genericForm'
 import {createOfficeDelivery,officeFilename} from './officeDelivery'
 import {prepareVaultFormArchive,VaultArchiveUncertain,type VaultArchiveReceipt} from './vaultFormArchive'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
-import {clearFormDrafts,DraftRevisionConflict,readDraftReference,readFormDrafts,recoverableFields,
-  saveFormDraft,type SavedFormDraft} from './savedFormDrafts'
+import {clearFormDrafts,DraftRevisionConflict,DraftSessionExpired,draftRetentionDays,draftRetentionMs,
+  observeDraftSessionRevocation,readDraftReference,readFormDrafts,recoverableFields,
+  saveFormDraft,type DraftSession,type SavedFormDraft} from './savedFormDrafts'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
 import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile,type FormProfileOwner} from './demoProfile'
@@ -79,13 +80,28 @@ const priorDraftKey = ref('')
 const carriedFields = ref<string[]>([])
 const savedDrafts = ref<SavedFormDraft[]>([])
 const draftRevisions = new Map<string,number>()
-const keepReason = ref(false)
+const draftBusy = ref(false)
 const draftConflict = ref(false)
 const draftError = ref('')
 const draftMessage = ref('')
 let formVersion = 0
 let mounted = true
-onBeforeUnmount(()=>{mounted=false})
+let draftRequest = 0
+let draftExpiryTimer: ReturnType<typeof setTimeout> | undefined
+let stopDraftRevocations: (()=>void) | undefined
+onBeforeUnmount(()=>{
+  mounted=false
+  stopDraftRevocations?.()
+  clearTimeout(draftExpiryTimer)
+})
+watch(savedDrafts,records=>{
+  clearTimeout(draftExpiryTimer)
+  if (!records.length) return
+  const expires = Math.min(...records.map(record=>record.savedAt+draftRetentionMs))
+  draftExpiryTimer = setTimeout(()=>{
+    savedDrafts.value = savedDrafts.value.filter(record=>Date.now()<record.savedAt+draftRetentionMs)
+  },Math.max(0,expires-Date.now()))
+})
 const priorDrafts = computed(()=>{
   if (!intake.value?.currentDraftKeys) return []
   const items = new Map((intake.value.previousDrafts || []).filter(item=>drafts.has(item.key))
@@ -101,14 +117,15 @@ const priorDrafts = computed(()=>{
 })
 const priorValues = computed(()=>drafts.get(priorDraftKey.value)?.values ||
   savedDrafts.value.find(item=>item.key===priorDraftKey.value)?.values || {})
-const priorReason = computed(()=>priorValues.value.reason ||
-  savedDrafts.value.find(item=>item.key===priorDraftKey.value)?.reason?.value)
+const priorReason = computed(()=>drafts.get(priorDraftKey.value)?.values.reason)
 const priorAwardFields = computed(()=>new Set((drafts.get(priorDraftKey.value)?.awardUses || [])
   .flatMap(use=>Object.keys(use.fields))))
 const comparableFields = computed(()=>scenarioFields(scenario.value)
   .filter(field=>field.id!=='reason' && priorValues.value[field.id]?.trim() && !priorAwardFields.value.has(field.id)))
-const draftFieldLabels = computed(()=>recoverableFields(scenario.value).map(field=>field.label))
-const reasonLabel = computed(()=>reasonField(scenario.value)?.label)
+const draftFields = computed(()=>recoverableFields(scenario.value))
+const currentSavedDraft = computed(()=>savedDrafts.value.find(item=>item.key===intake.value?.draftKey))
+const draftExpiryLabel = computed(()=>currentSavedDraft.value
+  ? new Date(currentSavedDraft.value.savedAt+draftRetentionMs).toLocaleString('zh-CN') : '')
 
 
 const review = computed(()=>reviewForm(scenario.value,values.value,Boolean(photo.value)))
@@ -191,8 +208,11 @@ async function switchOwner(next: FormProfileOwner) {
   ready.value = false
   saving.value = false
   clearDrafts()
+  draftRequest++
+  draftBusy.value = false
   savedDrafts.value = []
-  keepReason.value = false
+  priorDraftKey.value = ''
+  carriedFields.value = []
   draftConflict.value = false
   draftError.value = ''
   draftMessage.value = ''
@@ -215,120 +235,136 @@ async function switchOwner(next: FormProfileOwner) {
     if (loadVersion===version) ready.value = true
   }
 }
-onMounted(()=>void switchOwner(owner.value))
+onMounted(()=>{
+  void switchOwner(owner.value)
+  if (props.fromNotice) stopDraftRevocations = observeDraftSessionRevocation((revokedOwner,epoch)=>{
+    if (account.user?.id!==revokedOwner || account.formDraftEpoch===null || account.formDraftEpoch>=epoch) return
+    account.formDraftEpoch = null
+    resetRevokedDraftPage()
+    draftError.value = new DraftSessionExpired().message
+  })
+})
 
 function invalidateIntake() {
   if (intake.value) rememberDraft(intake.value.draftKey ?? 'notice:'+intake.value.id)
   intake.value = undefined
   preview.value = false
   draftMessage.value = ''
+  draftRequest++
+  draftBusy.value = false
   changed()
 }
 
-function acceptIntake(selection: NoticeSelection) {
+function resetRevokedDraftPage() {
+  invalidateIntake()
+  intakeKey.value++
+  void switchOwner('local:notice')
+}
+
+async function acceptIntake(selection: NoticeSelection) {
   if (intake.value) invalidateIntake()
-  loadSavedDrafts()
+  const batch = props.savedBatchId
+  const key = selection.draftKey ?? 'notice:'+selection.id
+  if (batch && selection.draftKey) {
+    const reading = runDraftAction(session=>readFormDrafts(session,batch))
+    const request = draftRequest
+    const records = await reading
+    if (!mounted || request!==draftRequest) return
+    savedDrafts.value = records ?? []
+  }
   intake.value = selection
   priorDraftKey.value = ''
   carriedFields.value = []
-  const key = selection.draftKey ?? 'notice:'+selection.id
   const saved = savedDrafts.value.find(item=>item.key===key && item.scenarioId===selection.scenario.id)
   if (!draftRevisions.has(key)) draftRevisions.set(key,saved?.revision ?? 0)
-  keepReason.value = Boolean(saved?.reason)
-  draftConflict.value = false
   const restored = saved && !drafts.has(key)
-  if (restored) drafts.set(key,{
-    values:{...saved.values,...(saved.reason ? {reason:saved.reason.value} : {})},
-    acceptedReason:saved.reason?.accepted,photo:'',name:'',
-  })
+  if (restored) drafts.set(key,{values:{...saved.values},photo:'',name:''})
   select(selection.scenario,false,key)
-  if (restored) {
-    if (saved.reason && !completion.value.includes('reason')) completion.value.push('reason')
-    message.value = '已恢复此原件版本保存的草稿。请补齐本次资料并重新确认导出。'
-  }
+  if (restored) message.value = '已恢复此原件版本保存的草稿。请补齐本次资料并重新确认导出。'
 }
 
-function loadSavedDrafts(): boolean {
-  const {savedBatchId} = props
-  const ownerId = account.user?.id
-  if (!savedBatchId || !ownerId) return false
-  draftError.value = ''
-  try {
-    savedDrafts.value = readFormDrafts(ownerId,savedBatchId)
-    return true
-  } catch (error) {
-    savedDrafts.value = []
-    draftError.value = error instanceof Error ? error.message : '浏览器草稿无法读取。'
-    return false
+async function runDraftAction<T>(action:(session:DraftSession)=>Promise<T>): Promise<T | undefined> {
+  const owner = account.user?.id
+  const epoch = account.formDraftEpoch
+  if (!owner || epoch===null) {
+    draftError.value = '本机草稿当前不可用。请检查浏览器存储后重新登录。'
+    return
   }
-}
-
-function saveDraftProgress() {
-  const {savedBatchId} = props
-  const ownerId = account.user?.id
-  const key = intake.value?.draftKey
-  if (!savedBatchId || !ownerId || !key || exporting.value) return
+  const request = ++draftRequest
+  const current = ()=>mounted && draftRequest===request && account.user?.id===owner
+  draftBusy.value = true
   draftError.value = ''
   draftMessage.value = ''
   draftConflict.value = false
   try {
-    const manualValues = Object.fromEntries(Object.entries(values.value)
-      .filter(([id])=>!profileFields.value[id] && !awardSources.value[id]))
-    const reason = keepReason.value && values.value.reason?.trim()
-      ? {value:values.value.reason,accepted:acceptedReason.value} : undefined
-    const saved = saveFormDraft(ownerId,savedBatchId,key,scenario.value,manualValues,draftRevisions.get(key) ?? 0,{reason})
-    draftRevisions.set(key,saved.revision)
-    savedDrafts.value = [...savedDrafts.value.filter(item=>item.key!==key),saved]
-    draftMessage.value = '已保存当前原件的草稿字段。'
+    const result = await action({owner,epoch})
+    if (current() && account.formDraftEpoch===epoch) return result
   } catch (error) {
+    if (!current()) return
     draftConflict.value = error instanceof DraftRevisionConflict
-    draftError.value = error instanceof Error ? error.message : '浏览器未能保存草稿。'
+    if (error instanceof DraftSessionExpired) {
+      account.formDraftEpoch = null
+      resetRevokedDraftPage()
+    }
+    draftError.value = error instanceof Error ? error.message : '本机草稿无法操作，当前填写内容仍在。'
+  } finally {
+    if (current()) draftBusy.value = false
   }
 }
 
-function reopenSavedProgress() {
+async function saveDraftProgress() {
+  const batch = props.savedBatchId
   const key = intake.value?.draftKey
-  if (!key || exporting.value || !loadSavedDrafts()) return
-  const saved = savedDrafts.value.find(item=>item.key===key && item.scenarioId===scenario.value.id)
-  if (saved && !window.confirm('读取已保存的版本？本页对应的手填字段及已保存理由会被替换。')) return
+  if (!batch || !key || exporting.value || draftBusy.value) return
+  const manualValues = Object.fromEntries(Object.entries(values.value)
+    .filter(([id])=>!profileFields.value[id] && !awardSources.value[id]))
+  const result = await runDraftAction(session=>
+    saveFormDraft(session,batch,key,scenario.value.id,manualValues,draftRevisions.get(key) ?? 0))
+  if (!result) return
+  draftRevisions.set(key,result.saved.revision)
+  savedDrafts.value = result.drafts
+  draftMessage.value = '已保存当前原件的草稿字段。'
+}
+
+async function reopenSavedProgress() {
+  const batch = props.savedBatchId
+  const key = intake.value?.draftKey
+  if (!batch || !key || exporting.value || draftBusy.value) return
+  const records = await runDraftAction(session=>readFormDrafts(session,batch))
+  if (!records) return
+  savedDrafts.value = records
+  const saved = records.find(item=>item.key===key && item.scenarioId===scenario.value.id)
+  if (saved && !window.confirm('读取已保存的版本？本页对应的手填字段会被替换。')) {
+    draftConflict.value = true
+    return
+  }
   draftRevisions.set(key,saved?.revision ?? 0)
-  draftConflict.value = false
   if (saved) {
     for (const {id} of recoverableFields(scenario.value)) {
-      if (saved.values[id]!==undefined) values.value[id] = saved.values[id]
-      else if (!profileFields.value[id]) delete values.value[id]
+      if (saved.values[id]!==undefined) {
+        values.value[id] = saved.values[id]
+        delete profileFields.value[id]
+      } else if (!profileFields.value[id]) delete values.value[id]
     }
-    if (saved.reason) {
-      values.value.reason = saved.reason.value
-      acceptedReason.value = saved.reason.accepted
-      if (!completion.value.includes('reason')) completion.value.push('reason')
-    }
-    keepReason.value = Boolean(saved.reason)
-    reasonEditorKey.value++
     changed()
     rememberDraft(key)
   }
   draftMessage.value = saved ? '已读取保存的版本，请重新核对。' : '此原件暂无保存记录，当前输入仍在。'
 }
 
-function clearDraftProgress() {
-  const {savedBatchId} = props
-  const ownerId = account.user?.id
-  if (!savedBatchId || !ownerId || exporting.value ||
-      !window.confirm('清除本批次在此标签页保存的草稿？当前填写内容会留在页面。')) return
-  try {
-    clearFormDrafts(ownerId,savedBatchId)
-    draftRevisions.clear()
-    keepReason.value = false
-    draftConflict.value = false
-    savedDrafts.value = []
-    draftError.value = ''
-    draftMessage.value = '本批次保存的草稿已清除。'
-  } catch {
-    draftError.value = '浏览器未能清除保存的草稿。'
-  }
+async function clearDraftProgress() {
+  const batch = props.savedBatchId
+  if (!batch || exporting.value || draftBusy.value ||
+      !window.confirm('清除本批次在此设备保存的草稿？当前填写内容会留在页面。')) return
+  const cleared = await runDraftAction(async session=>{
+    await clearFormDrafts(session,batch)
+    return true
+  })
+  if (!cleared) return
+  draftRevisions.clear()
+  savedDrafts.value = []
+  draftMessage.value = '本批次保存的草稿已清除。'
 }
-
 function carryPreviousFields() {
   const allowed = new Set(comparableFields.value.map(field=>field.id))
   for (const id of carriedFields.value) if (allowed.has(id)) values.value[id]=priorValues.value[id]
@@ -680,7 +716,7 @@ function displayed(value: string, sensitive?: boolean) {
 
     <template v-else>
       <SavedNoticeIntake v-if="savedBatchId" :key="'saved:'+intakeKey" :batch-id="savedBatchId"
-        :busy="!ready || saving || exporting" :progress="attachmentProgress" @invalidate="invalidateIntake" @accept="acceptIntake"/>
+        :busy="!ready || saving || exporting || draftBusy" :progress="attachmentProgress" @invalidate="invalidateIntake" @accept="acceptIntake"/>
       <NoticeIntake v-else-if="fromNotice" :key="intakeKey" :busy="!ready || saving" :progress="attachmentProgress" @invalidate="invalidateIntake" @accept="acceptIntake"/>
       <details v-if="fromNotice && persistAllowed" class="panel">
         <summary>此浏览器的本机资料</summary>
@@ -702,6 +738,7 @@ function displayed(value: string, sensitive?: boolean) {
         </button>
       </nav>
 
+      <p v-if="savedBatchId && !intake?.draftKey && draftError" role="alert">{{ draftError }}</p>
       <template v-if="!fromNotice || intake">
       <section class="panel" aria-label="模板来源">
         <h2>{{ scenario.title }}</h2>
@@ -724,18 +761,14 @@ function displayed(value: string, sensitive?: boolean) {
 
       <section v-if="savedBatchId && intake?.draftKey" class="panel" aria-label="原件草稿">
         <h2>保存原件草稿</h2>
-        <p>可在此标签页刷新后，由同一账号重新登录续填。主动退出时清除保存记录。</p>
-        <p>可保存的手填字段 · {{ draftFieldLabels.join('、') }}。画像值可在续填时重新核对带入，其他内容请在本次核对填写。</p>
-        <template v-if="reasonLabel">
-          <label class="toggle"><input v-model="keepReason" type="checkbox" :disabled="exporting">
-            同时保存「{{ reasonLabel }}」
-          </label>
-          <p>勾选后，点保存会在此标签页保留理由正文、采用的起草稿和所引用的奖项。请留意其中的个人信息。</p>
-        </template>
+        <p>主动保存后保留 {{ draftRetentionDays }} 天。同一账号可在此设备重新登录续填。主动退出会清除此账号在此设备的全部草稿。</p>
+        <p v-if="draftFields.length">可保存的手填字段 · {{ draftFields.map(field=>field.label).join('、') }}。续填时可重新带入画像。证件号、联系方式、理由、照片和导出确认仅用于当前填写。</p>
+        <p v-else>这份表暂无可保存的字段。</p>
+        <p v-if="draftExpiryLabel">当前草稿保存至 {{ draftExpiryLabel }}。</p>
         <div class="actions">
-          <button type="button" :disabled="exporting" @click="saveDraftProgress">保存当前草稿</button>
-          <button v-if="draftConflict" type="button" :disabled="exporting" @click="reopenSavedProgress">读取已保存的版本</button>
-          <button v-if="savedDrafts.length || draftError" type="button" :disabled="exporting" @click="clearDraftProgress">清除本批次保存的草稿</button>
+          <button type="button" :disabled="exporting || draftBusy || account.formDraftEpoch===null || !draftFields.length" @click="saveDraftProgress">保存当前草稿</button>
+          <button v-if="draftConflict" type="button" :disabled="exporting || draftBusy" @click="reopenSavedProgress">读取已保存的版本</button>
+          <button v-if="savedDrafts.length" type="button" :disabled="exporting || draftBusy" @click="clearDraftProgress">清除本批次保存的草稿</button>
         </div>
         <p v-if="draftMessage" role="status">{{ draftMessage }}</p>
         <p v-if="draftError" role="alert">{{ draftError }}</p>
@@ -821,7 +854,7 @@ function displayed(value: string, sensitive?: boolean) {
                 <button v-if="acceptedReason.awards.length && values.reason!==acceptedReason.text" type="button"
                   :disabled="exporting" @click="confirmManualReason">确认手写理由的事实并解除档案引用</button>
               </template>
-              <small>{{ intake?.draftKey && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
+              <small>{{ intake?.draftKey && draftFields.includes(field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>
         </fieldset>
