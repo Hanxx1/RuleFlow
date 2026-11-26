@@ -7,11 +7,6 @@ function ownerPrefix(owner: string) {
   return prefix+owner+':'
 }
 
-export function draftStorageKey(owner: string,batch: string) {
-  if (!draftIdentity.test(batch)) throw Error('表单批次无效，请重新打开通知。')
-  return ownerPrefix(owner)+batch
-}
-
 export function clearOwnerFormDrafts(owner: string,storage: DraftStorage = sessionStorage) {
   const start = ownerPrefix(owner)
   for (let index=storage.length-1;index>=0;index--) {

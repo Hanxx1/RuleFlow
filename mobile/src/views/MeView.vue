@@ -11,7 +11,12 @@ const identity=computed(()=>account.user?.email||'本机演示用户');
 const initial=computed(()=>identity.value.trim().charAt(0).toUpperCase()||'知');
 const completenessText=computed(()=>account.completeness?`当前规则资料完整度 ${account.completeness.score}%`:'用于规则资格判断，缺失原因会分别说明');
 onMounted(()=>{if(account.signedIn){account.loadCompleteness();account.loadSettings()}});
-async function logout(){if(!window.confirm('退出登录会清除当前账户的本机画像、课表、课程档案和此标签页保存的表单草稿。可先到个人画像导出备份，课程恢复目前仅支持预览，表单草稿不在备份内。确认退出？'))return;try{await account.logout()}finally{router.push('/auth/login')}}
+async function logout(){
+ if(!window.confirm('退出登录会清除当前账户的本机画像、课表、课程档案和此设备此账号的全部可恢复表单草稿。可先到个人画像导出备份。表单草稿不在备份内。确认退出？'))return
+ try{await account.logout()}
+ catch(error){window.alert(error instanceof Error?error.message:'退出时未能确认完成，请重新核对。')}
+ finally{await router.push('/auth/login')}
+}
 </script>
 
 <template>
