@@ -1,5 +1,45 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-011/013｜C 侧原件读取与字节核验（2026-11-25）
+
+### 1. 任务信息
+
+C；用户在远端进度核查后明确要求“开始开发”。本次完成独立可验收的来源原件读取切片，供 B 后续接入。分支 `feat/RF-013-verified-original-read`，从 fetch 后最新 main `efa9dd50dae8252615e140fa8ce79e7cee526d38` 创建。状态：本地实现与自测通过，待交叉评审；未提交／推送，无本次 commit 或 PR。不是 H06/H08 或 RF-011/013 整卡完成。
+
+### 2. 技术实现
+
+新增 `mobile/src/features/imports/formOriginal.ts` 的 `readFormOriginal` 与 `FormOriginalError`，复用现有 `parseFormContext/readFormContext/apiBlob`。按选定 source 固定 Document 引用，下载前后重读来源，校验实际大小与 SHA-256，成功才交付 Blob。新增同目录 29 项测试、`scripts/test-form-original-client.mjs` 真实 TCP 隔离验证脚本，更新 C 来源移交说明。未改 B 页面、公共 HTTP、服务端 API／OpenAPI、数据库、Provider 或 Android 配置，无新依赖。
+
+### 3. 设计与关键决策
+
+来源身份与原件版本均需复核，不能以文件名／hash 自动继承另一 source。解析与原件状态独立；原件暂不可核验时可尝试下载并核字节，已知缺失或无原件时拒绝。调用前复制引用，避免调用方修改对象改变本次核验目标。无安全摘要能力则拒绝，不隐式放过。读取不写草稿、不创建对象 URL；通知要求、模板适配、输入保护及导出决定仍归 B。两次复核不是导出锁，账号切换／取消后的异步结果应由 B 页面丢弃。
+
+### 4. 遇到的问题及解决
+
+沙箱 fetch 首先因本机代理不可达，单次绕过代理又遇 DNS 线程错误；获工具批准后以正常本机权限执行同一 fetch 成功，未改全局配置。首轮测试 19 passed／8 failed，定位为手写合成字符串 `Form` 的预期摘要错误；用 Node SHA-256 独立计算并纠正 fixture，未放宽生产核验。真实 TCP 脚本沙箱首次健康检查超时，未记为通过；正常权限重跑及最终脚本复验均通过。无未解决的已观察产品错误。
+
+### 5. 测试与验证
+
+Windows，Node v24.20.0、既有 Vitest/Vite 与 `.runtime/c-venv`。实际执行：
+
+- `npm.cmd --prefix mobile test -- src/features/imports/formOriginal.test.ts`：fixture 修正后首版 27 passed；再补下载期间改版及凭据轮换测试，包含在最终全量中。
+- `npm.cmd --prefix mobile test`：最终 **28 文件、224 passed**，其中新模块 29 项。覆盖身份／版本、不同可用状态、前后复核、大小及同大小内容变化、错误传递、凭据轮换、无摘要能力与调用方对象修改。
+- `npm.cmd --prefix mobile run build`：vue-tsc 与生产 Web 构建通过，保留 Vite CJS 弃用提示；产物 `mobile/web-dist`，新增模块尚无页面消费者，因此未作为应用入口打包使用。
+- `node scripts/test-form-original-client.mjs .runtime/c-venv/Scripts/python.exe`：最终五组实际 TCP 检查通过。同名双来源读回各自原字节；另一合成账户读取404；改动原件同大小字节触发摘要不符；删原件后历史行仍在且读取拒绝；批次更新后旧快照返回 stale。使用随机回环端口和唯一临时库／文件目录，无真实账户、上传或模型；最终停服并清理。
+- `scripts/check-api-contract.py`：既有指纹 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf` 不变；`node scripts/check-demo.mjs`：8份副本一致。`scripts/check-docs.py` 255个本地目标通过（外链未检），`scripts/check-paths.py` 和 `git diff --check` 通过；新增未跟踪文件另行检查。
+
+未跑后端全量，未运行 B 页面、真实 DOCX/XLSX、Office、浏览器网络／CORS、Android 或真机测试；不能将 Node TCP 验证推广为 H06 双表保值和导出通过。
+
+### 6. 运行证据
+
+本会话实际命令回执、29项测试及 [TCP脚本](../../../scripts/test-form-original-client.mjs)；接入方式见 [来源移交说明](C_RF013_source_handoff.md) 顶部。临时合成原件／数据库运行后已清理，没有截图或 APK。原始 Codex 会话分享链接／导出待成员保留，工作记录不替代原始证据。
+
+### 7. 未完成与限制
+
+B 尚需接入实际填表页、处理账号切换／取消与过时响应、逐表要求依赖及导出确认，并更新 #33 的修复验收断言；正式草稿刷新／登录恢复归 RF-012。当前模块只核原件，不创建要求绑定或判断可导出，也不能在返回后锁定原件。HTTP传输复用既有能力，未扩展公共缓存／会话协议。候选存储和共享迁移仍待团队确认；本轮未实施。原 `docs/plans/SPRINT_01_TASKS.md` 10行本地修改保留，不纳入本次成果；无新 APK，未提交或推送。
+
+提交授权补记：用户随后明确要求“提交并推送”。本次仅提交原件读取模块、29项测试、TCP验证脚本和两份C文档共5个文件，沿 `feat/RF-013-verified-original-read` 推送；原任务表修改排除并保留。上方未提交状态是开发阶段快照，最终提交与推送结果以Git回执为准。提供PR DES，不创建或合并PR。提交前核对最终差异和新增文件格式；本轮未改生产实现，沿用本节已记录的实际测试结果，未重复执行产品测试。
+
 ## RF-011/013｜C 侧类型化读取客户端（2026-11-24）
 
 ### 1. 任务信息
