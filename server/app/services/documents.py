@@ -43,14 +43,17 @@ def normalize_lines(blocks,document_id):
 def store_document(c,root,owner_id,raw,mime,name,parser):
     validate_file(raw,mime,name)
     document_id=str(uuid.uuid4());target=content_path(root,owner_id,document_id)
-    target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
-    now=datetime.now(timezone.utc).isoformat()
+    target.parent.mkdir(parents=True,exist_ok=True)
+    original=target.open('xb')
     try:
-        lines=normalize_lines(parser(raw,mime,name),document_id)
-        status,error=('parsed',None) if lines else ('failed','OCR_EMPTY')
-    except DocumentError as exc:lines=[];status,error='failed',exc.code
-    except Exception:lines=[];status,error='failed','DOCUMENT_PARSE_FAILED'
-    try:
+        with original:
+            original.write(raw)
+        now=datetime.now(timezone.utc).isoformat()
+        try:
+            lines=normalize_lines(parser(raw,mime,name),document_id)
+            status,error=('parsed',None) if lines else ('failed','OCR_EMPTY')
+        except DocumentError as exc:lines=[];status,error='failed',exc.code
+        except Exception:lines=[];status,error='failed','DOCUMENT_PARSE_FAILED'
         c.execute('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?,?)',(document_id,owner_id,name,mime,hashlib.sha256(raw).hexdigest(),len(raw),status,error,now,1))
         for line in lines:
             c.execute('INSERT INTO document_lines VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(line['id'],owner_id,document_id,line['line_number'],line.get('page'),line['text'],line.get('locator'),json.dumps(line.get('bbox')),line.get('coordinate_space'),line.get('page_width'),line.get('page_height'),line.get('confidence')))
@@ -69,7 +72,7 @@ def bind_document(c,owner_id,case_id,document_id,source_name):
     evidence=[]
     for row in rows:
         evidence_id='block:'+str(uuid.uuid5(uuid.NAMESPACE_URL,f'{case_id}:{row["id"]}'))
-        c.execute('INSERT OR IGNORE INTO evidence VALUES(?,?,?,?,?,?,?,?)',(evidence_id,owner_id,case_id,source_name,row['text'],row['locator'],row['page'],datetime.now(timezone.utc).isoformat()))
+        c.execute('INSERT OR IGNORE INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(evidence_id,owner_id,case_id,source_name,row['text'],row['locator'],row['page'],datetime.now(timezone.utc).isoformat()))
         c.execute('INSERT OR IGNORE INTO evidence_lines VALUES(?,?,?,?)',(owner_id,evidence_id,document_id,row['id']))
         evidence.append((evidence_id,row['text']))
     return evidence

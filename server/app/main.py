@@ -1,6 +1,7 @@
 """RuleFlow API. Private and mutable Demo data is always owner-scoped."""
 from __future__ import annotations
 import base64,hashlib,ipaddress,json,mimetypes,os,re,uuid
+from contextlib import ExitStack
 from urllib.parse import quote,urljoin,urlparse
 import httpx
 from datetime import date,datetime,time,timedelta,timezone
@@ -432,7 +433,7 @@ def attach_knowledge(case_id:str,chunk_id:str,body:KnowledgeConsent,user=Depends
   existing=c.execute('SELECT 1 FROM evidence WHERE owner_id=? AND id=?',(user['id'],evidence_id)).fetchone()
   if not existing:
    source=c.execute('SELECT title FROM knowledge_documents WHERE id=? AND owner_id=?',(chunk['knowledge_id'],user['id'])).fetchone()
-   c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(evidence_id,user['id'],case_id,source['title'],chunk['text'],'用户确认关联知识条款',chunk['page'],stamp()))
+   c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(evidence_id,user['id'],case_id,source['title'],chunk['text'],'用户确认关联知识条款',chunk['page'],stamp()))
    document_id=c.execute('SELECT document_id FROM knowledge_documents WHERE id=? AND owner_id=?',(chunk['knowledge_id'],user['id'])).fetchone()[0]
    c.execute('INSERT INTO knowledge_evidence_sources VALUES(?,?,?,?)',(user['id'],evidence_id,document_id,hashlib.sha256(chunk['text'].encode()).hexdigest()))
    for rule in extract_rules([(evidence_id,chunk['text'])]):
@@ -524,7 +525,7 @@ def create_case(body:CaseIn,user=Depends(current_user)):
  with conn() as c:
   c.execute('INSERT INTO cases(id,owner_id,title,category,status,relevance,deadline,created_at,updated_at,deadline_source,deadline_evidence_ids_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(cid,user['id'],body.title,body.category,body.status,'UNKNOWN',body.deadline,now,now,'user_input' if body.deadline else None,'[]'))
   if body.deadline:
-   ref='block:'+str(uuid.uuid4());c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],cid,'用户填写',f'用户填写截止时间为 {body.deadline}','用户填写记录，不代表官方文件',None,now))
+   ref='block:'+str(uuid.uuid4());c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],cid,'用户填写',f'用户填写截止时间为 {body.deadline}','用户填写记录，不代表官方文件',None,now))
    c.execute('UPDATE cases SET deadline_evidence_ids_json=? WHERE id=? AND owner_id=?',(json.dumps([ref]),cid,user['id']))
  return data(case_json(owned('cases',cid,user['id'])))
 @app.get('/api/v1/cases')
@@ -585,7 +586,7 @@ def patch_case(case_id:str,body:CasePatch,user=Depends(current_user)):
   if 'deadline' in fields:
    if body.deadline:
     eid='block:'+str(uuid.uuid4())
-    c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(eid,user['id'],case_id,'用户填写',f'用户填写截止时间为 {body.deadline}','用户填写记录，不代表官方文件',None,stamp()))
+    c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(eid,user['id'],case_id,'用户填写',f'用户填写截止时间为 {body.deadline}','用户填写记录，不代表官方文件',None,stamp()))
     c.execute('UPDATE cases SET deadline_evidence_ids_json=? WHERE id=? AND owner_id=?',(json.dumps([eid]),case_id,user['id']))
    invalidate_review(c,user['id'],case_id)
  return get_case(case_id,user)
@@ -603,13 +604,17 @@ async def upload_case_attachment(case_id:str,file:UploadFile=File(...),consent:b
  try:
   raw=await read_upload(file);mime=file.content_type or mimetypes.guess_type(file.filename or '')[0] or ''
   if mime not in ALLOWED:raise HTTPException(415,'不支持的附件格式')
-  with conn() as c:
-   document=store_document(c,document_root(),user['id'],raw,mime,file.filename or '用户补充附件',parse_bytes)
-   ref='block:'+str(uuid.uuid4())
-   c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],case_id,'用户补充附件记录',f'用户上传 {file.filename or "附件"}，处理状态：{document["status"]}','文件上传记录，不代表附件内容已核对',None,stamp()))
-   c.execute('INSERT INTO case_attachment_documents VALUES(?,?,?,?)',(user['id'],case_id,document['id'],ref))
-   if document['status']=='parsed':bind_document(c,user['id'],case_id,document['id'],file.filename or '用户补充附件')
-   invalidate_review(c,user['id'],case_id)
+  root=document_root()
+  with ExitStack() as cleanup:
+   with conn() as c:
+    document=store_document(c,root,user['id'],raw,mime,file.filename or '用户补充附件',parse_bytes)
+    cleanup.callback(content_path(root,user['id'],document['id']).unlink, missing_ok=True)
+    ref='block:'+str(uuid.uuid4())
+    c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],case_id,'用户补充附件记录',f'用户上传 {file.filename or "附件"}，处理状态：{document["status"]}','文件上传记录，不代表附件内容已核对',None,stamp()))
+    c.execute('INSERT INTO case_attachment_documents VALUES(?,?,?,?)',(user['id'],case_id,document['id'],ref))
+    if document['status']=='parsed':bind_document(c,user['id'],case_id,document['id'],file.filename or '用户补充附件')
+    invalidate_review(c,user['id'],case_id)
+   cleanup.pop_all()  # The database transaction committed; keep its original.
  except DocumentError as exc:raise HTTPException(exc.status,{'code':exc.code,'message':str(exc)})
  return data({'document_id':document['id'],'status':document['status'],'error_code':document['error_code'],'requires_reanalysis':True,'warning':'附件需核对；旧确认已失效，请重新分析再确认任务'})
 
@@ -800,7 +805,7 @@ def create_task(case_id:str,body:TaskIn,user=Depends(current_user)):
   refs=list(body.evidence_ids)
   if body.deadline or body.duration_minutes:
    ref='block:'+str(uuid.uuid4());refs.append(ref)
-   c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],case_id,'用户填写任务安排',f'用户填写步骤截止={body.deadline or "未设置"}；估计耗时={body.duration_minutes or "未填写"}分钟','用户填写，不代表官方通知',None,stamp()))
+   c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],case_id,'用户填写任务安排',f'用户填写步骤截止={body.deadline or "未设置"}；估计耗时={body.duration_minutes or "未填写"}分钟','用户填写，不代表官方通知',None,stamp()))
   c.execute('INSERT INTO tasks(id,owner_id,case_id,title,status,deadline,evidence_ids_json,created_at,updated_at,duration_minutes) VALUES(?,?,?,?,?,?,?,?,?,?)',(tid,user['id'],case_id,body.title,'todo',body.deadline,json.dumps(refs),stamp(),stamp(),body.duration_minutes))
  with conn() as c:rows=c.execute('SELECT * FROM tasks WHERE owner_id=? AND case_id=?',(user['id'],case_id)).fetchall();edges=c.execute('SELECT before_task_id,after_task_id FROM task_edges WHERE owner_id=? AND case_id=?',(user['id'],case_id)).fetchall()
  return data(next(x for x in task_dtos(rows,edges,user['id'],case_id) if x['id']==tid))
@@ -843,7 +848,7 @@ def edge(case_id:str,body:EdgeIn,user=Depends(current_user)):
   existing=c.execute('SELECT id FROM task_edges WHERE owner_id=? AND case_id=? AND before_task_id=? AND after_task_id=?',(user['id'],case_id,body.before_task_id,body.after_task_id)).fetchone()
   if existing:return data({'id':existing['id'],'idempotent':True})
   eid=str(uuid.uuid4());c.execute('INSERT INTO task_edges VALUES(?,?,?,?,?)',(eid,user['id'],case_id,body.before_task_id,body.after_task_id))
-  ref='block:'+str(uuid.uuid4());c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],case_id,'用户填写依赖',f'用户确认步骤“{before["title"]}”先于“{after["title"]}”','用户填写，不代表原文要求',None,stamp()))
+  ref='block:'+str(uuid.uuid4());c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],case_id,'用户填写依赖',f'用户确认步骤“{before["title"]}”先于“{after["title"]}”','用户填写，不代表原文要求',None,stamp()))
   c.execute('INSERT INTO task_edge_evidence VALUES(?,?,?,?)',(eid,user['id'],json.dumps([ref]),'user_input'))
   for item in c.execute('SELECT * FROM schedule_items WHERE owner_id=? AND task_id=?',(user['id'],body.after_task_id)).fetchall():validate_schedule_write(c,user['id'],case_id,body.after_task_id,item['starts_at'],item['ends_at'],item['id'])
  return data({'id':eid})
@@ -1220,17 +1225,16 @@ def import_url(body:UrlImport,user=Depends(current_user)):
 def import_text(body:TextImport,user=Depends(current_user)):
  # Strict mode stores only redacted text until the user has explicitly consented to processing.
  database(); iid=str(uuid.uuid4()); privacy=redact(body.text)
- with conn() as c:c.execute('INSERT INTO imports VALUES(?,?,?,?,?,?,?,?,?)',(iid,user['id'],'text',body.title or title_from(body.text),'needs_confirmation',json.dumps(privacy,ensure_ascii=False),None,stamp(),stamp()))
- if not body.consent:return data({'id':iid,'state':'needs_confirmation','privacy':privacy})
- jid=str(uuid.uuid4())
- with conn() as c:c.execute('INSERT INTO analysis_jobs VALUES(?,?,?,?,?,?,?,?)',(jid,user['id'],iid,'completed','evidence_created',None,stamp(),stamp()))
- cid=str(uuid.uuid4()); eid='block:'+str(uuid.uuid4())
- deadline=None
  with conn() as c:
-  now=stamp();c.execute('INSERT INTO cases(id,owner_id,title,category,status,relevance,deadline,created_at,updated_at,deadline_source,deadline_evidence_ids_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(cid,user['id'],body.title or title_from(body.text),category_from(body.text),'review','UNKNOWN',deadline,now,now,'document' if deadline else None,json.dumps([eid]) if deadline else '[]'))
-  c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(eid,user['id'],cid,'用户导入文本',body.text,'全文',None,stamp()))
-  c.execute('UPDATE imports SET state=?,updated_at=? WHERE id=? AND owner_id=?',('review',stamp(),iid,user['id']))
- with conn() as c:c.execute('INSERT INTO import_case_sources VALUES(?,?,?,?)',(user['id'],iid,cid,json.dumps([eid])))
+  now=stamp()
+  c.execute('INSERT INTO imports VALUES(?,?,?,?,?,?,?,?,?)',(iid,user['id'],'text',body.title or title_from(body.text),'needs_confirmation',json.dumps(privacy,ensure_ascii=False),None,now,now))
+  if not body.consent:return data({'id':iid,'state':'needs_confirmation','privacy':privacy})
+  cid=str(uuid.uuid4());eid='block:'+str(uuid.uuid4());jid=str(uuid.uuid4())
+  c.execute('INSERT INTO cases(id,owner_id,title,category,status,relevance,deadline,created_at,updated_at,deadline_source,deadline_evidence_ids_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(cid,user['id'],body.title or title_from(body.text),category_from(body.text),'review','UNKNOWN',None,now,now,None,'[]'))
+  c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(eid,user['id'],cid,'用户导入文本',body.text,'全文',None,now))
+  c.execute('INSERT INTO import_case_sources VALUES(?,?,?,?)',(user['id'],iid,cid,json.dumps([eid])))
+  c.execute('UPDATE imports SET state=?,updated_at=? WHERE id=? AND owner_id=?',('review',now,iid,user['id']))
+  c.execute('INSERT INTO analysis_jobs VALUES(?,?,?,?,?,?,?,?)',(jid,user['id'],iid,'processing','candidate_analysis',None,now,now))
  analysis=run_import_analysis(cid,user['id'],[(eid,body.text)],jid)
  return data({'id':iid,'job_id':jid,'state':'review','case_id':cid,'coverage':'已抽取有原文依据的规则与步骤；个体事实不足时保持 UNKNOWN','evidence_id':eid,'analysis':analysis})
 @app.get('/api/v1/imports/{import_id}/progress')

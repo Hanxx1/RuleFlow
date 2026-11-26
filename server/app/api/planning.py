@@ -231,7 +231,7 @@ def update_task_planning(task_id:str,body:TaskPlanningIn,user=Depends(current_us
   c.execute('BEGIN IMMEDIATE')
   if c.execute('SELECT 1 FROM schedule_items WHERE task_id=? AND owner_id=?',(task_id,user['id'])).fetchone():raise HTTPException(409,'任务已有安排，请先移除对应安排再修改耗时或拆分方式')
   ref='block:'+str(uuid.uuid4());now=stamp()
-  c.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],task['case_id'],'用户排程偏好',f'用户估计步骤耗时{body.duration_minutes}分钟；可拆分={body.splittable}；最小片段{body.min_chunk_minutes}分钟；最大片段{body.max_chunk_minutes}分钟；重要性{body.importance}；偏好{body.preference}','用户填写，不代表官方通知',None,now))
+  c.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(ref,user['id'],task['case_id'],'用户排程偏好',f'用户估计步骤耗时{body.duration_minutes}分钟；可拆分={body.splittable}；最小片段{body.min_chunk_minutes}分钟；最大片段{body.max_chunk_minutes}分钟；重要性{body.importance}；偏好{body.preference}','用户填写，不代表官方通知',None,now))
   refs=sorted(set(json.loads(task['evidence_ids_json']))|{ref})
   c.execute('UPDATE tasks SET duration_minutes=?,evidence_ids_json=?,updated_at=? WHERE id=? AND owner_id=?',(body.duration_minutes,json.dumps(refs),now,task_id,user['id']))
   c.execute('INSERT INTO task_planning VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(task_id) DO UPDATE SET splittable=excluded.splittable,min_chunk_minutes=excluded.min_chunk_minutes,max_chunk_minutes=excluded.max_chunk_minutes,importance=excluded.importance,preference=excluded.preference,evidence_id=excluded.evidence_id,updated_at=excluded.updated_at',(task_id,user['id'],int(body.splittable),body.min_chunk_minutes,body.max_chunk_minutes,body.importance,body.preference,ref,now))
