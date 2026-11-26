@@ -362,3 +362,39 @@ BUILD SUCCESSFUL in 6m 39s
 - A 在同一工作树、同一源码基线补充 `validate_database()`。沿用 Document 目录清单，按 `document_derivatives.owner_id/id` 查找副本，并对照该条记录的 SHA-256。备份、核验和恢复均执行此检查。必要业务表、迁移版本记录和核验所需字段必须可读，迁移 10 起要求脱敏副本表存在。
 - 新生成的 v2 清单记录 UTC 备份时间及库中实际登记的最高迁移版本；运行服务的源码提交无法从卷可靠确定，记录为 null。v1 清单沿用其现有字段，读取时也执行新增的数据核验。部署说明已同步。
 - 仅运行 `tests/test_server_data_backup.py`，沿用前节的 Python、pytest 选项及仓库外临时目录，结果 **14 passed，5 warnings，28.53s**。新增 5 个用例覆盖通过现有接口生成的合成 PDF 脱敏副本恢复、缺件和同大小篡改、清单时间与迁移版本核验、v1 兼容，以及缺表、缺摘要字段和空迁移记录。临时数据已清理，5 条警告均来自既有 FastAPI/Starlette。RF-051 的生产卷及 Linux/Docker 验收仍待执行。
+
+
+## 2026-11-19 · UX-A04 解析结果页信息分层与定向验证
+
+### 基线、范围与状态
+
+- 独立任务分支 `feat/UX-A04-analysis-layout` 最初从当时最新 main `69f012a` 建立，开发期间同步至 `4db2b6d`。当时 main 尚无 A.md，按 A 要求未重复创建记录；恢复记录现已由 [PR #28](https://github.com/Hanxx1/RuleFlow/pull/28) 合入，合并提交 `3bcd0d7`。本次快进同步该基线后增量追加本节，原历史内容保留。
+- 状态：一版可运行页面改进及定向验证已完成，等待 A 查看效果；UX-A04 尚未由用户验收，代码和本节记录均未提交、未推送。未处理 BUG-A01、恢复 RF-006 代码或修改后端接口与业务语义。
+
+### 实际改动
+
+- `AnalysisResultView.vue`：移除前置大幅插画与重复概览，优先呈现通知、已有截止日期及证据入口、待核对问题、日期与行动核对；提供直达核对区入口。材料/文件/规则、分析历史与帮助入口按需展开，已有执行步骤仍可查看。
+- `AnalysisReviewPanel.vue`：精简说明和局部布局，日期与行动原文引用可展开查看；保留日期候选选择、人工日期、暂不设置日期、行动勾选、逐步骤日期、依赖与明确同意后的确认流程。缺年份等复核提示不折叠。
+- `AttachmentPanel.vue`：完整度与风险说明保持可见，附件明细、上传和重新分析操作收纳到展开区。缺失附件警告同时在确认区之前呈现，避免用户错过分析不完整的提示。
+- `LocalMatchPanel.vue`：新增仅由结果页启用的紧凑模式，资格未知、资料冲突、缺字段与不可计算条件仍可见；依据按需展开，相关性判断页面保留原有展开展示。
+- 使用原生 details 收纳内容，展开/收起不卸载内部表单。切换事项时清理上一事项的保存提示、编辑状态及证据弹层；浏览器检查曾发现旧保存提示残留，已修复并回归。
+- 新增 `mobile/src/features/cases/analysisLayout.test.ts`，覆盖主次顺序、默认折叠、重复问题去重、附件风险前置、已有任务/证据控件与离线导航保留；未增加依赖或开展全局样式重构。
+
+### 实际验证及证据边界
+
+- 定向测试：`npm.cmd --prefix mobile test -- src/features/cases/analysisLayout.test.ts src/services/review.test.ts src/services/localMatching.test.ts src/services/privacyGuard.test.ts`，最终 **4 文件、13 项通过**。初版测试夹具缺路由 id 和 SSR 所需 DOM 弹层替身，曾出现 2 项失败及 document 未定义异常；修正测试环境后同组通过，未删减业务断言。
+- 构建：`npm.cmd --prefix mobile run build`，最终 vue-tsc 与 Vite 生产构建通过，213 modules；保留既有 Vite CJS API 弃用警告。没有生成新 Android APK。
+- 手机尺寸实际页面检查：Edge 无头浏览器运行真实 Vue 页面，使用合成通知、临时合成账户状态和受控 API 响应；320/390/430px 宽度无横向溢出、无 pageerror。检查人工日期、候选日期、暂不设日期、行动选择、折叠后输入保留、确认请求载荷、证据弹层、附件选择与上传、附件重新分析、历史重新分析、事项编辑、跨事项状态清理和离线样例均通过。该结果不等于真实后端往返或 Android 真机验收。
+- 浏览器检查脚本初次因受限环境无法启动 Edge/访问本地服务而失败；改用同一本机权限环境运行。随后修正 Vite 热更新导致的重复路由实例引用、按钮定位和合成会话初始化，最终使用已挂载应用实例验证。失败尝试不计为通过。
+- 同一份合成通知、同一 390×844 视口：默认页面高度由 3250px 降至 1936px，约缩短 40%；这仅是该样例布局对比，不外推全部通知或性能指标。改动前后完整截图和首屏截图已实际查看。
+- 本地证据（忽略目录，不随代码提交）：`.runtime/ux-a04-check.mjs`、`.runtime/ux-a04/after-results.json`、`verification.json`；截图 `.runtime/ux-a04/before.png`、`after.png`、`before-first-screen.png`、`after-first-screen.png`、`after-offline.png`。请求记录只含合成内容，不使用真实账户或上传文件。
+- 上述执行验证针对同步至 `4db2b6d` 后的 UX-A04 工作区；后续 `3bcd0d7` 同步只带入 A/D 记录和课程测试文件，不涉及本次页面源码，故本轮补录未重复测试或构建。`git diff --check` 通过。
+- 未验证：Android 真机、APK、真实网络与上传、完整后端业务回归。RF-006 真机未通过状态不变；本次不是 RF-006 或 RF-007 整卡验收。
+
+### 2026-11-26 · UX-A04 最新主线集成与零任务入口复核
+
+- A 从 `origin/main` 的 `a8374ab` 建立 `feat/UX-A04-analysis-layout-integration` 独立工作树。转入时核对四个 Vue 文件及布局测试与原工作树逐字节一致。以主线 A.md 为底追加原 UX-A04 记录，保留 RF-051 记录及其提交前补核。原 UX-A04 工作树保留。
+- 在已有结果页布局上移除“执行步骤”区的任务数/登录态显示条件，复用原空态和当前事项流程链接。新增登录账户、零任务时的空态及链接目标断言。主线的提醒、账户与任务状态逻辑沿用现有实现。
+- 运行 `npm.cmd --prefix mobile test -- src/features/cases/analysisLayout.test.ts src/services/review.test.ts src/services/localMatching.test.ts src/services/privacyGuard.test.ts`，4 文件、14 项通过；`npm.cmd --prefix mobile run build` 通过，220 个模块完成转换。Vite 输出既有 CJS 弃用提示。
+- Edge 无头浏览器、390×844，使用合成账户、零任务及一项缺失附件的受控响应。点击“打开完整执行流程”进入同一事项的流程空态，再点页面返回按钮回到核对页；确认按钮保持禁用，附件警示在核对区之前。该次往返无业务写请求、页面异常或结果页横向溢出。截图存于本工作树忽略目录 `.runtime/ux-a04-final/`。真实后端及 Android 真机未验，本次未构建 APK；交互效果待 A 确认。
+- A 已查看最终页面截图及完整源码补丁，认可当前交互效果与修改范围，同意提交并创建 PR。真实后端及 Android 真机验收仍待执行。

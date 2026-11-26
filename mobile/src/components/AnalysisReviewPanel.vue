@@ -13,20 +13,20 @@ async function prepare(){saving.value=true;error.value='';try{await prepareLegac
 watch(()=>[props.caseId,props.revisionKey],()=>{if(props.caseId!=='demo-assessment')load()},{immediate:true});
 </script>
 <template>
-  <section class="surface-card review-panel" aria-label="核对分析候选">
-    <h2>核对分析候选</h2>
+  <section id="analysis-review" class="surface-card review-panel" aria-label="核对分析候选" tabindex="-1">
+    <h2>核对日期与行动</h2>
     <p v-if="loading">正在读取待核对信息…</p>
     <div v-if="error" class="notice notice--danger" role="alert">{{error}} <button type="button" class="text-button" @click="load">重新读取</button></div>
     <p v-if="review?.status==='confirmed'" role="status">日期与行动步骤已确认。资格判断仍以画像和原文条件为准。</p>
     <div v-else-if="!review&&!loading&&!error"><p>当前事项没有确认记录。可以载入已有步骤和证据进行核对，原任务ID和完成记录会保留。</p><button class="button button--secondary" type="button" :disabled="saving" @click="prepare">载入已有步骤核对</button></div>
     <form v-else-if="review" @submit.prevent="confirm">
-      <p>请核对原文。这里的候选尚未进入执行计划；确认行动步骤不会将未知资格变成符合。</p>
+      <p>核对后再生成行动步骤；资格未知时仍需补充资料。</p>
       <fieldset>
-        <legend>日期候选</legend>
+        <legend>重要日期</legend>
         <article v-for="item in review.candidate.dates" :key="item.id" class="review-date">
           <strong>{{item.raw}}</strong>
           <small>{{({publication:'发布信息',event:'活动时间',deadline:'截止候选',unknown:'语义待核对'} as Record<string,string>)[item.role]}}</small>
-          <blockquote>{{item.quote}}</blockquote>
+          <details class="review-evidence"><summary>查看日期原文</summary><blockquote>{{item.quote}}</blockquote></details>
           <p v-if="item.review_reasons.length">{{item.review_reasons.map(reason=>({missing_year:'年份缺失，请核对后填写',invalid_date:'日期无效',invalid_time:'时刻无效',unknown_date_role:'用途待核对',multiple_deadlines:'存在多个截止日期，请选择对应环节',time_requires_review:'具体时刻缺少完整年份或明确时区，请人工核对'} as Record<string,string>)[reason]||reason).join('；')}}</p>
           <label v-if="item.role==='deadline'&&item.value" class="review-choice">
             <input v-model="deadlineId" type="radio" :value="item.id" name="deadline-candidate" @change="mode='candidate'">
@@ -47,7 +47,7 @@ watch(()=>[props.caseId,props.revisionKey],()=>{if(props.caseId!=='demo-assessme
         </label>
       </fieldset>
       <fieldset>
-        <legend>选择行动步骤</legend>
+        <legend>建议创建的行动</legend>
         <article v-for="action in review.candidate.actions" :key="action.id" class="review-action">
           <label class="review-choice">
             <input v-model="actionIds" type="checkbox" :value="action.id">
@@ -57,7 +57,7 @@ watch(()=>[props.caseId,props.revisionKey],()=>{if(props.caseId!=='demo-assessme
               <small v-if="action.origin==='previous'">历史步骤，请核对是否保留</small>
             </span>
           </label>
-          <blockquote v-for="(quote,id) in action.evidence_quotes" :key="id">{{quote}}</blockquote>
+          <details class="review-evidence"><summary>查看行动依据</summary><blockquote v-for="(quote,id) in action.evidence_quotes" :key="id">{{quote}}</blockquote></details>
           <label v-if="actionIds.includes(action.id)" class="review-field">
             <span>此步骤的截止日期</span>
             <select v-model="taskDates[action.id]" :aria-label="action.title+'截止日期'">
@@ -82,7 +82,7 @@ watch(()=>[props.caseId,props.revisionKey],()=>{if(props.caseId!=='demo-assessme
 </template>
 <style scoped>
 .review-panel{margin-block:16px;min-width:0;overflow-wrap:anywhere}
-.review-panel h2{font-size:18px}
+.review-panel h2{font-size:18px;margin:0 0 8px}.review-panel{padding:18px}.review-panel>form>p{font-size:13px;color:var(--color-text-secondary);margin:8px 0}.review-evidence summary{font-size:12px;color:var(--color-primary,#008a79);cursor:pointer;padding:6px 0}.review-date>p{font-size:13px;color:#855b17;margin:6px 0}.review-date>strong{font-size:17px}.review-panel fieldset{background:#fbfdfc}.review-panel legend{font-size:15px}
 .review-panel form{min-width:0}
 .review-panel fieldset{min-width:0;margin:16px 0;padding:12px;border:1px solid var(--color-border);border-radius:12px}
 .review-panel legend{max-width:100%;padding:0 4px;font-weight:650}
