@@ -170,7 +170,7 @@ def confirm_review(connection, owner_id: str, case_id: str, revision: int, actio
     timestamp = now()
     if source == "user_input":
         ref = "block:" + str(uuid.uuid4())
-        connection.execute("INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)",
+        connection.execute("INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)",
                            (ref, owner_id, case_id, "用户确认", f"用户确认截止日期为 {value}", "用户确认记录，不代表官方文件", None, timestamp))
         refs = [ref]
     connection.execute("UPDATE cases SET deadline=?,deadline_source=?,deadline_evidence_ids_json=?,updated_at=? WHERE id=? AND owner_id=?",
@@ -188,7 +188,7 @@ def confirm_review(connection, owner_id: str, case_id: str, revision: int, actio
         task_value, date_refs, task_source=resolved.get(action_id,(value,refs,source))
         if action_id in resolved and task_source=='user_input':
             ref='block:'+str(uuid.uuid4())
-            connection.execute('INSERT INTO evidence VALUES(?,?,?,?,?,?,?,?)',(ref,owner_id,case_id,'用户确认',f'用户确认任务截止日期为 {task_value}','用户确认记录，不代表官方文件',None,timestamp))
+            connection.execute('INSERT INTO evidence(id, owner_id, case_id, source_name, text, locator, page, created_at) VALUES(?,?,?,?,?,?,?,?)',(ref,owner_id,case_id,'用户确认',f'用户确认任务截止日期为 {task_value}','用户确认记录，不代表官方文件',None,timestamp))
             date_refs=[ref]
         task_refs=sorted(set(action['evidence_ids'])|set(date_refs)|({planning['evidence_id']} if planning else set()))
         connection.execute("""INSERT INTO tasks(id,owner_id,case_id,title,status,deadline,evidence_ids_json,created_at,updated_at,duration_minutes)
