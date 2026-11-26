@@ -14,20 +14,19 @@ import AnalysisReviewPanel from '../../components/AnalysisReviewPanel.vue';
 import AnalysisHistoryPanel from '../../components/AnalysisHistoryPanel.vue';
 import AttachmentPanel from '../../components/AttachmentPanel.vue';
 import {useCasesStore} from './store';
+import {useCaseEditor} from './useCaseEditor';
 import {useAccountStore} from '../../stores/account';
 
 
 const route=useRoute(),router=useRouter(),cases=useCasesStore(),account=useAccountStore();
-const pageError=ref(''),pageMessage=ref(''),evidenceOpen=ref(false),activeEvidence=ref<any|null>(null),editing=ref(false),saving=ref(false);
-const draft=ref<any>({title:'',category:'other',status:'draft',deadline:''});
+const pageError=ref(''),evidenceOpen=ref(false),activeEvidence=ref<any|null>(null);
 const caseId=computed(()=>String(route.params.id));
+const {editing,saving,pageMessage,draft,beginEdit,saveCase}=useCaseEditor(caseId,pageError);
 const resources=computed(()=>cases.resources||{});
 async function load(){pageError.value='';try{await cases.loadOne(caseId.value);await cases.loadResources(caseId.value)}catch(e:any){pageError.value=e?.message||'事项解析结果读取失败'}}
-onMounted(load);watch(caseId,()=>{pageMessage.value='';editing.value=false;evidenceOpen.value=false;activeEvidence.value=null;load()});
+onMounted(load);watch(caseId,()=>{evidenceOpen.value=false;activeEvidence.value=null;load()});
 function evidenceById(id?:string){return resources.value.evidence?.find((item:any)=>item.id===id)||null}
 function openEvidence(item:any){const id=item?.evidence_ids?.[0]||item?.id;activeEvidence.value=evidenceById(id)||item;evidenceOpen.value=true}
-function beginEdit(){const item=cases.selected;draft.value={title:item.title,category:item.category,status:item.status,deadline:item.deadline?.slice(0,10)||''};editing.value=true;pageMessage.value=''}
-async function saveCase(){saving.value=true;pageError.value='';try{await cases.updateCase(caseId.value,{...draft.value,deadline:draft.value.deadline||null});editing.value=false;pageMessage.value='事项信息已保存。'}catch(e:any){pageError.value=e?.message||'事项保存失败'}finally{saving.value=false}}
 const deadlineEvidence=computed(()=>cases.selected?.deadline_evidence_ids?.map((id:string)=>evidenceById(id)).filter(Boolean)||[]);
 const deadlineSourceLabel=computed(()=>({document:'来自导入文档',knowledge:'来自规则知识',user_input:'由你填写',generated:'系统生成，待核对'} as Record<string,string>)[cases.selected?.deadline_source]||'来源待核对');
 </script>

@@ -398,3 +398,9 @@ BUILD SUCCESSFUL in 6m 39s
 - 运行 `npm.cmd --prefix mobile test -- src/features/cases/analysisLayout.test.ts src/services/review.test.ts src/services/localMatching.test.ts src/services/privacyGuard.test.ts`，4 文件、14 项通过；`npm.cmd --prefix mobile run build` 通过，220 个模块完成转换。Vite 输出既有 CJS 弃用提示。
 - Edge 无头浏览器、390×844，使用合成账户、零任务及一项缺失附件的受控响应。点击“打开完整执行流程”进入同一事项的流程空态，再点页面返回按钮回到核对页；确认按钮保持禁用，附件警示在核对区之前。该次往返无业务写请求、页面异常或结果页横向溢出。截图存于本工作树忽略目录 `.runtime/ux-a04-final/`。真实后端及 Android 真机未验，本次未构建 APK；交互效果待 A 确认。
 - A 已查看最终页面截图及完整源码补丁，认可当前交互效果与修改范围，同意提交并创建 PR。真实后端及 Android 真机验收仍待执行。
+
+### 2026-11-26 · UX-A04 / PR #43 跨事项保存回写修正
+
+- 在 `b80ace0` 上按独立评审意见修正。结果页按保存批次处理成功、失败和结束回调；切换事项立即清除旧编辑与保存状态。store 收到成功 PATCH 后更新目标事项的列表项，仅在该 ID 仍被选中时更新详情。页面模板和已认可布局沿用原版。
+- 使用两个可控 PATCH 响应，覆盖 A 保存、切换 B、B 开始保存后 A 才成功或失败。检查两条列表项、B 的详情、草稿、编辑/保存状态和提示，并验证 B 自己的成功与失败回调。附件顺序断言先定位带 alert 角色的段落并核对其中的缺件文字，再检查核对区存在且排在警示之后。
+- 定向命令 `npm.cmd --prefix mobile test -- src/features/cases/useCaseEditor.test.ts src/features/cases/analysisLayout.test.ts src/services/review.test.ts src/services/localMatching.test.ts src/services/privacyGuard.test.ts`，5 文件、16 项通过。生产构建 `npm.cmd --prefix mobile run build` 通过，221 个模块完成转换，保留既有 Vite CJS 弃用提示。原有浏览器证据保留，本轮使用受控响应验证保存时序；真实后端及 Android 真机仍待验收。

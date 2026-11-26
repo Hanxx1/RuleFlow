@@ -30,8 +30,12 @@ describe('UX-A04 result hierarchy',()=>{
  });
  it('keeps incomplete attachment warning before confirmation and risk reasons outside details',async()=>{
   const html=await render({signedIn:true,missing:2});
-  expect(html).toContain('还缺 2 项附件或读取失败');
-  expect(html.indexOf('role="alert"')).toBeLessThan(html.indexOf('id="analysis-review"'));
+  const warning=/<p\b[^>]*\brole="alert"[^>]*>([^<]*)<\/p>/.exec(html);
+  expect(warning).not.toBeNull();
+  expect(warning![1]).toContain('还缺 2 项附件或读取失败');
+  const reviewStart=html.indexOf('id="analysis-review"');
+  expect(reviewStart).toBeGreaterThanOrEqual(0);
+  expect(warning!.index).toBeLessThan(reviewStart);
   expect(html.indexOf('尚未核对年份')).toBeLessThan(html.indexOf('>分析说明</summary>'));
  });
  it('keeps the current case flow reachable for a signed-in user with zero tasks',async()=>{
