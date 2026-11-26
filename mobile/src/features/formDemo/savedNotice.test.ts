@@ -1,15 +1,18 @@
 import {createHash} from 'node:crypto'
 import {beforeEach,describe,expect,it,vi} from 'vitest'
-import {ApiError,api,apiBlob} from '../../core/http'
+import {ApiError,api} from '../../core/http'
 import {readFormContext,type FormContext,type FormContextSource} from '../imports/formContext'
+import {readFormOriginal} from '../imports/formOriginal'
 import {preserveAttachmentKeys} from './noticeIntake'
-import {defaultNotice,loadSavedNotice,loadSavedOriginal,recheckSavedForm,savedDraftKey,savedNoticeProblem,savedRules} from './savedNotice'
+import {defaultNotice,isLegacyXlsSource,loadSavedNotice,loadSavedOriginal,recheckSavedForm,savedDraftKey,savedNoticeProblem,savedRules} from './savedNotice'
 import templateData from './templateData.json'
 
 vi.mock('../../core/http',async importOriginal=>({
-  ...await importOriginal<typeof import('../../core/http')>(),api:vi.fn(),apiBlob:vi.fn(),
+  ...await importOriginal<typeof import('../../core/http')>(),api:vi.fn(),
 }))
 vi.mock('../imports/formContext',()=>({readFormContext:vi.fn()}))
+
+vi.mock('../imports/formOriginal',()=>({readFormOriginal:vi.fn()}))
 
 const raw = Buffer.from(templateData['scholarship.xlsx'],'base64')
 const hash = createHash('sha256').update(raw).digest('hex')
@@ -36,6 +39,14 @@ const context = (...sources:FormContextSource[]):FormContext => ({
 beforeEach(()=>vi.resetAllMocks())
 
 describe('authenticated inputs',()=>{
+  it('identifies a saved XLS without making its extracted cells the default notice',()=>{
+    const legacy:FormContextSource = {...source('legacy','旧版申请表.XLS'),extraction:{state:'available',error_code:null}}
+    expect(isLegacyXlsSource(legacy)).toBe(true)
+    expect(isLegacyXlsSource(a)).toBe(false)
+    expect(defaultNotice(context(legacy,a,announcement()),a)).toBe('notice')
+    expect(defaultNotice(context(legacy,a),a)).toBe('')
+  })
+
   it('passes a fresh batch revision into the existing typed client',async()=>{
     vi.mocked(api).mockResolvedValue({revision:5})
     vi.mocked(readFormContext).mockResolvedValue(context(a,b))
@@ -58,19 +69,25 @@ describe('authenticated inputs',()=>{
     expect(readFormContext).toHaveBeenCalledTimes(3)
   })
 
-  it('allows a verified Office original when server extraction failed',async()=>{
-    vi.mocked(apiBlob).mockResolvedValue(new Blob([new Uint8Array(raw)]))
-    await expect(loadSavedOriginal({...a,extraction:{state:'failed',error_code:'parse_failed'}})).resolves.toMatchObject({id:'scholarship'})
-    expect(apiBlob).toHaveBeenCalledWith('/api/v1/documents/doc-a/content')
+  it('passes the exact snapshot and source into the shared reader, even with failed extraction',async()=>{
+    const failed = {...a,extraction:{state:'failed',error_code:'parse_failed'}} as const
+    const batch = context(b,failed)
+    vi.mocked(readFormOriginal).mockResolvedValue(new Blob([new Uint8Array(raw)]))
+    await expect(loadSavedOriginal(batch,failed)).resolves.toMatchObject({scenario:{id:'scholarship'}})
+    expect(readFormOriginal).toHaveBeenCalledTimes(1)
+    expect(readFormOriginal).toHaveBeenCalledWith(batch,failed.source_id)
   })
 
-  it('blocks same-size byte changes and never downloads a missing original',async()=>{
-    const changed = new Uint8Array(raw)
-    changed[changed.length-1]^=1
-    vi.mocked(apiBlob).mockResolvedValue(new Blob([changed]))
-    await expect(loadSavedOriginal(a)).rejects.toThrow('原件指纹不符')
-    await expect(loadSavedOriginal({...b,original:{state:'missing',error_code:'missing'}})).rejects.toThrow('原件已缺失')
-    expect(apiBlob).toHaveBeenCalledTimes(1)
+  it('keeps missing originals out of the reader and propagates integrity errors for the selected file',async()=>{
+    const missing = {...b,original:{state:'missing',error_code:'missing'}} as const
+    const batch = context(a,missing)
+    await expect(loadSavedOriginal(batch,missing)).rejects.toThrow('原件已缺失')
+    expect(readFormOriginal).not.toHaveBeenCalled()
+    const changed = new Error('下载内容与来源原件不一致，请重新读取后核对。')
+    vi.mocked(readFormOriginal).mockRejectedValue(changed)
+    await expect(loadSavedOriginal(batch,a)).rejects.toBe(changed)
+    expect(readFormOriginal).toHaveBeenCalledTimes(1)
+    expect(readFormOriginal).toHaveBeenCalledWith(batch,a.source_id)
   })
 })
 
@@ -116,6 +133,21 @@ describe('per-file draft identity and requirements',()=>{
     const next = context(notice,a,b,source('c','附件3.xlsx'))
     expect(savedRules(next,notice,'b',scopes,[]).requirements.lengths.reason.max).toBe(150)
     expect(savedRules(next,notice,'c',scopes,[]).unresolved).toBe(true)
+  })
+
+  it('keeps separate material requirements visible without applying their limits to any form',()=>{
+    const notice = announcement('个人总结不少于1500字','附件1申请理由不超过180字')
+    const initial = context(notice,a,b)
+    const rule = savedRules(initial,notice,'a',{},[]).items[0]
+    expect(rule.needsScope).toBe(true)
+    const scopes = {[rule.key]:{applyTo:[],candidates:['a','b'],manual:true}}
+    for (const item of [a,b]) {
+      const resolved = savedRules(initial,notice,item.source_id,scopes,[])
+      expect(resolved.unresolved).toBe(false)
+      expect(resolved.requirements.lengths.achievement).toBeUndefined()
+      expect(resolved.requirements.evidence).toContainEqual(expect.objectContaining({kind:'review',text:rule.text}))
+      expect(resolved.signature).not.toEqual(savedRules(initial,notice,item.source_id,{},[]).signature)
+    }
   })
 
   it('keeps an unaffected table eligible when its sibling needs a new binding',()=>{

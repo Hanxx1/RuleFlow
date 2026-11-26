@@ -12,6 +12,9 @@ import {experienceSource,loadExperiences} from '../experience/archive'
 import {reviewAccountProfile,staleProfileLabels,type ProfileCandidate} from './accountFormProfile'
 import {awardCandidates,currentAward,retainAwardUses,type AwardUse} from './accountAwardFill'
 import {reasonAwards,reasonField,type ReasonVersion} from './reasonDraft'
+import {exportGenericForm,mappedFields} from './genericForm'
+import {createOfficeDelivery,officeFilename} from './officeDelivery'
+import {prepareVaultFormArchive,VaultArchiveUncertain,type VaultArchiveReceipt} from './vaultFormArchive'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
 import {clearFormDrafts,DraftRevisionConflict,readDraftReference,readFormDrafts,recoverableFields,
   saveFormDraft,type SavedFormDraft} from './savedFormDrafts'
@@ -26,7 +29,7 @@ const importDraft = useImportDraftStore()
 const owner = ref<FormProfileOwner>(props.fromNotice?'local:notice':'demo:forms')
 const intake = ref<NoticeSelection>()
 const intakeKey = ref(0)
-const persistAllowed = computed(()=>!props.savedBatchId && (!props.fromNotice || !account.signedIn))
+const persistAllowed = computed(()=>!props.savedBatchId && !intake.value?.genericMapping && (!props.fromNotice || !account.signedIn))
 const profile = ref<DemoProfile>({revision:0,values:{},awards:[]})
 const ready = ref(false)
 const saving = ref(false)
@@ -42,7 +45,19 @@ const zoom = ref(1)
 const vertical = ref(50)
 const notice = ref('')
 const preview = ref(false)
-const confirmation = shallowRef<Readonly<{values:Readonly<FormValues>;photo:string;filename:string}>>()
+const confirmation = shallowRef<ReturnType<typeof createOfficeDelivery>>()
+const verifiedFile = shallowRef<{filename:string;bytes:number}>()
+const vaultConsent = ref(false)
+const vaultLinkCase = ref(false)
+const archivedFile = shallowRef<VaultArchiveReceipt>()
+const archiveUncertain = ref(false)
+watch(confirmation,()=>{
+  verifiedFile.value = undefined
+  archivedFile.value = undefined
+  archiveUncertain.value = false
+  vaultConsent.value = false
+  vaultLinkCase.value = false
+},{flush:'sync'})
 const reveal = ref(false)
 const message = ref('')
 const problem = ref('')
@@ -115,7 +130,9 @@ const filenameError = computed(()=>{
   if (requiredStem.value && filename.value!==requiredStem.value) return '文件名须与通知识别出的命名要求一致。'
   return validateFilename(filename.value)
 })
-const filenamePreview = computed(()=>(props.fromNotice || filename.value.startsWith('演示-')?'':'演示-')+filename.value+'.'+scenario.value.format)
+const filenamePreview = computed(()=>officeFilename(scenario.value.format,filename.value,!props.fromNotice))
+const handoffRequests = computed(()=>intake.value?.requirements.evidence.filter(item=>
+  item.kind==='review' || item.kind==='photo') ?? [])
 const days = computed(()=>leaveDays(values.value))
 const competition = computed(()=>isCompetitionNotice(notice.value))
 
@@ -128,7 +145,7 @@ function changed() {
   if (!values.value.reason?.trim()) acceptedReason.value = undefined
   draftMessage.value = ''
   confirmation.value = undefined
-  if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
+  if (intake.value) attachmentProgress.value[intake.value.progressId ?? intake.value.id] = 'editing'
   message.value = ''
   problem.value = ''
 }
@@ -148,7 +165,7 @@ function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
   if (saveCurrent) rememberDraft(scenario.value.id)
   scenario.value = next
   const draft = drafts.get(draftKey)
-  values.value = draft ? {...draft.values} : resolveDemoProfile(next,profile.value)
+  values.value = draft ? {...draft.values} : intake.value?.genericMapping ? {} : resolveDemoProfile(next,profile.value)
   profileFields.value = {...draft?.profileFields}
   awardUses.value = draft?.awardUses || []
   photo.value = draft?.photo || ''
@@ -533,8 +550,17 @@ function useAvatar() {
 }
 
 function confirmOutput(event:Event) {
-  confirmation.value = (event.target as HTMLInputElement).checked
-    ? Object.freeze({values:Object.freeze({...values.value}),photo:photo.value,filename:filename.value}) : undefined
+  confirmation.value = undefined
+  if (!(event.target as HTMLInputElement).checked) return
+  const template = scenario.value
+  const mapping = intake.value?.genericMapping
+  const confirmedValues = Object.freeze({...values.value})
+  const image = photo.value
+  const stem = filename.value
+  const demo = !props.fromNotice
+  confirmation.value = createOfficeDelivery(template.format,filenamePreview.value,()=>mapping
+    ? exportGenericForm(mapping,template,confirmedValues,stem)
+    : buildForm(template,confirmedValues,image,stem,demo))
 }
 
 function togglePreview() {
@@ -542,7 +568,7 @@ function togglePreview() {
   confirmation.value = undefined
 }
 
-async function download() {
+async function deliver(destination:'download'|'vault') {
   const output = confirmation.value
   if (!output || !ready.value || saving.value || exporting.value || count.value || filenameError.value ||
       intake.value?.exportBlocked ||
@@ -551,13 +577,26 @@ async function download() {
   const template = scenario.value
   const version = formVersion
   const accountId = account.user?.id
+  const archive = destination==='vault'
+  if (archive && (!props.savedBatchId || !selection || !accountId ||
+      !vaultConsent.value || archivedFile.value || archiveUncertain.value)) return
+  const caseId = vaultLinkCase.value ? selection?.caseId || undefined : undefined
   const sources = Object.values(profileFields.value)
   const awards = awardUses.value
   const reasonAwardsUsed = acceptedReason.value?.awards ?? []
   const stillConfirmed = ()=>mounted && version===formVersion && account.user?.id===accountId &&
     intake.value===selection && confirmation.value===output
   exporting.value = true
+  problem.value = ''
+  message.value = ''
+  let checkingSources = false
   try {
+    const archiveOutput = archive ? await output() : undefined
+    if (!stillConfirmed()) return
+    const save = archiveOutput ? await prepareVaultFormArchive(archiveOutput,caseId,vaultConsent.value,()=>
+      stillConfirmed() && window.confirm('此 Office 文件没有完成端侧扫描。请确认已人工核对整个文件，允许上传到当前账号的材料库。')) : undefined
+    if (!stillConfirmed() || (archive && !save)) return
+    checkingSources = true
     if (selection?.verifyExport) {
       await selection.verifyExport()
       if (!stillConfirmed()) return
@@ -581,21 +620,33 @@ async function download() {
       const stale = [...new Set(awards.filter(use=>!currentAward(use.entry,available)).map(use=>use.entry.title))]
       if (stale.length) throw Error('已带入奖项需要重新核对（'+stale.join('、')+'）。请清除旧带入值后重新带入，也可手工填写。')
     }
-    const result = buildForm(template,output.values,output.photo,output.filename,!props.fromNotice)
+    checkingSources = false
+    const result = archiveOutput ?? await output()
+    if (!stillConfirmed()) return
+    verifiedFile.value = {filename:result.filename,bytes:result.blob.size}
+    if (save) {
+      const item = await save()
+      if (stillConfirmed()) {
+        archivedFile.value = item
+        message.value = item.linkedCase ? '已存入材料库并关联当前事项。' : '已存入当前账号的材料库。'
+      }
+      return
+    }
     const url = URL.createObjectURL(result.blob)
     const link = document.createElement('a')
     link.href = url
     link.download = result.filename
-    link.click()
-    if (intake.value) attachmentProgress.value[intake.value.id] = 'exported'
+    try { link.click() } catch (error) {
+      URL.revokeObjectURL(url)
+      throw error
+    }
+    if (selection) attachmentProgress.value[selection.progressId ?? selection.id] = 'exported'
     window.setTimeout(()=>URL.revokeObjectURL(url),15_000)
-    const generated = props.fromNotice?'文件已生成':'演示文件已生成'
-    message.value = scenario.value.photo==='physical'
-      ? generated+'。请打印后按校方要求贴照，再办理提交。'
-      : generated+'，未向学校提交。'
+    message.value = '已发起文件下载。'
   } catch (error) {
-    if (mounted && version===formVersion && account.user?.id===accountId) {
-      if (selection?.verifyExport) confirmation.value = undefined
+    if (stillConfirmed()) {
+      if (checkingSources && selection?.verifyExport) confirmation.value = undefined
+      if (error instanceof VaultArchiveUncertain) archiveUncertain.value = true
       problem.value = error instanceof Error && !error.message.startsWith('无法连接在线服务')
         ? error.message : '复核或导出失败，请检查网络后重试。'
     }
@@ -654,19 +705,24 @@ function displayed(value: string, sensitive?: boolean) {
       <template v-if="!fromNotice || intake">
       <section class="panel" aria-label="模板来源">
         <h2>{{ scenario.title }}</h2>
-        <p>{{ scenario.provenance }} · <a :href="scenario.source" target="_blank" rel="noopener noreferrer">{{ scenario.school }}</a></p>
-        <p>人工办理：{{ scenario.manual }}</p>
-        <p v-if="scenario.printNote" class="warning">{{ scenario.printNote }}</p>
+        <p>{{ scenario.provenance }}<template v-if="scenario.source"> ·
+          <a :href="scenario.source" target="_blank" rel="noopener noreferrer">{{ scenario.school }}</a>
+        </template></p>
         <p v-if="intake">已选原件：{{ intake.attachment }}。</p>
         <p v-if="intake?.exportBlocked" class="warning">{{ intake.exportBlocked }}</p>
         <p v-if="fromNotice && !persistAllowed">本次补录按当前文件管理。</p>
+        <p v-if="intake?.genericMapping">此原表的填写值仅保留在当前页面，需逐项核对未识别区和人工办理项。</p>
+        <details v-if="intake?.genericMapping?.form.manual.length">
+          <summary>查看原表保留区域</summary>
+          <ul><li v-for="(item,index) in intake.genericMapping.form.manual" :key="index">{{ item.where }} · {{ item.text }}</li></ul>
+        </details>
         <div v-if="!fromNotice" class="actions">
           <button type="button"  :disabled="!ready || saving" @click="fillExamples">用合成资料补齐缺项</button>
           <button type="button"  :disabled="!ready || saving" @click="clearRemembered">清除本机演示资料</button>
         </div>
       </section>
 
-      <section v-if="savedBatchId" class="panel" aria-label="原件草稿">
+      <section v-if="savedBatchId && intake?.draftKey" class="panel" aria-label="原件草稿">
         <h2>保存原件草稿</h2>
         <p>可在此标签页刷新后，由同一账号重新登录续填。主动退出时清除保存记录。</p>
         <p>可保存的手填字段 · {{ draftFieldLabels.join('、') }}。画像值可在续填时重新核对带入，其他内容请在本次核对填写。</p>
@@ -717,12 +773,12 @@ function displayed(value: string, sensitive?: boolean) {
       <section class="panel" aria-label="填写表单">
         <div class="section-head">
           <h2>{{ showAll ? '编辑整张表单' : '补录所需资料' }}</h2>
-          <p aria-live="polite">{{ count ? count+' 项待补充或修正' : '申请人字段已齐全' }}</p>
+          <p aria-live="polite">{{ count ? count+' 项待补充或修正' : intake?.genericMapping ? '已识别字段已填写，请核对原件其余区域' : '申请人字段已齐全' }}</p>
         </div>
         <div class="actions">
           <button type="button" @click="showAll=!showAll">{{ showAll ? '只显示补录字段' : '显示并编辑整张表单' }}</button>
         </div>
-        <AccountProfileFill v-if="savedBatchId && intake && account.signedIn" :key="intake.id"
+        <AccountProfileFill v-if="savedBatchId && intake && !intake.genericMapping && account.signedIn" :key="intake.id"
           :scenario="scenario" :case-id="intake.caseId" :values="values" :disabled="saving || exporting"
           @apply="fillFromAccountProfile"/>
         <button v-if="Object.keys(profileFields).length" type="button" :disabled="exporting" @click="clearProfileFields">
@@ -765,7 +821,7 @@ function displayed(value: string, sensitive?: boolean) {
                 <button v-if="acceptedReason.awards.length && values.reason!==acceptedReason.text" type="button"
                   :disabled="exporting" @click="confirmManualReason">确认手写理由的事实并解除档案引用</button>
               </template>
-              <small>{{ savedBatchId && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
+              <small>{{ intake?.draftKey && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>
         </fieldset>
@@ -794,7 +850,7 @@ function displayed(value: string, sensitive?: boolean) {
 
         <p v-if="scenario.photo==='physical'" class="warning">
           {{ scenario.photoNote || '照片需打印后粘贴。导出保留照片框。' }}
-          <a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方依据</a>
+          <a v-if="scenario.source" :href="scenario.source" target="_blank" rel="noopener noreferrer">校方依据</a>
         </p>
         <fieldset v-if="scenario.photo==='embedded'" :disabled="saving">
           <legend>演示照片</legend>
@@ -826,17 +882,64 @@ function displayed(value: string, sensitive?: boolean) {
 
       <section v-if="preview" class="panel" aria-label="导出预览">
         <h2>导出内容预览</h2>
-        <p>此处预览填写值。实际版式以 Excel 或 Word 中打开的文件为准。</p>
-        <p v-if="intake?.manualReviews" class="warning">通知中有 {{ intake.manualReviews }} 条人工核对或办理项，请返回上方通知依据逐条查看。</p>
         <dl v-for="group in scenario.groups" :key="group.title" class="preview-values">
           <template v-for="field in group.fields" :key="field.id">
             <dt>{{ field.label }}</dt><dd>{{ displayed(values[field.id],field.sensitive) }}</dd>
           </template>
         </dl>
-        <p v-if="scenario.photo==='physical'">照片框留空。打印后请按<a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方说明</a>粘贴照片。</p>
         <img v-if="scenario.photo==='embedded' && photo" class="preview-photo" :src="photo" alt="导出照片预览">
-        <label class="toggle"><input type="checkbox" :checked="Boolean(confirmation)" :disabled="Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting" @change="confirmOutput"> 我确认这份文件的填写值和文件名</label>
-        <button type="button" class="primary" :disabled="!confirmation || Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
+        <section class="delivery-review" aria-label="版式与交付检查">
+          <h3>导出文件</h3>
+          <p class="file-name">{{ filenamePreview }}</p>
+          <p v-if="fromNotice">下载后请按通知自行提交文件。</p>
+          <p>请在 {{ scenario.format==='xlsx' ? 'Excel 或 WPS 表格' : 'Word 或 WPS 文字' }} 中核对版式。需要纸质件时，请先检查打印预览。</p>
+          <p v-if="scenario.printNote" class="warning">{{ scenario.printNote }}</p>
+          <p>人工办理 · {{ scenario.manual }}</p>
+          <p v-if="scenario.photo==='physical'">照片框留空。打印后请按原件及适用通知粘贴照片。</p>
+          <details v-if="handoffRequests.length">
+            <summary>核对通知中的办理要求</summary>
+            <ul>
+              <li v-for="item in handoffRequests" :key="item.id">正文第 {{ item.line }} 行 · {{ item.text }}</li>
+            </ul>
+          </details>
+          <p v-if="(intake?.manualReviews || 0)>handoffRequests.filter(item=>item.kind==='review').length">其他要求请查看上方通知依据。</p>
+          <details v-if="intake?.genericMapping?.form.manual.length">
+            <summary>核对原表说明和保留区域</summary>
+            <ul>
+              <li v-for="(item,index) in intake.genericMapping.form.manual" :key="index">{{ item.where }} · {{ item.text }}</li>
+            </ul>
+          </details>
+        </section>
+        <label class="toggle"><input type="checkbox" :checked="Boolean(confirmation)" :disabled="Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting" @change="confirmOutput"> 我确认这份文件的填写值和文件名<span v-if="scenario.id==='leave'">，并已核对起止节次及总节数</span></label>
+        <button type="button" class="primary" :disabled="!confirmation || Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting" @click="deliver('download')">确认并下载 {{ scenario.format.toUpperCase() }}</button>
+        <p v-if="verifiedFile" role="status">文件校验通过 · {{ verifiedFile.filename }} · {{ verifiedFile.bytes }} 字节</p>
+        <details v-if="savedBatchId && account.signedIn && confirmation && !intake?.exportBlocked" class="vault-archive">
+          <summary>保存到材料库</summary>
+          <template v-if="archivedFile || archiveUncertain">
+            <p v-if="archivedFile">此确认版本已保存{{ archivedFile.linkedCase ? '并关联当前事项' : '' }}。</p>
+            <p v-else>保存状态待核对。</p>
+            <RouterLink to="/vault">查看材料库</RouterLink>
+          </template>
+          <template v-else>
+            <p>将当前确认的 {{ filenamePreview }} 上传并保存在你的账号中。</p>
+            <label v-if="intake?.caseId" class="toggle">
+              <input v-model="vaultLinkCase" type="checkbox" :disabled="exporting"> 关联此通知的事项
+            </label>
+            <label class="toggle">
+              <input v-model="vaultConsent" type="checkbox" :disabled="exporting">
+              我已核对文件隐私并同意上传到当前账号的材料库
+            </label>
+            <button type="button" :disabled="!vaultConsent || saving || exporting" @click="deliver('vault')">上传并存入材料库</button>
+          </template>
+        </details>
+        <details v-if="intake?.genericMapping">
+          <summary>查看填写清单</summary>
+          <ul>
+            <li v-for="item in mappedFields(intake.genericMapping)" :key="item.field.id">
+              {{ item.field.label }} · {{ displayed(values[item.field.id],item.field.sensitive) }}
+            </li>
+          </ul>
+        </details>
         <p v-if="exporting && savedBatchId" role="status">正在复核来源、通知要求及原件…</p>
       </section>
       </template>
@@ -863,6 +966,9 @@ button:disabled{opacity:.55;cursor:default}
 .actions,.section-head,.photo-panel{display:flex;gap:.65rem;align-items:flex-start;flex-wrap:wrap}
 .section-head{justify-content:space-between}
 fieldset{min-width:0;border:1px solid #e0e7f0;border-radius:.65rem;padding:.65rem;margin:0 0 .7rem}
+.delivery-review{margin:1rem 0;padding:.7rem;border:1px solid #e0e7f0;border-radius:.65rem}
+.delivery-review h3{margin:0 0 .6rem}
+.vault-archive{margin:1rem 0}
 legend{font-weight:700;padding:0 .2rem}
 .field{display:grid;gap:.2rem;margin:.2rem 0;font-size:.92rem;min-width:0}
 .field input,.field select,.field textarea{box-sizing:border-box;width:100%;min-height:2.4rem;border:1px solid #bacce2;border-radius:.45rem;padding:.45rem;background:white;color:#18243a;font:inherit}

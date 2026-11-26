@@ -8,7 +8,7 @@ const {zipSync,strToU8} = createRequire(path.resolve(__dirname,'../mobile/packag
 const original = process.argv[2]
 const out = process.argv[3]
 const base = process.env.FORM_DEMO_URL || 'http://127.0.0.1:5187'
-const text = '学生复学办理通知\n申请理由 12–30 字。\n申请表文件命名为“学号-姓名-复学申请.docx”。\n申请人签字后交件。'
+const text = '学生复学办理通知\n申请理由 12–30 字。\n申请表文件命名为“学号-姓名-复学申请.docx”。\n申请人签字后交件。\n附件2请加盖学院章后交件。'
 
 async function testMultiple(browser, replacementPath, requests, errors) {
   const context = await browser.newContext({acceptDownloads:true,viewport:{width:390,height:844}})
@@ -159,7 +159,12 @@ async function testMultiple(browser, replacementPath, requests, errors) {
     assert.equal(await page.getByRole('button',{name:'保存补录并预览'}).isDisabled(),true)
     await page.locator('#reason').fill('本人休学期已满，申请于新学期按原学籍复学。')
     await page.getByRole('button',{name:'保存补录并预览'}).click()
-    await page.getByText('00003456-林通知-复学申请.docx',{exact:true}).waitFor()
+    const delivery = page.getByRole('region',{name:'版式与交付检查'})
+    await delivery.getByText('00003456-林通知-复学申请.docx',{exact:true}).waitFor()
+    await delivery.getByText('下载后请按通知自行提交文件。',{exact:true}).waitFor()
+    await delivery.getByText('核对通知中的办理要求',{exact:true}).click()
+    await delivery.getByText(/正文第 4 行 · 申请人签字后交件/).waitFor()
+    assert.equal(await delivery.getByText(/附件2请加盖学院章/).count(),0)
     const filename = page.getByLabel('文件名（不含扩展名）')
     await filename.fill('不符合要求的文件名')
     await page.getByText('文件名须与通知识别出的命名要求一致。',{exact:true}).waitFor()
@@ -171,7 +176,7 @@ async function testMultiple(browser, replacementPath, requests, errors) {
     ])
     assert.equal(download.suggestedFilename(),'00003456-林通知-复学申请.docx')
     await download.saveAs(path.join(out,download.suggestedFilename()))
-    await page.getByText('文件已生成，未向学校提交。',{exact:true}).waitFor()
+    await page.getByText('已发起文件下载。',{exact:true}).waitFor()
     await page.getByRole('textbox',{name:'通知正文',exact:true}).fill('新的通知')
     assert.equal(await page.getByRole('button',{name:'确认并下载 DOCX'}).count(),0)
     if (process.argv[4] && process.argv[5]) {
