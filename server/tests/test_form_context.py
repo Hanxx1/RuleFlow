@@ -25,6 +25,35 @@ def context(user, batch, revision=None):
                       params={'expected_revision': revision})
 
 
+def test_url_cms_form_body_reaches_saved_lines_and_preserves_original(monkeypatch):
+    raw=('''<html><body><div><ul><li>学校导航</li></ul></div>
+    <form name="_newscontent_fromname"><div id="vsb_content">
+    <div class="v_news_content"><p>请提交申请表。</p><p>截止2026年12月1日。</p>
+    <p><a href="form.docx">附件：申请表</a></p></div></div></form>
+    <div><p>下一篇通知</p></div></body></html>''').encode()
+    url='https://notice.example.edu/info/1/2.htm'
+    monkeypatch.setattr('app.main.fetch_public', lambda target: (raw, 'text/html', url))
+    user=account('context-html-form@example.com')
+    batch=batch_for(user)
+    response=client.post(batch+'/sources/url',headers=head(user),
+                         json={'url':url,'consent':True})
+    assert response.status_code==200
+    source=response.json()['data']
+    assert source['status']=='ready'
+    assert source['metadata']['attachments'][0]['url']=='https://notice.example.edu/info/1/form.docx'
+    result=context(user,batch)
+    assert result.status_code==200
+    item,=result.json()['data']['sources']
+    expected=['请提交申请表。','截止2026年12月1日。','附件：申请表']
+    assert [line['text'] for line in item['lines']]==expected
+    assert item['text']=='\n'.join(expected)
+    assert item['document_ref']['sha256']==hashlib.sha256(raw).hexdigest()
+    document_id=item['document_ref']['id']
+    document=client.get('/api/v1/documents/'+document_id,headers=head(user)).json()['data']
+    assert [line['line_id'] for line in item['lines']]==[line['id'] for line in document['lines']]
+    assert client.get('/api/v1/documents/'+document_id+'/content',headers=head(user)).content==raw
+
+
 def upload(user, batch, raw=b'Synthetic notice\nSecond line', name='notice.txt'):
     response = client.post(batch + '/sources/files', headers=head(user), data={'consent': 'true'},
                            files=[('files', (name, raw, 'text/plain'))])

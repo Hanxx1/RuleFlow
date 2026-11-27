@@ -39,6 +39,48 @@ Windows，复用已有 `RuleFlow/.runtime/c-venv`，在本次独立工作区执�
 
 网页净化尚未修复；B 的双表成功为用户转达，未独立复验，不将 H06 全部边界、H08 或 RF 整卡标为完成。CM-004 需 B 回核课程／资料身份映射、服务端权限及限定资料集合检索、版本和逐项失效回执，并提供分支及测试证据；C 串页面、D 核时间和任务影响，公共接口及跨端失败恢复按原审查规则执行。当前课程删除和恢复仍为只读预览；真实解绑、恢复写入、更新删除及缓存生命周期未在本轮实现。无本次 APK。
 
+### 续记：RF-013 网页正文表单容器修复（2026-11-27）
+
+#### 1. 任务信息
+
+C；用户明确“开始开发”后实施网页正文提取最小修复。fetch 最新 main 为 `bbeb9a4`，已含 PR #50 的 `296df36` 交接文档；从该基线创建独立分支 `fix/RF-013-html-body-extraction`，工作区 `RuleFlow-RF013-html-body`。状态：修复及后端完整回归通过，待交叉评审。用户随后明确授权提交并推送本次 6 个文件；对应 commit 由本节 Git 历史追溯，推送结果以本次会话实际回执为准，未创建 PR。CM-004 本轮不改公共接口。
+
+#### 2. 技术实现
+
+修改 `server/app/parsing.py::html_blocks`：在删除 form 前定位已有正文选择器，只保留包裹该正文的 form；无关表单仍移除，input/button/select/textarea 等交互控件不进入正文。未新增选择器、依赖或正文猜测算法，原有行内文字、换行、表格分隔保持。
+
+`server/tests/test_html_blocks.py` 新增 9 项结构回归（含七种既有容器），`server/tests/test_form_context.py` 新增 1 项 URL 来源导入→Document 原行→form-context 回归，验证附件候选、原件字节/hash及真实行 ID。同步更新来源移交和联调交接说明。共 6 个修改文件，无数据库、共享接口、B 页面或 Android 修改。
+
+#### 3. 设计与关键决策
+
+从 B 远端 `feat/RF-012-device-draft-retention` 的工作记录定位[西北大学历史通知](https://www.nwu.edu.cn/info/1101/13884.htm)，实际获取公开 HTML。正文结构为 `form > #vsb_content > .v_news_content`；旧代码先删除 form，导致正文丢失，回退后返回 69 段、1403 字符，首段为导航，资助正文缺失。采用容器优先的最小修复，保留搜索／登录表单清理，不按中文关键词猜删正文，也不修改已保存来源或 Evidence 行。
+
+只影响新解析。B 使用修复版后需显式新导入网页，按新 source_id／Document 行核对；旧噪声不因 form-context 重读而改变，新来源不能静默继承旧草稿身份。
+
+#### 4. 遇到的问题及解决
+
+沙箱 Git fetch 和网页获取受网络限制，正常本机权限复跑成功。沙箱 pytest 初次因系统临时目录权限产生 32 项 setup error，不计产品测试结果；正常权限下修复前为 9 failed／23 passed，均为新增正文丢失或控件反例，修复后 32 passed。
+
+首轮完整后端为 334 passed／14 failed，失败集中在 `test_server_data_backup.py`；单独首错复验为 `backup FAILED OUTPUT_IN_REPOSITORY`。确认默认临时目录的祖先 `C:/Users/Logic/.git` 存在，既有备份保护按设计拒绝该输出。未删除仓库标记或放宽保护，改用仓库外、预先确认不存在的专用 `C:/Windows/Temp/campusweave-rf013-20261127-a8d731` 复验，348 项通过。检查原工作区时沙箱身份触发 Git 所有权错误，正常用户权限只读复核成功，未改全局 safe.directory；原计划文档差异保留。
+
+#### 5. 测试与验证
+
+Windows，复用已有 `.runtime/c-venv`；以下命令从本次工作区执行，Python 为 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`。
+
+- `-m pytest --rootdir=. server/tests/test_html_blocks.py server/tests/test_form_context.py -q -p no:cacheprovider`：修复后 **32 passed，5 项既有弃用警告，5.40 秒**。
+- `-m pytest --rootdir=. --basetemp=C:/Windows/Temp/campusweave-rf013-20261127-a8d731 server/tests -q -p no:cacheprovider`：最终 **348 passed，5 项既有弃用警告，55.76 秒**。使用隔离数据库及合成文件，未跳过或修改备份保护断言。
+- 公开网页本地解析：获取 72,550 字节，SHA-256 `bc5d395179c2af25321d5965b0ae12dedead76fb9abb65b6ae093f604dd31f2e`；修复后 **30 段、790 字符**，忽略空白后与 `.v_news_content` 完整文字相等，检查的导航文字未混入、资助正文存在。该 hash 只标识本次获取，网页后续可能变化；未获取附件或执行双表导出。
+- `scripts/check-api-contract.py`：通过，OpenAPI 保持接受基线 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`。`scripts/check-docs.py`：265 个本地链接目标通过；`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份副本）及 `git diff --check` 均通过。
+- 未运行前端构建、B 双表浏览器链或 Android；无 APK。
+
+#### 6. 运行证据
+
+本次原始网页和仅含 URL／大小／hash／检查结果的 JSON 在本机忽略目录 `.runtime/html-body/nwu-notice.html`、`.runtime/html-body/verification.json`，未提交网页原件或个人数据。新增回归均为合成文本及 HTML，跟随本任务分支供评审。失败、修复后测试和真实网页验证输出保留在本次 Codex 会话；原始会话分享链接或导出仍待保留。
+
+#### 7. 未完成与限制
+
+修复的是既有容器被外层 form 误删的路径；没有正文容器、动态渲染、选中 main 过宽等网页仍可能失败或夹带内容，不承诺任意网页纯正文。旧批次不会自动清洗，未验 B 完整双表导出、真实网络导入全链或真机，RF-013 整卡与 CM-004 接口未标完成。CM-004 继续按原文档由 B/C 回核身份、权限和失效反馈。
+
 ## RF-011/013｜C 侧原件读取与字节核验（2026-11-25）
 
 ### 1. 任务信息
