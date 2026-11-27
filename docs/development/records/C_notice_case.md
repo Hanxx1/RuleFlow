@@ -1,5 +1,44 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-014｜多候选输出校验内部实验（2026-11-28）
+
+### 1. 任务信息
+
+C；用户在下一阶段建议后明确“继续”。本轮完成不落库的校验与合成回归切片，供后续公共协议评审；不是正式多事项识别、存储或执行功能。分支 `feat/RF-014-candidate-validation`，独立工作区 `RuleFlow-RF014-candidates`，fetch 后基线 `origin/main` 为 `bbeb9a4`。上一轮正文修复 `9031dea` 仍在独立远端分支，不作为已合入依赖。用户随后明确授权提交并推送本轮 6 个文件；对应 commit 由本节 Git 历史追溯，推送结果以本次会话实际回执为准，未创建 PR。
+
+### 2. 技术实现
+
+新增 `server/app/services/notice_candidate_validation.py`：纯函数 `validate_candidate_output` 与 Fake Provider 接缝 `preview_candidate_output`，严格内部工作模型和只读预览。逐项验证批次、source_id／hash、Document 版本／行、精确短引、显式课程归属、重复及数量／长度边界；模型资格或正式对象字段拒绝，输出 UNKNOWN 并保留核对原因。已知不可用或超时异常转为固定内容无关错误，无 Demo 回退。
+
+新增 `server/tests/test_notice_candidate_validation.py` 43 项用例及 `evidence/C_20261128/rf014_preview_samples.json` 两门同名不同学期课程＋普通事务的合成样例；新增 [校验准备说明](../RF014_CANDIDATE_VALIDATION_PREPARATION.md)，更新 RF-002 入口和本记录。没有路由或现有业务调用新模块；未改公共 Provider、AIAnalysis、API／OpenAPI、数据库、存储、UI、B/D 文件或 Android，无新依赖。
+
+### 3. 设计与关键决策
+
+先复用 `read_source_snapshot` 输出，不建立第二套来源服务或 Evidence。调用方须以认证身份取得真实快照和该身份可用课程集合，纯校验不承担资源授权；未将模型／客户端快照视为凭据。批次 revision 不足以覆盖同版本来源变化，因此保留逐来源 hash、Document 版本及行检查。缺原件但历史行仍在时明确待核对，旧文本不编造行定位；同标题不合并跨学期课程。
+
+结果只表示结构及引用可定位，不证明语义、资格或执行许可；所有候选保持 UNKNOWN 和用户核对要求。接口字段、kind 和本地错误码都是内部评审工作模型，不直接升级为正式 DTO；规则、行动、日期和材料内容验证留后续，避免提前复制既有 Rule／Review 能力。
+
+### 4. 遇到的问题及解决
+
+沙箱 fetch 无法联网，正常本机权限只对已知工作区执行 fetch 成功，未更改全局 Git 配置。首轮测试指定 `.runtime/pytest-rf014-first`，但父 `.runtime` 尚不存在，39 项均为 setup error，未执行产品断言；创建父目录后换新的独立 basetemp 复跑，39 项通过。随后补来源替换、重复身份及长度用例，最终 43 项含在 95 项相关回归中全部通过。未通过删断言、放宽校验或跳过测试取绿灯。
+
+### 5. 测试与验证
+
+Windows，复用 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`，从本次工作区执行：
+
+- `-m pytest --rootdir=. --basetemp=.runtime/pytest-rf014-second server/tests/test_notice_candidate_validation.py -q -p no:cacheprovider --tb=short`：初版 **39 passed，5 项既有弃用警告，2.01 秒**。
+- `-m pytest --rootdir=. --basetemp=.runtime/pytest-rf014-related server/tests/test_notice_candidate_validation.py server/tests/test_ai.py server/tests/test_notice_source_snapshot.py server/tests/test_form_context.py server/tests/test_notice_migration_baseline.py -q -p no:cacheprovider --tb=short`：最终 **95 passed，5 项既有弃用警告，11.42 秒**，含新增 43 项。真实快照用例通过现有 API 上传合成 TXT，跨 owner 读取被拒，校验前后数据库 dump 一致，未创建候选、Case／Evidence／Task。
+- `scripts/check-api-contract.py`：通过，指纹仍为 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`；`scripts/check-docs.py`：271 个本地链接目标通过；`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份副本）及 `git diff --check` 均通过。
+- 未运行完整后端、前端构建、真实模型／外部资源、B 工作区或 Android。Fake Provider 成功／空输出／失败测试不等于真实识别效果或 RF-009/010 完成。
+
+### 6. 运行证据
+
+样例 JSON 与新增测试在本分支实际存在，全部为合成文本及占位 ID；测试输出在当前 Codex 会话，未另存日志或真实通知／个人数据。`.runtime/pytest-rf014-*` 是本次忽略的隔离测试输出，不作为正式业务备份。原始 Codex 会话分享链接或导出待保留；无本轮 APK。
+
+### 7. 未完成与限制
+
+模块未接公开路由、Provider 或页面；没有真实多事项识别、行动／日期／材料／规则内容校验、预算／幂等、存储或执行。内部模型不代表正式契约获批。B/D 需回核来源与归属语义，A/B 协调正式协议；RF-015／016 的 DDL、版本和确认事务继续按唯一决策表确认，CM-007 不消费本模型执行正式写入。快照授权和新鲜度由调用方保障，当前校验不能独立防止传入伪造快照或保证返回后来源不变。
+
 ## RF-013 与 CM-004｜正文入口核查和课程资料交接（2026-11-27）
 
 ### 1. 任务信息
