@@ -154,7 +154,7 @@ async function run() {
     const unaffected = await write(unrelated,{
       owner:other.id,batch:otherBatch,key:otherKey,values:{name:'其他账户'},epoch:otherEpoch,revision:0,
     })
-    console.log('PASS real login and original verification before same-device browser restart recovery; foreign account sees nothing; private fields excluded')
+    console.log('PASS real login and original verification before same-device browser restart recovery; server denies foreign original; caller-selected local partitions are independent; private fields excluded')
 
     const secondTab = await signIn(owner)
     assert.equal(await readKey(secondTab),key)

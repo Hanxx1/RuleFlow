@@ -36,7 +36,7 @@ export function startsProtectedSection(text: string) {
   const label = normalizedLabel(text)
   return /^(以下|[本此][栏区])?由(?!申请人|本人|学生|个人|填表人).{1,35}填写/.test(label) ||
     /^(学校|学院|院系|教务|校医院|财务|体育部|管理部门|审核单位|辅导员|导师).{0,14}(意见|审核|审批|填写)/.test(label) ||
-    /^(辅导员|指导教师|导师|班主任|推荐人|负责人|经办人)(?:基本|联系|身份)?(?:信息|资料|栏|区)?$/.test(label)
+    /^(辅导员|指导教师|导师|班主任|推荐人|负责人|经办人|审核人|审批人)(?:基本|联系|身份)?(?:信息|资料|栏|区)?$/.test(label)
 }
 
 export function detectField(raw: string, allowCustom = false): Field | undefined {

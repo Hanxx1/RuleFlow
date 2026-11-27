@@ -13,6 +13,8 @@ describe('generic form field evidence',()=>{
     expect(reservedLabel('申请人签名')).toBe(true)
     expect(startsProtectedSection('辅导员基本信息')).toBe(true)
     expect(startsProtectedSection('推荐人联系资料')).toBe(true)
+    expect(startsProtectedSection('审核人信息')).toBe(true)
+    expect(startsProtectedSection('审批人联系信息')).toBe(true)
     expect(startsProtectedSection('申请人信息')).toBe(false)
   })
 
