@@ -1,5 +1,44 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-013 与 CM-004｜正文入口核查和课程资料交接（2026-11-27）
+
+### 1. 任务信息
+
+C；用户转达 B 已用真实校方通知正文和附件跑通双表填写／导出，但整页网页导入仍夹带导航，要求核查对应分支并更新文档，同时对齐 CM-004 的课程身份、资料授权和删课／恢复失效反馈。状态：C 侧核查及可评审交接文档已完成，待 B 技术回核；未完成网页提取修复或 CM-004 真实关联实现。分支 `docs/RF-013-CM-004-integration-handoff`，独立工作区 `RuleFlow-RF013-CM004-handoff`，基于实际 fetch 后 `origin/main` 的 `f6aec68`。用户随后明确授权提交并推送这三个文档；对应 commit 由本节 Git 历史追溯，推送结果以本次会话实际回执为准，未创建 PR。
+
+### 2. 技术实现
+
+新增 [正文入口与课程资料联调交接](../RF013_CM004_INTEGRATION_HANDOFF.md)，更新 [来源移交说明](C_RF013_source_handoff.md) 顶部当前状态及本记录。核对网页获取→`parse_url_blocks`→`parse_bytes`→`html_blocks`、form-context 只读快照与 `readFormOriginal` 字节核验、课程档案 id／Workspace owner 和整体 revision、知识库检索请求及索引删除行为。未改正式业务代码、API／DTO、数据库、共享存储、B/D 记录或 Android。
+
+### 3. 设计与关键决策
+
+Git 历史确认 `de7a493` 已经 PR #40／`054a8d6` 进入 main，快照、HTTP 和类型化客户端亦已集成；旧文档“本地待评审”仅保留作历史。form-context 读取已存正文，不二次清洗。当前 `html_blocks` 未命中正文容器时回退 body，可包含 div 导航。可供 B 立即联调的是经用户核对的粘贴正文＋现有附件来源＋当前 revision 的 form-context；粘贴来源不生成正式行定位。
+
+CM-004 沿用团队现有多课共享、解除关系保留原件、删课影响预览、默认安全恢复及失效待核对行为。整理 C 的 `courseProfiles[].id` 与 B 消费边界，明确本机 id 不授予服务端权限、Workspace revision 不是单课版本、source／knowledge／Document／chunk 身份不可混用。现有知识检索无课程或资料 ID 范围字段，不能宣称已完成课程范围隔离。回执分类是评审语义，不擅自批准公共枚举、URL、关联存储或迁移；未联系或代记 B 已确认，也未改 D 唯一决策表。
+
+### 4. 遇到的问题及解决
+
+首次 fetch 因本机代理 127.0.0.1 不可达；获工具授权后单次禁用代理获取 origin/main 成功，未改全局配置。原 `RuleFlow` 工作区在 `feat/RF-013-verified-original-read` 且已有 `SPRINT_01_TASKS.md` 本地差异，完整保留，另建文档工作区。
+
+首次测试误用了不存在的 `test_form_context_service.py`，报路径不存在、0 项执行，随后按实际文件名纠正。两次沙箱 pytest 持续无输出，已中断，不计通过；正常本机权限下以明确 rootdir 重跑实际三个测试文件成功。真实 B 网页样本未提供，本次只能复现导航混入的一条合成路径，未声称定位所有校方网页。
+
+### 5. 测试与验证
+
+Windows，复用已有 `RuleFlow/.runtime/c-venv`，在本次独立工作区执行：
+
+- `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest --rootdir=. server/tests/test_form_context.py server/tests/test_notice_source_snapshot.py server/tests/test_parsing.py -q -p no:cacheprovider`：**45 passed，5 项既有弃用警告，11.48 秒**。隔离测试数据库和上传根；未调用真实校方网页或模型。
+- 合成 HTML 直接调用现有 `html_blocks`：带 article 正文容器只输出 `Notice body`；普通 div 正文触发回退时输出 `Navigation` 与 `Notice body`，与代码边界相符。未新增或修改测试文件。
+- `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8 scripts/check-docs.py`：最终 **264 个本地链接目标通过**；`scripts/check-paths.py`：通过。
+- `git diff --check`：通过。仅文档改动，未执行前端构建、B 双表导出复现、CM-004 真实关联测试、Android 或真机验收。
+
+### 6. 运行证据
+
+已有实现提交 `e10f129`／`f1bf3b4`／`ee25e39`／`de7a493` 及 main 集成提交可由 Git 历史核对；本轮测试与合成验证输出在当前 Codex 会话，未另存日志文件。B 真实样本／双表导出及原始会话证据位置待补充；本轮原始 Codex 会话分享链接或导出待保留。未提交真实通知、附件、个人资料或密钥。
+
+### 7. 未完成与限制
+
+网页净化尚未修复；B 的双表成功为用户转达，未独立复验，不将 H06 全部边界、H08 或 RF 整卡标为完成。CM-004 需 B 回核课程／资料身份映射、服务端权限及限定资料集合检索、版本和逐项失效回执，并提供分支及测试证据；C 串页面、D 核时间和任务影响，公共接口及跨端失败恢复按原审查规则执行。当前课程删除和恢复仍为只读预览；真实解绑、恢复写入、更新删除及缓存生命周期未在本轮实现。无本次 APK。
+
 ## RF-011/013｜C 侧原件读取与字节核验（2026-11-25）
 
 ### 1. 任务信息
