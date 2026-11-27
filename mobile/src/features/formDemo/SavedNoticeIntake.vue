@@ -205,13 +205,13 @@ async function openForm() {
       exportBlocked,
       verifyExport:async()=>{
         try {
-          const latest = await loadSavedNotice(snapshot.batch_id)
+          const rechecked = await loadSavedNotice(snapshot.batch_id)
           if (request!==version) throw Error('填写上下文已切换，请重新核对。')
           const recheck = (next: FormContext) => {
             if (next.case_id!==latest.case_id) throw Error('关联事项已变化。填写值已保留，请重新读取并核对。')
             return recheckSavedForm(next,source,key,selectedNotice?.source_id || '',binding.signature,scopes,exclusions)
           }
-          const current = recheck(latest)
+          const current = recheck(rechecked)
           await loadSavedOriginal(current)
           recheck(await loadSavedNotice(snapshot.batch_id))
         } catch (problem) {

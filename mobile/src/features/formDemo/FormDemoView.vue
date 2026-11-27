@@ -90,6 +90,7 @@ const priorReason = computed(()=>priorValues.value.reason ||
   savedDrafts.value.find(item=>item.key===priorDraftKey.value)?.reason?.value)
 const priorAwardFields = computed(()=>new Set((drafts.get(priorDraftKey.value)?.awardUses || [])
   .flatMap(use=>Object.keys(use.fields))))
+const priorProfileFields = computed(()=>drafts.get(priorDraftKey.value)?.profileFields || {})
 const comparableFields = computed(()=>scenarioFields(scenario.value)
   .filter(field=>field.id!=='reason' && priorValues.value[field.id]?.trim() && !priorAwardFields.value.has(field.id)))
 const draftFieldLabels = computed(()=>recoverableFields(scenario.value).map(field=>field.label))
@@ -313,7 +314,7 @@ function clearDraftProgress() {
 }
 
 function carryPreviousFields() {
-  const allowed = new Set(comparableFields.value.map(field=>field.id))
+  const allowed = new Set(comparableFields.value.filter(field=>!priorProfileFields.value[field.id]).map(field=>field.id))
   for (const id of carriedFields.value) if (allowed.has(id)) values.value[id]=priorValues.value[id]
   carriedFields.value = []
   showAll.value = true
@@ -694,10 +695,15 @@ function displayed(value: string, sensitive?: boolean) {
           </select>
         </label>
         <p>仅带入勾选的字段。文件名、照片和先前的导出确认需重新核对。</p>
-        <label v-for="field in comparableFields" :key="field.id" class="toggle">
-          <input v-model="carriedFields" type="checkbox" :value="field.id" :disabled="exporting">
-          {{ field.label }} · {{ displayed(priorValues[field.id],field.sensitive) }}
-        </label>
+        <div v-for="field in comparableFields" :key="field.id">
+          <p v-if="priorProfileFields[field.id]">
+            {{ field.label }} · {{ displayed(priorValues[field.id],field.sensitive) }}（旧画像值，仅供对照。请从当前画像重新带入。）
+          </p>
+          <label v-else class="toggle">
+            <input v-model="carriedFields" type="checkbox" :value="field.id" :disabled="exporting">
+            {{ field.label }} · {{ displayed(priorValues[field.id],field.sensitive) }}
+          </label>
+        </div>
         <details v-if="priorReason">
           <summary>查看旧理由（仅供对照）</summary>
           <p class="reason-snapshot">{{ priorReason }}</p>
