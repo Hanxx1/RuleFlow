@@ -66,6 +66,16 @@ Windows，复用 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`，从�
 6. **运行证据** — 回归测试、命令输出及 [PR #52](https://github.com/Hanxx1/RuleFlow/pull/52)。
 7. **未完成与限制** — 待评审人复核。工作仍限内部校验，未接真实模型、存储或业务执行。正式协议继续评审。
 
+### 2026-11-28 续：PR #52 时间短引截断
+
+1. **任务信息** — C，RF-014，继续处理 #52 的第二轮评审反馈，基于 `b289dd6`。
+2. **技术实现** — 对照短引与真实来源行在对应位置解析出的日期及时间原文，复用已有日期提取器。
+3. **设计与关键决策** — 日期提取器的 `end` 只覆盖年月日，使用包含时间的 `raw` 比对。只有完整匹配才保留具体值。
+4. **遇到的问题及解决** — 修复前短引只到 `17时` 时生成 `17:00`。修复后该短引留空并标记 `truncated_date_quote`，完整 `17时30分` 保留北京时间 `17:30`。
+5. **测试与验证** — `pytest server/tests/test_notice_candidate_validation.py server/tests/test_notice_candidate_content.py server/tests/test_date_candidates.py` 共 111 项通过，含本轮两个对照用例。在仓库外独立临时目录运行 `pytest --rootdir=. server/tests -q -p no:cacheprovider`，438 项通过。OpenAPI 基线检查通过。
+6. **运行证据** — 本轮回归和命令输出，以及 [PR #52](https://github.com/Hanxx1/RuleFlow/pull/52)。
+7. **未完成与限制** — 待评审人复核，校验仍限内部预览，未联调真实模型或正式办理流程。
+
 ## RF-013 与 CM-004｜正文入口核查和课程资料交接（2026-11-27）
 
 ### 1. 任务信息

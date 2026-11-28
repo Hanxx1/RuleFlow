@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import ValidationError
 
 from ..ai import AIAnalysis, AIInvalidOutput, validate_ai_payload, validate_candidates
-from .date_candidates import DATE, extract_dates
+from .date_candidates import extract_dates
 from .notice_candidate_validation import CandidatePreview, CandidateValidationError
 
 
@@ -91,14 +91,17 @@ def _extract_scoped_dates(sources: tuple[ContentSource, ...], source_texts: tupl
         scoped_dates = [item for item in dates if item['evidence_ids'] == [source.local_ref]]
         if not scoped_dates:
             continue
-        full_spans = {match.span() for match in DATE.finditer(source_text)}
-        # A short quote has no occurrence offset. Every occurrence must agree
-        # with the source date boundary before we keep the parsed value.
+        # The extractor's end offset covers the calendar date only. Its raw
+        # match also includes the clock text used to compute a time value.
+        full_matches = {(item['start'], item['raw'])
+                        for item in extract_dates([(source.local_ref, source_text)])}
+        # A short quote has no occurrence offset. Every occurrence must match
+        # the complete source date and clock before we keep the parsed value.
         offset = source_text.find(source.text)
         while offset != -1 and scoped_dates:
             complete_dates = []
             for item in scoped_dates:
-                if (offset + item['start'], offset + item['end']) in full_spans:
+                if (offset + item['start'], item['raw']) in full_matches:
                     complete_dates.append(item)
                 else:
                     item['value'] = None

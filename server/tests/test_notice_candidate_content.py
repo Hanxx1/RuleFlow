@@ -216,6 +216,25 @@ def test_truncated_date_quote_is_unresolved_against_the_source_line(content, quo
     assert 'DATE_REVIEW_REQUIRED' in result.review_reasons
 
 
+@pytest.mark.parametrize('ending,expected_value', [
+    ('17时', None),
+    ('17时30分', '2026-12-10T17:30:00+08:00'),
+])
+def test_date_quote_must_include_the_full_clock(content, ending, expected_value):
+    _, _, output, snapshot = content
+    source = snapshot['sources'][0]
+    prefix = '北京时间报名截止2026-12-10 '
+    source['lines'][0]['text'] = prefix + '17时30分。'
+    source['text'] = '\n'.join(line['text'] for line in source['lines'])
+    output['candidates'][0]['source_refs'][0]['quote'] = prefix + ending
+    preview = validate_candidate_output(output, snapshot)[0]
+    result = validate_candidate_content(preview, {})
+    date, = json.loads(result.dates_json)
+    assert date['value'] == expected_value
+    assert ('truncated_date_quote' in date['review_reasons']) == (expected_value is None)
+    assert 'DATE_REVIEW_REQUIRED' in result.review_reasons
+
+
 def test_changed_source_version_changes_local_alias(content):
     preview, payload, output, snapshot = content
     source = snapshot['sources'][0]
