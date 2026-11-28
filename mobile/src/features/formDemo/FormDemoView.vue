@@ -1,21 +1,32 @@
 <script setup lang="ts">
-import {computed,onMounted,ref,watch} from 'vue'
+import {computed,onBeforeUnmount,onMounted,ref,shallowRef,watch} from 'vue'
 import {useAccountStore} from '../../stores/account'
+import {loadWorkspace} from '../../services/clientWorkspace'
 import {useImportDraftStore} from '../imports/draftStore'
 import NoticeIntake from './NoticeIntake.vue'
+import SavedNoticeIntake from './SavedNoticeIntake.vue'
+import AccountProfileFill from './AccountProfileFill.vue'
+import AccountAwardFill from './AccountAwardFill.vue'
+import ApplicationReasonDraft from './ApplicationReasonDraft.vue'
+import {experienceSource,loadExperiences} from '../experience/archive'
+import {reviewAccountProfile,staleProfileLabels,type ProfileCandidate} from './accountFormProfile'
+import {awardCandidates,currentAward,retainAwardUses,type AwardUse} from './accountAwardFill'
+import {reasonAwards,reasonField,type ReasonVersion} from './reasonDraft'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
+import {clearFormDrafts,DraftRevisionConflict,readDraftReference,readFormDrafts,recoverableFields,
+  saveFormDraft,type SavedFormDraft} from './savedFormDrafts'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
 import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile,type FormProfileOwner} from './demoProfile'
 import {exampleValues,isCompetitionNotice,leaveDays,proposedFilename,reviewForm,scenarioFields,scenarios,validateFilename,type FormValues,type Scenario} from './scenarios'
 
-const props = defineProps<{fromNotice?:boolean}>()
+const props = defineProps<{fromNotice?:boolean;savedBatchId?:string}>()
 const account = useAccountStore()
 const importDraft = useImportDraftStore()
 const owner = ref<FormProfileOwner>(props.fromNotice?'local:notice':'demo:forms')
 const intake = ref<NoticeSelection>()
 const intakeKey = ref(0)
-const persistAllowed = computed(()=>!props.fromNotice || !account.signedIn)
+const persistAllowed = computed(()=>!props.savedBatchId && (!props.fromNotice || !account.signedIn))
 const profile = ref<DemoProfile>({revision:0,values:{},awards:[]})
 const ready = ref(false)
 const saving = ref(false)
@@ -31,15 +42,59 @@ const zoom = ref(1)
 const vertical = ref(50)
 const notice = ref('')
 const preview = ref(false)
-const confirmValues = ref(false)
+const confirmation = shallowRef<Readonly<{values:Readonly<FormValues>;photo:string;filename:string}>>()
 const reveal = ref(false)
 const message = ref('')
 const problem = ref('')
 const imageVersion = ref(0)
 const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
-const drafts = new Map<string,{values:FormValues;photo:string;name:string}>()
-const attachmentProgress = ref<Record<number,'editing'|'exported'>>({})
+const acceptedReason = ref<ReasonVersion>()
+const reasonEditorKey = ref(0)
+const profileFields = ref<Record<string,ProfileCandidate>>({})
+const awardUses = ref<AwardUse[]>([])
+const reasonSources = computed(()=>reasonAwards(awardUses.value))
+const awardSources = computed(()=>Object.fromEntries(awardUses.value.flatMap(use=>
+  Object.keys(use.fields).map(id=>[id,use.source]))))
+const drafts = new Map<string,{values:FormValues;photo:string;name:string;
+  profileFields?:Record<string,ProfileCandidate>;awardUses?:AwardUse[];acceptedReason?:ReasonVersion}>()
+const attachmentProgress = ref<Record<string,'editing'|'exported'>>({})
+const exporting = ref(false)
+const priorDraftKey = ref('')
+const carriedFields = ref<string[]>([])
+const savedDrafts = ref<SavedFormDraft[]>([])
+const draftRevisions = new Map<string,number>()
+const keepReason = ref(false)
+const draftConflict = ref(false)
+const draftError = ref('')
+const draftMessage = ref('')
+let formVersion = 0
+let mounted = true
+onBeforeUnmount(()=>{mounted=false})
+const priorDrafts = computed(()=>{
+  if (!intake.value?.currentDraftKeys) return []
+  const items = new Map((intake.value.previousDrafts || []).filter(item=>drafts.has(item.key))
+    .map(item=>[item.key,item.name]))
+  for (const item of savedDrafts.value) {
+    if (intake.value.currentDraftKeys.includes(item.key) || items.has(item.key)) continue
+    const reference = readDraftReference(item.key)
+    if (!reference) continue
+    const title = scenarios.find(scenario=>scenario.id===item.scenarioId)?.title
+    items.set(item.key,`${title} · ${reference.sha256.slice(0,8)} · ${reference.sourceId.slice(-6)}`)
+  }
+  return [...items.entries()].map(([key,name])=>({key,name}))
+})
+const priorValues = computed(()=>drafts.get(priorDraftKey.value)?.values ||
+  savedDrafts.value.find(item=>item.key===priorDraftKey.value)?.values || {})
+const priorReason = computed(()=>priorValues.value.reason ||
+  savedDrafts.value.find(item=>item.key===priorDraftKey.value)?.reason?.value)
+const priorAwardFields = computed(()=>new Set((drafts.get(priorDraftKey.value)?.awardUses || [])
+  .flatMap(use=>Object.keys(use.fields))))
+const priorProfileFields = computed(()=>drafts.get(priorDraftKey.value)?.profileFields || {})
+const comparableFields = computed(()=>scenarioFields(scenario.value)
+  .filter(field=>field.id!=='reason' && priorValues.value[field.id]?.trim() && !priorAwardFields.value.has(field.id)))
+const draftFieldLabels = computed(()=>recoverableFields(scenario.value).map(field=>field.label))
+const reasonLabel = computed(()=>reasonField(scenario.value)?.label)
 
 
 const review = computed(()=>reviewForm(scenario.value,values.value,Boolean(photo.value)))
@@ -66,18 +121,27 @@ const days = computed(()=>leaveDays(values.value))
 const competition = computed(()=>isCompetitionNotice(notice.value))
 
 function changed() {
-  confirmValues.value = false
+  formVersion++
+  for (const key of Object.keys(profileFields.value)) {
+    if (values.value[key]!==profileFields.value[key].value) delete profileFields.value[key]
+  }
+  awardUses.value = retainAwardUses(awardUses.value,values.value)
+  if (!values.value.reason?.trim()) acceptedReason.value = undefined
+  draftMessage.value = ''
+  confirmation.value = undefined
   if (intake.value) attachmentProgress.value[intake.value.id] = 'editing'
   message.value = ''
   problem.value = ''
 }
 
 function rememberDraft(key: string) {
-  drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value})
+  drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value,
+    profileFields:{...profileFields.value},awardUses:awardUses.value,acceptedReason:acceptedReason.value})
 }
 
 function clearDrafts() {
   drafts.clear()
+  draftRevisions.clear()
   attachmentProgress.value = {}
 }
 
@@ -86,6 +150,8 @@ function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
   scenario.value = next
   const draft = drafts.get(draftKey)
   values.value = draft ? {...draft.values} : resolveDemoProfile(next,profile.value)
+  profileFields.value = {...draft?.profileFields}
+  awardUses.value = draft?.awardUses || []
   photo.value = draft?.photo || ''
   photoInput.value = undefined
   imageVersion.value++
@@ -93,6 +159,8 @@ function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
   vertical.value = 50
   nameOverride.value = draft?.name || ''
   reasonSuggestion.value = ''
+  acceptedReason.value = draft?.acceptedReason
+  reasonEditorKey.value++
   preview.value = false
   reveal.value = false
   showAll.value = false
@@ -107,6 +175,11 @@ async function switchOwner(next: FormProfileOwner) {
   ready.value = false
   saving.value = false
   clearDrafts()
+  savedDrafts.value = []
+  keepReason.value = false
+  draftConflict.value = false
+  draftError.value = ''
+  draftMessage.value = ''
   profile.value = {revision:0,values:{},awards:[]}
   select(scenario.value,false)
   if (!persistAllowed.value) {
@@ -129,18 +202,163 @@ async function switchOwner(next: FormProfileOwner) {
 onMounted(()=>void switchOwner(owner.value))
 
 function invalidateIntake() {
-  if (intake.value) rememberDraft('notice:'+intake.value.id)
+  if (intake.value) rememberDraft(intake.value.draftKey ?? 'notice:'+intake.value.id)
   intake.value = undefined
   preview.value = false
+  draftMessage.value = ''
   changed()
 }
 
 function acceptIntake(selection: NoticeSelection) {
+  if (intake.value) invalidateIntake()
+  loadSavedDrafts()
   intake.value = selection
-  select(selection.scenario,false,'notice:'+selection.id)
+  priorDraftKey.value = ''
+  carriedFields.value = []
+  const key = selection.draftKey ?? 'notice:'+selection.id
+  const saved = savedDrafts.value.find(item=>item.key===key && item.scenarioId===selection.scenario.id)
+  if (!draftRevisions.has(key)) draftRevisions.set(key,saved?.revision ?? 0)
+  keepReason.value = Boolean(saved?.reason)
+  draftConflict.value = false
+  const restored = saved && !drafts.has(key)
+  if (restored) drafts.set(key,{
+    values:{...saved.values,...(saved.reason ? {reason:saved.reason.value} : {})},
+    acceptedReason:saved.reason?.accepted,photo:'',name:'',
+  })
+  select(selection.scenario,false,key)
+  if (restored) {
+    if (saved.reason && !completion.value.includes('reason')) completion.value.push('reason')
+    message.value = '已恢复此原件版本保存的草稿。请补齐本次资料并重新确认导出。'
+  }
 }
 
-watch(()=>props.fromNotice,enabled=>{
+function loadSavedDrafts(): boolean {
+  const {savedBatchId} = props
+  const ownerId = account.user?.id
+  if (!savedBatchId || !ownerId) return false
+  draftError.value = ''
+  try {
+    savedDrafts.value = readFormDrafts(ownerId,savedBatchId)
+    return true
+  } catch (error) {
+    savedDrafts.value = []
+    draftError.value = error instanceof Error ? error.message : '浏览器草稿无法读取。'
+    return false
+  }
+}
+
+function saveDraftProgress() {
+  const {savedBatchId} = props
+  const ownerId = account.user?.id
+  const key = intake.value?.draftKey
+  if (!savedBatchId || !ownerId || !key || exporting.value) return
+  draftError.value = ''
+  draftMessage.value = ''
+  draftConflict.value = false
+  try {
+    const manualValues = Object.fromEntries(Object.entries(values.value)
+      .filter(([id])=>!profileFields.value[id] && !awardSources.value[id]))
+    const reason = keepReason.value && values.value.reason?.trim()
+      ? {value:values.value.reason,accepted:acceptedReason.value} : undefined
+    const saved = saveFormDraft(ownerId,savedBatchId,key,scenario.value,manualValues,draftRevisions.get(key) ?? 0,{reason})
+    draftRevisions.set(key,saved.revision)
+    savedDrafts.value = [...savedDrafts.value.filter(item=>item.key!==key),saved]
+    draftMessage.value = '已保存当前原件的草稿字段。'
+  } catch (error) {
+    draftConflict.value = error instanceof DraftRevisionConflict
+    draftError.value = error instanceof Error ? error.message : '浏览器未能保存草稿。'
+  }
+}
+
+function reopenSavedProgress() {
+  const key = intake.value?.draftKey
+  if (!key || exporting.value || !loadSavedDrafts()) return
+  const saved = savedDrafts.value.find(item=>item.key===key && item.scenarioId===scenario.value.id)
+  if (saved && !window.confirm('读取已保存的版本？本页对应的手填字段及已保存理由会被替换。')) return
+  draftRevisions.set(key,saved?.revision ?? 0)
+  draftConflict.value = false
+  if (saved) {
+    for (const {id} of recoverableFields(scenario.value)) {
+      if (saved.values[id]!==undefined) values.value[id] = saved.values[id]
+      else if (!profileFields.value[id]) delete values.value[id]
+    }
+    if (saved.reason) {
+      values.value.reason = saved.reason.value
+      acceptedReason.value = saved.reason.accepted
+      if (!completion.value.includes('reason')) completion.value.push('reason')
+    }
+    keepReason.value = Boolean(saved.reason)
+    reasonEditorKey.value++
+    changed()
+    rememberDraft(key)
+  }
+  draftMessage.value = saved ? '已读取保存的版本，请重新核对。' : '此原件暂无保存记录，当前输入仍在。'
+}
+
+function clearDraftProgress() {
+  const {savedBatchId} = props
+  const ownerId = account.user?.id
+  if (!savedBatchId || !ownerId || exporting.value ||
+      !window.confirm('清除本批次在此标签页保存的草稿？当前填写内容会留在页面。')) return
+  try {
+    clearFormDrafts(ownerId,savedBatchId)
+    draftRevisions.clear()
+    keepReason.value = false
+    draftConflict.value = false
+    savedDrafts.value = []
+    draftError.value = ''
+    draftMessage.value = '本批次保存的草稿已清除。'
+  } catch {
+    draftError.value = '浏览器未能清除保存的草稿。'
+  }
+}
+
+function carryPreviousFields() {
+  const allowed = new Set(comparableFields.value.filter(field=>!priorProfileFields.value[field.id]).map(field=>field.id))
+  for (const id of carriedFields.value) if (allowed.has(id)) values.value[id]=priorValues.value[id]
+  carriedFields.value = []
+  showAll.value = true
+  changed()
+}
+
+function fillFromAccountProfile(candidates: ProfileCandidate[]) {
+  if (exporting.value) return
+  const applied = candidates.filter(item=>!values.value[item.id]?.trim())
+  for (const item of applied) {
+    values.value[item.id] = item.value
+    profileFields.value[item.id] = item
+  }
+  if (!applied.length) return
+  completion.value = [...new Set([...completion.value,...applied.map(item=>item.id)])]
+  changed()
+  message.value = '已从当前账户的本机画像带入 '+applied.map(item=>item.label).join('、')+'。请核对本次填写值。'
+}
+
+function clearProfileFields() {
+  for (const id of Object.keys(profileFields.value)) {
+    if (values.value[id]===profileFields.value[id].value) delete values.value[id]
+  }
+  profileFields.value = {}
+  changed()
+}
+
+function fillFromAccountAward(use:AwardUse) {
+  const ids = Object.keys(use.fields)
+  if (exporting.value || ids.some(id=>values.value[id]?.trim())) return
+  Object.assign(values.value,use.fields)
+  awardUses.value = [...awardUses.value,use]
+  completion.value = [...new Set([...completion.value,...ids])]
+  changed()
+  message.value = '已带入奖项「'+use.entry.title+'」，请核对本次申报要求。'
+}
+
+function clearAwardFields() {
+  for (const id of Object.keys(awardSources.value)) delete values.value[id]
+  awardUses.value = []
+  changed()
+}
+
+watch([()=>props.fromNotice,()=>props.savedBatchId],([enabled])=>{
   invalidateIntake()
   intakeKey.value++
   void switchOwner(enabled?'local:notice':'demo:forms')
@@ -254,6 +472,20 @@ function useReason() {
   changed()
 }
 
+function acceptReason(version:ReasonVersion) {
+  if (exporting.value) return
+  acceptedReason.value = version
+  values.value.reason = version.text
+  if (!completion.value.includes('reason')) completion.value.push('reason')
+  changed()
+}
+
+function confirmManualReason() {
+  if (!acceptedReason.value || values.value.reason===acceptedReason.value.text) return
+  acceptedReason.value = undefined
+  changed()
+}
+
 async function cropPhoto() {
   const file = photoInput.value
   if (!file) return
@@ -301,11 +533,56 @@ function useAvatar() {
   changed()
 }
 
-function download() {
-  if (!confirmValues.value || !ready.value || saving.value || filenameError.value ||
+function confirmOutput(event:Event) {
+  confirmation.value = (event.target as HTMLInputElement).checked
+    ? Object.freeze({values:Object.freeze({...values.value}),photo:photo.value,filename:filename.value}) : undefined
+}
+
+function togglePreview() {
+  preview.value = !preview.value
+  confirmation.value = undefined
+}
+
+async function download() {
+  const output = confirmation.value
+  if (!output || !ready.value || saving.value || exporting.value || count.value || filenameError.value ||
+      intake.value?.exportBlocked ||
       (props.fromNotice ? !intake.value : account.signedIn)) return
+  const selection = intake.value
+  const template = scenario.value
+  const version = formVersion
+  const accountId = account.user?.id
+  const sources = Object.values(profileFields.value)
+  const awards = awardUses.value
+  const reasonAwardsUsed = acceptedReason.value?.awards ?? []
+  const stillConfirmed = ()=>mounted && version===formVersion && account.user?.id===accountId &&
+    intake.value===selection && confirmation.value===output
+  exporting.value = true
   try {
-    const result = buildForm(scenario.value,{...values.value},photo.value,filename.value,!props.fromNotice)
+    if (selection?.verifyExport) {
+      await selection.verifyExport()
+      if (!stillConfirmed()) return
+    }
+    if ((sources.length || awards.length || reasonAwardsUsed.length) && accountId) {
+      const [workspace,entries] = await Promise.all([
+        sources.length ? loadWorkspace(accountId) : undefined,
+        awards.length || reasonAwardsUsed.length ? loadExperiences(accountId) : [],
+      ])
+      if (!stillConfirmed()) return
+      if (workspace) {
+        const current = reviewAccountProfile(workspace,template,selection?.caseId || '',{})
+        const stale = staleProfileLabels(sources,current.candidates)
+        if (stale.length) throw Error('已从画像带入的字段需要重新核对（'+stale.join('、')+'）。请清除相关带入值后重新带入，也可手工填写。')
+      }
+      const available = awardCandidates(entries)
+      if (reasonAwardsUsed.some(use=>{
+        const entry = currentAward(use.entry,available)
+        return !entry || entry.title!==use.entry.title || experienceSource(entry).quote!==use.source.quote
+      })) throw Error('申请理由引用的奖项已变化。请核对后重新起草，或修改并确认手写理由。')
+      const stale = [...new Set(awards.filter(use=>!currentAward(use.entry,available)).map(use=>use.entry.title))]
+      if (stale.length) throw Error('已带入奖项需要重新核对（'+stale.join('、')+'）。请清除旧带入值后重新带入，也可手工填写。')
+    }
+    const result = buildForm(template,output.values,output.photo,output.filename,!props.fromNotice)
     const url = URL.createObjectURL(result.blob)
     const link = document.createElement('a')
     link.href = url
@@ -318,7 +595,13 @@ function download() {
       ? generated+'。请打印后按校方要求贴照，再办理提交。'
       : generated+'，未向学校提交。'
   } catch (error) {
-    problem.value = error instanceof Error ? error.message : '导出失败，请重试。'
+    if (mounted && version===formVersion && account.user?.id===accountId) {
+      if (selection?.verifyExport) confirmation.value = undefined
+      problem.value = error instanceof Error && !error.message.startsWith('无法连接在线服务')
+        ? error.message : '复核或导出失败，请检查网络后重试。'
+    }
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -330,19 +613,25 @@ function displayed(value: string, sensitive?: boolean) {
 <template>
   <main class="form-demo">
     <header class="intro">
-      <RouterLink :to="fromNotice?'/imports/new':'/me'">{{ fromNotice?'← 返回导入通知':'← 返回我的' }}</RouterLink>
+      <RouterLink :to="savedBatchId?`/imports/${savedBatchId}/sources`:fromNotice?'/imports/new':'/me'">{{ fromNotice?'← 返回导入通知':'← 返回我的' }}</RouterLink>
       <p class="eyebrow">有绪 CampusWeave · {{ fromNotice?'本机处理':'离线演示' }}</p>
       <h1>{{ fromNotice?'按通知填写附件':'智能填表' }}</h1>
       <RouterLink v-if="!fromNotice" to="/imports/new">导入自己的通知和附件</RouterLink>
       <p>{{ fromNotice?'先核对通知要求与申请表版本，再补齐资料并导出可编辑原格式文件。':'选择真实校园事务样例，补齐字段、预览并下载可编辑文件。请使用合成资料和图片。' }}</p>
     </header>
 
-    <section v-if="account.signedIn && !fromNotice" class="panel">
+    <section v-if="savedBatchId && !account.signedIn" class="panel">
+      <p>登录后可读取当前账户的已保存通知。</p>
+      <RouterLink :to="{path:'/auth/login',query:{formBatch:savedBatchId}}">登录后继续填表</RouterLink>
+    </section>
+    <section v-else-if="account.signedIn && !fromNotice" class="panel">
       <p>这组样本仅在离线演示身份下开放。可从「我的」返回演示模式。</p>
     </section>
 
     <template v-else>
-      <NoticeIntake v-if="fromNotice" :key="intakeKey" :busy="!ready || saving" :progress="attachmentProgress" @invalidate="invalidateIntake" @reset="clearDrafts" @accept="acceptIntake"/>
+      <SavedNoticeIntake v-if="savedBatchId" :key="'saved:'+intakeKey" :batch-id="savedBatchId"
+        :busy="!ready || saving || exporting" :progress="attachmentProgress" @invalidate="invalidateIntake" @accept="acceptIntake"/>
+      <NoticeIntake v-else-if="fromNotice" :key="intakeKey" :busy="!ready || saving" :progress="attachmentProgress" @invalidate="invalidateIntake" @accept="acceptIntake"/>
       <details v-if="fromNotice && persistAllowed" class="panel">
         <summary>此浏览器的本机资料</summary>
         <p>只在选择保存补录时保存可复用字段，供此浏览器下次填写。</p>
@@ -369,13 +658,58 @@ function displayed(value: string, sensitive?: boolean) {
         <p>{{ scenario.provenance }} · <a :href="scenario.source" target="_blank" rel="noopener noreferrer">{{ scenario.school }}</a></p>
         <p>人工办理：{{ scenario.manual }}</p>
         <p v-if="scenario.printNote" class="warning">{{ scenario.printNote }}</p>
-        <p v-if="intake">已选原件：{{ intake.attachment }}。从已核对的通知提取约束后填写。</p>
-        <p v-if="fromNotice && !persistAllowed">登录状态下，本次补录仅用于当前文件。</p>
+        <p v-if="intake">已选原件：{{ intake.attachment }}。</p>
+        <p v-if="intake?.exportBlocked" class="warning">{{ intake.exportBlocked }}</p>
+        <p v-if="fromNotice && !persistAllowed">本次补录按当前文件管理。</p>
         <div v-if="!fromNotice" class="actions">
           <button type="button"  :disabled="!ready || saving" @click="fillExamples">用合成资料补齐缺项</button>
           <button type="button"  :disabled="!ready || saving" @click="clearRemembered">清除本机演示资料</button>
         </div>
       </section>
+
+      <section v-if="savedBatchId" class="panel" aria-label="原件草稿">
+        <h2>保存原件草稿</h2>
+        <p>可在此标签页刷新后，由同一账号重新登录续填。主动退出时清除保存记录。</p>
+        <p>可保存的手填字段 · {{ draftFieldLabels.join('、') }}。画像值可在续填时重新核对带入，其他内容请在本次核对填写。</p>
+        <template v-if="reasonLabel">
+          <label class="toggle"><input v-model="keepReason" type="checkbox" :disabled="exporting">
+            同时保存「{{ reasonLabel }}」
+          </label>
+          <p>勾选后，点保存会在此标签页保留理由正文、采用的起草稿和所引用的奖项。请留意其中的个人信息。</p>
+        </template>
+        <div class="actions">
+          <button type="button" :disabled="exporting" @click="saveDraftProgress">保存当前草稿</button>
+          <button v-if="draftConflict" type="button" :disabled="exporting" @click="reopenSavedProgress">读取已保存的版本</button>
+          <button v-if="savedDrafts.length || draftError" type="button" :disabled="exporting" @click="clearDraftProgress">清除本批次保存的草稿</button>
+        </div>
+        <p v-if="draftMessage" role="status">{{ draftMessage }}</p>
+        <p v-if="draftError" role="alert">{{ draftError }}</p>
+      </section>
+
+      <details v-if="priorDrafts.length" class="panel">
+        <summary>对照已移除或改版的草稿</summary>
+        <label class="field">旧草稿
+          <select v-model="priorDraftKey" :disabled="exporting" @change="carriedFields=[]">
+            <option value="">选择旧草稿</option>
+            <option v-for="item in priorDrafts" :key="item.key" :value="item.key">{{ item.name }}</option>
+          </select>
+        </label>
+        <p>仅带入勾选的字段。文件名、照片和先前的导出确认需重新核对。</p>
+        <div v-for="field in comparableFields" :key="field.id">
+          <p v-if="priorProfileFields[field.id]">
+            {{ field.label }} · {{ displayed(priorValues[field.id],field.sensitive) }}（旧画像值，仅供对照。请从当前画像重新带入。）
+          </p>
+          <label v-else class="toggle">
+            <input v-model="carriedFields" type="checkbox" :value="field.id" :disabled="exporting">
+            {{ field.label }} · {{ displayed(priorValues[field.id],field.sensitive) }}
+          </label>
+        </div>
+        <details v-if="priorReason">
+          <summary>查看旧理由（仅供对照）</summary>
+          <p class="reason-snapshot">{{ priorReason }}</p>
+        </details>
+        <button type="button" :disabled="!carriedFields.length || exporting" @click="carryPreviousFields">带入选中的旧值</button>
+      </details>
 
       <details v-if="!fromNotice" class="panel">
         <summary>手上只有赛事通知？</summary>
@@ -394,8 +728,17 @@ function displayed(value: string, sensitive?: boolean) {
         <div class="actions">
           <button type="button" @click="showAll=!showAll">{{ showAll ? '只显示补录字段' : '显示并编辑整张表单' }}</button>
         </div>
+        <AccountProfileFill v-if="savedBatchId && intake && account.signedIn" :key="intake.id"
+          :scenario="scenario" :case-id="intake.caseId" :values="values" :disabled="saving || exporting"
+          @apply="fillFromAccountProfile"/>
+        <button v-if="Object.keys(profileFields).length" type="button" :disabled="exporting" @click="clearProfileFields">
+          清除画像带入值
+        </button>
+        <AccountAwardFill v-if="savedBatchId && intake && account.signedIn && scenario.id==='scholarship'"
+          :key="intake.id" :values="values" :disabled="saving || exporting" @apply="fillFromAccountAward"/>
+        <button v-if="awardUses.length" type="button" :disabled="exporting" @click="clearAwardFields">清除奖项带入值</button>
         <p v-if="!groups.length">本次没有资料缺项。可预览，或打开整表修改。</p>
-        <fieldset v-for="group in groups" :key="group.title" :disabled="saving || !ready">
+        <fieldset v-for="group in groups" :key="group.title" :disabled="saving || !ready || exporting">
           <legend>{{ group.title }}</legend>
           <div class="fields">
             <div v-for="field in group.fields" :key="field.id" class="field" :class="{wide:field.type==='long'}">
@@ -409,10 +752,32 @@ function displayed(value: string, sensitive?: boolean) {
                 :inputmode="field.type==='number'?'numeric':undefined" :aria-invalid="Boolean(review.errors[field.id])" autocomplete="off" @input="changed">
               <small v-if="field.hint">{{ field.hint }}</small>
               <small v-if="review.errors[field.id]" class="warning">{{ review.errors[field.id] }}</small>
-              <small>{{ persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
+              <details v-if="profileFields[field.id]">
+                <summary>已从个人画像带入</summary>
+                <small v-for="source in profileFields[field.id].refs" :key="source.id">{{ source.quote }} · {{ source.id }}<br></small>
+              </details>
+              <details v-if="awardSources[field.id]">
+                <summary>已从本机经历带入</summary>
+                <small>{{ awardSources[field.id].quote }} · 版本 {{ awardSources[field.id].revision }} · {{ awardSources[field.id].id }}</small>
+              </details>
+              <template v-if="field.id==='reason' && acceptedReason">
+                <details>
+                  <summary>{{ values.reason===acceptedReason.text?'查看已采用的本机稿':'查看修改前的本机稿' }}</summary>
+                  <p class="reason-snapshot">{{ acceptedReason.text }}</p>
+                  <small v-for="item in acceptedReason.awards" :key="item.source.id">
+                    {{ item.source.quote }} · 版本 {{ item.source.revision }} · {{ item.source.id }}<br>
+                  </small>
+                </details>
+                <button v-if="acceptedReason.awards.length && values.reason!==acceptedReason.text" type="button"
+                  :disabled="exporting" @click="confirmManualReason">确认手写理由的事实并解除档案引用</button>
+              </template>
+              <small>{{ savedBatchId && profileKey(scenario,field) ? '可随原件草稿保存' : persistAllowed && profileKey(scenario,field) ? '保存补录后可在适用场景复用' : '仅用于本次表单' }}</small>
             </div>
           </div>
         </fieldset>
+        <ApplicationReasonDraft v-if="fromNotice && intake" :key="reasonEditorKey"
+          :scenario="scenario" :awards="reasonSources" :value="values.reason || ''"
+          :disabled="saving || !ready || exporting" @apply="acceptReason"/>
         <section v-if="scenario.id==='scholarship' && (!fromNotice || persistAllowed)" class="award-archive" aria-label="演示经历档案">
           <h3>演示经历档案</h3>
           <p>保存已填的获奖组，下次可以填入空白奖项。填表时仍需核对年月、顺序和申报范围。</p>
@@ -424,8 +789,8 @@ function displayed(value: string, sensitive?: boolean) {
               <button type="button" class="text-button" :disabled="!nextAwardSlot(values)" @click="applyAward(award)">填入空白奖项</button>
             </li>
           </ul>
-          <button type="button" @click="suggestReason">起草申请理由</button>
-          <div v-if="reasonSuggestion">
+          <button v-if="!fromNotice" type="button" @click="suggestReason">起草申请理由</button>
+          <div v-if="!fromNotice && reasonSuggestion">
             <p>{{ reasonSuggestion }}</p>
             <button type="button" @click="useReason">使用这份理由</button>
           </div>
@@ -455,13 +820,13 @@ function displayed(value: string, sensitive?: boolean) {
 
         <label class="toggle"><input v-model="reveal" type="checkbox"> 显示敏感字段原值</label>
         <label class="field">文件名（不含扩展名）
-          <input :placeholder="suggestedStem" :value="nameOverride" @input="nameOverride=($event.target as HTMLInputElement).value; changed()">
+          <input :placeholder="suggestedStem" :value="nameOverride" :disabled="exporting" @input="nameOverride=($event.target as HTMLInputElement).value; changed()">
         </label>
         <p class="file-name">{{ filenamePreview }}</p>
         <p v-if="filenameError" class="warning">{{ filenameError }}</p>
         <div class="actions">
           <button type="button" class="primary" :disabled="Boolean(count) || saving || !ready" @click="saveCompletion">{{ persistAllowed?'保存补录并预览':'确认补录并预览' }}</button>
-          <button type="button" :disabled="!ready || saving" @click="preview=!preview; confirmValues=false">{{ preview?'收起字段预览':'预览填写内容' }}</button>
+          <button type="button" :disabled="!ready || saving" @click="togglePreview">{{ preview?'收起字段预览':'预览填写内容' }}</button>
         </div>
       </section>
 
@@ -476,8 +841,9 @@ function displayed(value: string, sensitive?: boolean) {
         </dl>
         <p v-if="scenario.photo==='physical'">照片框留空。打印后请按<a :href="scenario.source" target="_blank" rel="noopener noreferrer">校方说明</a>粘贴照片。</p>
         <img v-if="scenario.photo==='embedded' && photo" class="preview-photo" :src="photo" alt="导出照片预览">
-        <label class="toggle"><input v-model="confirmValues" type="checkbox" :disabled="Boolean(count || filenameError) || !ready || saving"> 我确认这份文件的填写值和文件名</label>
-        <button type="button" class="primary" :disabled="!confirmValues || Boolean(count || filenameError) || !ready || saving" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
+        <label class="toggle"><input type="checkbox" :checked="Boolean(confirmation)" :disabled="Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting" @change="confirmOutput"> 我确认这份文件的填写值和文件名</label>
+        <button type="button" class="primary" :disabled="!confirmation || Boolean(count || filenameError || intake?.exportBlocked) || !ready || saving || exporting" @click="download">确认并下载 {{ scenario.format.toUpperCase() }}</button>
+        <p v-if="exporting && savedBatchId" role="status">正在复核来源、通知要求及原件…</p>
       </section>
       </template>
       <p v-if="message" role="status" class="feedback">{{ message }}</p>
@@ -516,6 +882,7 @@ legend{font-weight:700;padding:0 .2rem}
 .photo-panel img,.preview-photo{width:90px;aspect-ratio:5/7;object-fit:cover;border:1px solid #dce5f0}
 .award-archive{border:1px solid #e0e7f0;border-radius:.65rem;padding:.65rem;margin-bottom:.8rem}
 .award-archive h3{margin:.15rem 0;font-size:1rem}
+.reason-snapshot{white-space:pre-wrap;overflow-wrap:anywhere}
 .file-name{overflow-wrap:anywhere}
 .feedback{position:sticky;bottom:4rem;padding:.65rem;border-radius:.5rem;background:#eef5ff}
 @media(max-width:480px){.fields{grid-template-columns:1fr}.form-demo{padding-inline:.7rem}}

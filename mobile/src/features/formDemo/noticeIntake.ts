@@ -2,12 +2,18 @@ import {strFromU8,unzipSync} from 'fflate'
 import templateData from './templateData.json'
 import {competitionSource,scenarioFields,scenarios,type FormValues,type Scenario} from './scenarios'
 
-export type AttachmentMatch = {name: string; scenario?: Scenario; error?: string}
+export type AttachmentMatch = {name: string; scenario?: Scenario; error?: string; sha256?: string}
 type NoticeClause = {id: number; line: number; text: string}
 export type NoticeEvidence = NoticeClause & {kind: 'length' | 'filename' | 'photo' | 'review'}
-export type NoticeTarget = {id: number; name: string; title?: string}
+export type NoticeTarget = {id: number | string; name: string; title?: string}
 export type NoticeSelection = {
-  id: number; scenario: Scenario; requirements: NoticeRequirements; attachment: string; manualReviews: number
+  id: number | string; scenario: Scenario; requirements: NoticeRequirements; attachment: string; manualReviews: number
+  draftKey?: string
+  currentDraftKeys?: string[]
+  caseId?: string | null
+  previousDrafts?: {key:string; name:string}[]
+  exportBlocked?: string
+  verifyExport?: () => Promise<void>
 }
 type NamingRule = {parts: string[]; joiner: string; extension?: string}
 export type NoticeRequirements = {
@@ -23,18 +29,32 @@ export type NoticeRequirements = {
 const fileLimit = 10*1024*1024
 const textLimit = 30_000
 
-export async function matchAttachment(file: File): Promise<AttachmentMatch> {
+export async function matchAttachment(file: File, expected?: {sha256:string;size:number}): Promise<AttachmentMatch> {
   const name = file.name
   if (!/\.(docx|xlsx)$/i.test(name)) return {name,error:'当前仅核对 DOCX、XLSX 原表。'}
   if (file.size>fileLimit || file.size<4) return {name,error:'文件大小不符合本机核对限制。'}
   const bytes = await file.arrayBuffer()
-  const signature = new Uint8Array(bytes,0,4)
-  if (signature.join(',')!=='80,75,3,4') return {name,error:'文件内容与 DOCX/XLSX 格式不符。'}
   const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))]
     .map(value=>value.toString(16).padStart(2,'0')).join('')
+  if (expected && (bytes.byteLength!==expected.size || hash!==expected.sha256)) {
+    return {name,error:'原件指纹不符，请从来源页核对或重新导入。'}
+  }
+  const signature = new Uint8Array(bytes,0,4)
+  if (signature.join(',')!=='80,75,3,4') return {name,error:'文件内容与 DOCX/XLSX 格式不符。'}
   const hashes: Record<string,string> = templateData.sourceHashes
   const scenario = scenarios.find(item=>hashes[item.id]===hash && name.toLowerCase().endsWith('.'+item.format))
-  return scenario ? {name,scenario} : {name,error:'未核验此原件或版本。请核对校方空白原表，当前待人工映射。'}
+  return scenario ? {name,scenario,sha256:hash} : {name,sha256:hash,error:'未核验此原件或版本。请核对校方空白原表，当前待人工映射。'}
+}
+
+export function preserveAttachmentKeys(previous: readonly AttachmentMatch[], keys: readonly string[],
+                                       next: readonly AttachmentMatch[], create: () => string) {
+  const identity = (match: AttachmentMatch) => match.sha256 && JSON.stringify([match.name,match.sha256])
+  return next.map(item=>{
+    const key = identity(item)
+    if (!key || next.filter(match=>identity(match)===key).length!==1) return create()
+    const old = previous.flatMap((match,index)=>identity(match)===key ? [index] : [])
+    return old.length===1 ? keys[old[0]] : create()
+  })
 }
 
 export async function readNotice(file: File) {
@@ -85,7 +105,7 @@ function noticeClauses(text: string): NoticeClause[] {
     .map((part,id)=>({...part,id}))
 }
 
-export function suggestedTarget(evidence: NoticeEvidence, targets: NoticeTarget[]) {
+export function noticeTargetMatches(evidence: NoticeEvidence, targets: NoticeTarget[]) {
   // A naming expression can itself contain the title of an unrelated output.
   const context = (evidence.kind==='filename'
     ? evidence.text.split(/文件(?:名|命名)|命名(?:格式|为)/,1)[0]
@@ -98,8 +118,13 @@ export function suggestedTarget(evidence: NoticeEvidence, targets: NoticeTarget[
     return context.includes(name) || Boolean(title && context.includes(title)) ||
       Boolean(number && attachmentNumbers.has(number.replace(/\s/g,'')))
   })
+  return {references,named:Boolean(attachmentNumbers.size || /\.(docx|xlsx)\b/.test(context))}
+}
+
+export function suggestedTarget(evidence: NoticeEvidence, targets: NoticeTarget[]) {
+  const {references,named} = noticeTargetMatches(evidence,targets)
   if (references.length===1) return references[0].id
-  if (targets.length===1 && !attachmentNumbers.size && !/\.(docx|xlsx)\b/.test(context)) return targets[0].id
+  if (targets.length===1 && !named) return targets[0].id
   return undefined
 }
 

@@ -4,6 +4,7 @@ import {RouterLink,useRoute,useRouter} from 'vue-router';
 import {Capacitor} from '@capacitor/core';
 import {api,apiBase,auth,checkApiHealth} from '../core/http';
 import {useAccountStore} from '../stores/account';
+import {savedDraftReturnPath} from '../features/formDemo/savedDraftSession';
 import {useCasesStore} from '../features/cases/store';
 import AppHeader from '../components/AppHeader.vue';
 import AppState from '../components/AppState.vue';
@@ -31,7 +32,7 @@ async function load(){
   }catch(e){fail(e)}
 }
 watch(()=>route.fullPath,load,{immediate:true});
-async function submitAuth(){busy.value=true;error.value='';message.value='';try{if(route.path==='/auth/login'){await account.login(email.value,password.value);await router.replace('/home')}else if(route.path==='/auth/register'){const d=await auth.register(email.value,password.value);token.value=d.development_verification_token||'';message.value='注册成功，请完成邮箱验证。开发模式已填入验证令牌。'}else if(route.path==='/auth/verify'){await auth.verify(token.value);message.value='邮箱已验证，现在可以登录。'}else if(route.path==='/auth/reset'){if(!token.value){const d=await auth.resetRequest(email.value);token.value=d.development_reset_token||'';message.value=d.message}else{await auth.reset(token.value,password.value);message.value='密码已重置。'}}}catch(e){fail(e)}finally{busy.value=false}}
+async function submitAuth(){busy.value=true;error.value='';message.value='';try{if(route.path==='/auth/login'){const target=savedDraftReturnPath(route.query.formBatch);await account.login(email.value,password.value);await router.replace(target)}else if(route.path==='/auth/register'){const d=await auth.register(email.value,password.value);token.value=d.development_verification_token||'';message.value='注册成功，请完成邮箱验证。开发模式已填入验证令牌。'}else if(route.path==='/auth/verify'){await auth.verify(token.value);message.value='邮箱已验证，现在可以登录。'}else if(route.path==='/auth/reset'){if(!token.value){const d=await auth.resetRequest(email.value);token.value=d.development_reset_token||'';message.value=d.message}else{await auth.reset(token.value,password.value);message.value='密码已重置。'}}}catch(e){fail(e)}finally{busy.value=false}}
 async function createCase(){busy.value=true;error.value='';try{const x=await cases.create(caseTitle.value,category.value);await router.push('/cases/'+x.id)}catch(e){fail(e)}finally{busy.value=false}}
 async function setTask(id:string,status:string){try{await cases.setTask(id,status)}catch(e){fail(e)}}
 async function saveProfile(){busy.value=true;error.value='';try{const clean=Object.fromEntries(Object.entries(profile.value).filter(([,v])=>v!==''&&v!==null));if(account.signedIn)await api('/api/v1/profile',{method:'PUT',body:JSON.stringify({facts:clean})});else localStorage.setItem('zhishi-profile',JSON.stringify(clean));message.value=account.signedIn?'画像已保存并用于账户事项判断。':'本机画像已保存；当前演示事项仍使用固定演示画像。'}catch(e){fail(e)}finally{busy.value=false}}

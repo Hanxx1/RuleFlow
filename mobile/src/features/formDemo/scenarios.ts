@@ -15,6 +15,7 @@ export type Field = {
   export?: false
 }
 export type FormValues = Record<string, string>
+export const scholarshipAwardCutoff = 202608
 export type Scenario = {
   id: string
   title: string
@@ -194,7 +195,7 @@ export function reviewForm(scenario: Scenario, values: FormValues, hasPhoto: boo
       const match = /^(\d{4})年(\d{1,2})月$/.exec(values[ids[0]] || '')
       if (!match) continue
       const month = Number(match[1])*100 + Number(match[2])
-      if (month < lastAward || month > 202608) errors[ids[0]] = '请按年月先后填写，最晚为 2026 年 8 月'
+      if (month < lastAward || month > scholarshipAwardCutoff) errors[ids[0]] = '请按年月先后填写，最晚为 2026 年 8 月'
       lastAward = month
     }
   }
