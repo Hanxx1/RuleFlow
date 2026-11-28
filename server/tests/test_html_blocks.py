@@ -54,7 +54,11 @@ def test_unrelated_forms_still_do_not_become_fallback_notice_text():
  assert [row['text'] for row in html_blocks(raw)]==['Plain notice']
 
 
-def test_search_form_body_selector_does_not_hide_later_article():
- raw=('<form role="search"><div class="entry-content"><p>搜索帮助</p></div></form>'
+@pytest.mark.parametrize('search_region', [
+ '<form role="search">{}</form>',
+ '<search><form>{}</form></search>',
+])
+def test_search_form_body_selector_does_not_hide_later_article(search_region):
+ raw=(search_region.format('<div class="entry-content"><p>搜索帮助</p></div>') +
       '<article><p>报名截止2026-12-10。</p></article>').encode()
  assert [row['text'] for row in html_blocks(raw)]==['报名截止2026-12-10。']

@@ -91,6 +91,16 @@ Windows，复用已有 `.runtime/c-venv`；以下命令从本次工作区执行�
 6. **运行证据** — 回归测试、命令输出及 [PR #51](https://github.com/Hanxx1/RuleFlow/pull/51)。
 7. **未完成与限制** — 待评审人复核。旧来源需重新导入，本轮未复验真实网页、双表导出或真机。
 
+#### 2026-11-28 续：PR #51 原生搜索区域
+
+1. **任务信息** — C，RF-013，继续处理 #51 的第二轮评审反馈，基于 `305d4e0`。
+2. **技术实现** — `html_blocks` 在选择正文容器前移除原生 `<search>` 区域，并将原搜索表单测试扩展为两种结构。
+3. **设计与关键决策** — 用原生元素及显式角色识别搜索区域，普通 CMS 外层表单仍按正文容器处理。
+4. **遇到的问题及解决** — 修复前原生 `<search>` 内的 `.entry-content` 抢先匹配，回归实测只返回搜索帮助。修复后只返回后续通知文章及其截止日期。
+5. **测试与验证** — `pytest server/tests/test_html_blocks.py server/tests/test_form_context.py` 共 34 项通过，含原有 CMS 表单用例。在仓库外独立临时目录运行 `pytest --rootdir=. server/tests -q -p no:cacheprovider`，350 项通过。OpenAPI 基线检查通过。
+6. **运行证据** — 本轮回归和命令输出，以及 [PR #51](https://github.com/Hanxx1/RuleFlow/pull/51)。
+7. **未完成与限制** — 待评审人复核，未复验真实网页、双表导出或真机。
+
 ## RF-011/013｜C 侧原件读取与字节核验（2026-11-25）
 
 ### 1. 任务信息

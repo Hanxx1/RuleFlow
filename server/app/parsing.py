@@ -13,9 +13,9 @@ def html_blocks(raw):
  soup=BeautifulSoup(raw,'html.parser')
  for element in soup.select('script,style,nav,footer,input,button,select,textarea'):
   if element.parent is not None:element.decompose()
- # Explicit search forms cannot supply the notice, even if they use a body class.
- for form in soup.select('form[role~="search" i]'):
-  if form.parent is not None:form.decompose()
+ # Search regions can use a body class without containing the notice.
+ for region in soup.select('search, form[role~="search" i]'):
+  if region.parent is not None:region.decompose()
  content=None
  for selector in ('.v_news_content','.wp_articlecontent','.article-content','.news-content','.entry-content','article','main'):
   content=soup.select_one(selector)
