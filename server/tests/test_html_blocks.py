@@ -52,3 +52,9 @@ def test_article_wrapper_controls_are_excluded_without_removing_prose_or_table()
 def test_unrelated_forms_still_do_not_become_fallback_notice_text():
  raw=b'<body><form><p>Search prompt</p></form><div><p>Plain notice</p></div></body>'
  assert [row['text'] for row in html_blocks(raw)]==['Plain notice']
+
+
+def test_search_form_body_selector_does_not_hide_later_article():
+ raw=('<form role="search"><div class="entry-content"><p>搜索帮助</p></div></form>'
+      '<article><p>报名截止2026-12-10。</p></article>').encode()
+ assert [row['text'] for row in html_blocks(raw)]==['报名截止2026-12-10。']
