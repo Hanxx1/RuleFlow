@@ -1,5 +1,6 @@
 import json
 
+from app.auth import conn
 from helpers import account, client, confirm_import, head
 
 
@@ -40,7 +41,7 @@ def test_skip_reopen_recomputes_pending_and_preserves_done():
     assert successor()['status'] == 'done'
 
 
-def test_vault_rename_with_single_selection_payload_reproduces_lost_link():
+def test_vault_metadata_updates_leave_shared_links_and_bytes_untouched():
     headers, case, first, second = task_pair()
     url = '/api/v1/vault/items'
     response = client.post(url, headers=headers, data={
@@ -54,13 +55,33 @@ def test_vault_rename_with_single_selection_payload_reproduces_lost_link():
         return [x['id'] for x in client.get(url, headers=headers, params={'task_id':task}).json()['data']]
 
     assert linked(first) == linked(second) and len(linked(first)) == 1
-    # Control: metadata-only PATCH preserves both links.
-    assert client.patch(item_url, headers=headers, json={'name':'control.txt'}).status_code == 200
-    assert linked(first) == linked(second)
-    # Replay the payload captured from VaultView when only the name was edited.
-    result = client.patch(item_url, headers=headers, json={
-        'name':'renamed.txt', 'category':'other', 'case_ids':[case], 'task_ids':[first]
-    })
+    # Reject any link deletion during metadata updates, even if reinserted later.
+    with conn() as connection:
+        connection.executescript("""
+            CREATE TEMP TRIGGER keep_task_links BEFORE DELETE ON vault_task_links
+                BEGIN SELECT RAISE(ABORT, 'metadata PATCH must leave links alone'); END;
+            CREATE TEMP TRIGGER keep_case_links BEFORE DELETE ON vault_case_links
+                BEGIN SELECT RAISE(ABORT, 'metadata PATCH must leave links alone'); END;
+        """)
+    rename = client.patch(item_url, headers=headers, json={'name':'renamed.txt'})
+    assert rename.status_code == 200
+    assert rename.json()['data']['name'] == 'renamed.txt'
+    category = client.patch(item_url, headers=headers, json={'category':'proof'})
+    assert category.status_code == 200
+    assert category.json()['data']['category'] == 'proof'
+    assert category.json()['data']['case_ids'] == [case]
+    assert len(linked(first)) == 1 and linked(first) == linked(second)
+    assert client.get(item_url+'/content', headers=headers).content == b'shared proof'
+
+    stranger = head(account('other-task-handoff@example.com'))
+    assert client.patch(item_url, headers=stranger, json={'name':'denied.txt'}).status_code == 404
+
+    # The existing explicit relation-update contract still applies.
+    with conn() as connection:
+        connection.execute('DROP TRIGGER keep_task_links')
+        connection.execute('DROP TRIGGER keep_case_links')
+    result = client.patch(item_url, headers=headers, json={'task_ids':[first]})
     assert result.status_code == 200
+    assert result.json()['data']['name'] == 'renamed.txt'
     assert len(linked(first)) == 1 and linked(second) == []
     assert client.get(item_url+'/content', headers=headers).content == b'shared proof'

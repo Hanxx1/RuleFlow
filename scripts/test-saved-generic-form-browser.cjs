@@ -33,14 +33,15 @@ function office(parts) {
   return Buffer.from(zipSync(Object.fromEntries(Object.entries(parts).map(([name,value])=>[name,strToU8(value)]))))
 }
 
-function docFixture() {
+function docFixture(reviewerOnly=false) {
   const cell = text => '<w:tc><w:p><w:r><w:t>'+text+'</w:t></w:r></w:p></w:tc>'
   const row = (label,value='') => '<w:tr>'+cell(label)+cell(value)+'</w:tr>'
   return office({
     '[Content_Types].xml':`<Types xmlns="${contentType}"><Override PartName="/word/document.xml" ContentType="${wordMime}.main+xml"/></Types>`,
     '_rels/.rels':`<Relationships xmlns="${packageRel}"><Relationship Id="r" Type="${rel}/officeDocument" Target="word/document.xml"/></Relationships>`,
-    'word/document.xml':`<w:document xmlns:w="${word}"><w:body><w:tbl>${row('学生姓名')+row('申请人姓名')+
-      row('学号','（请填写学号）')+row('照片（打印后粘贴）')+row('辅导员信息')+row('姓名')+row('联系电话')}</w:tbl></w:body></w:document>`,
+    'word/document.xml':`<w:document xmlns:w="${word}"><w:body><w:tbl>${reviewerOnly ? row('学号')+row('审核人信息')+row('姓名')+row('联系电话') :
+      row('学生姓名')+row('申请人姓名')+row('学号','（请填写学号）')+row('照片（打印后粘贴）')+
+      row('辅导员信息')+row('姓名')+row('联系电话')}</w:tbl></w:body></w:document>`,
   })
 }
 
@@ -63,6 +64,7 @@ async function run() {
   const legacy = legacyPath ? {name:path.basename(legacyPath),bytes:await readFile(legacyPath)} : undefined
   const pdf = pdfPath ? {name:path.basename(pdfPath),bytes:await readFile(pdfPath)} : undefined
   const synthetic = {name:'字段角色回归.docx',bytes:docFixture()}
+  const reviewerSample = {name:'审核人分区回归.docx',bytes:docFixture(true)}
   const protectedSample = {name:'受保护回归.xlsx',bytes:protectedSheet()}
   const email = 'rf029-'+randomUUID().slice(0,12)+'@example.com'
   const password = randomUUID()
@@ -80,7 +82,7 @@ async function run() {
   await upload('联调通知.txt','联调办理通知\n请核对学校原件，申请人签字后交件。','text/plain')
   if (pdf) await upload(pdf.name,pdf.bytes,'application/pdf')
   if (legacy) await upload(legacy.name,legacy.bytes,'application/vnd.ms-excel')
-  for (const sample of [...samples,synthetic,protectedSample]) {
+  for (const sample of [...samples,synthetic,reviewerSample,protectedSample]) {
     await upload(sample.name,sample.bytes,sample.name.endsWith('.docx') ? wordMime : sheetMime)
   }
   const browser = await chromium.launch({channel:'msedge',headless:true})
@@ -175,6 +177,22 @@ async function run() {
     assert.equal(xml.includes('照片（打印后粘贴）'),true)
     assert.equal((xml.match(/沈言初/g) || []).length,1)
     console.log('PASS ambiguous role requires explicit mapping, changed mapping starts blank, protected role stays and manual fallback blocks export')
+
+    await select(reviewerSample.name)
+    const studentIdPosition = mapping.getByRole('combobox',{name:/写入位置 · 学号/})
+    assert.equal(await studentIdPosition.inputValue(),'0')
+    assert.equal(await mapping.getByRole('combobox',{name:/写入位置 · (姓名|联系电话)/}).count(),0)
+    await enable()
+    await editor.locator('#studentId').fill('00005835')
+    const wordPart = 'word/document.xml'
+    const reviewerExport = await exportFile(reviewerSample.name,'审核人分区回归')
+    const rows = bytes=>strFromU8(bytes).replaceAll('<w:t></w:t>','<w:t/>').match(/<w:tr>[\s\S]*?<\/w:tr>/g)
+    const beforeRows = rows(unzipSync(reviewerSample.bytes)[wordPart])
+    const afterRows = rows(reviewerExport[wordPart])
+    assert.equal(afterRows.length,4)
+    assert.match(afterRows[0],/00005835/)
+    assert.deepEqual(afterRows.slice(1),beforeRows.slice(1))
+    console.log('PASS default applicant student ID mapping writes only the first row and preserves reviewer fields')
 
     await select(protectedSample.name)
     await intake.getByRole('alert').filter({hasText:'工作表已保护'}).waitFor()

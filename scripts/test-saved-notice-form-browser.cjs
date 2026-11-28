@@ -185,7 +185,7 @@ async function run() {
       await page.getByRole('button',{name:'提交',exact:true}).click()
       await page.waitForURL(url=>url.pathname===`/imports/${batch}/forms`)
     }
-    const download = async (expected,entry,values)=>{
+    const download = async (expected,entry,values,artifactName=expected)=>{
       await confirm()
       const delivery = preview.getByRole('region',{name:'版式与交付检查'})
       await delivery.getByText(expected,{exact:true}).waitFor()
@@ -194,7 +194,7 @@ async function run() {
       await preview.getByRole('button',{name:/确认并下载/}).click()
       const result = await waiting
       assert.equal(result.suggestedFilename(),expected)
-      const output = path.join(out,expected)
+      const output = path.join(out,artifactName)
       await result.saveAs(output)
       const bytes = await readFile(output)
       const parts = unzipSync(new Uint8Array(bytes))
@@ -202,9 +202,10 @@ async function run() {
       for (const value of values) assert.ok(text.includes(value),`${expected} 缺少 ${value}`)
       return {parts,text,bytes}
     }
-    const blocked = async message=>{
+    const blocked = async (message,afterConfirm)=>{
       const before = downloads.length
       await confirm()
+      await afterConfirm?.()
       await preview.getByRole('button',{name:/确认并下载/}).click()
       await page.getByRole('alert').filter({hasText:message}).waitFor()
       assert.equal(downloads.length,before)
@@ -464,6 +465,10 @@ async function run() {
     assert.equal(await preview.getByLabel('我确认这份文件的填写值和文件名').isChecked(),false)
     await aDraft.screenshot({path:path.join(out,'原件草稿恢复.png')})
     await fill({...examples.scholarship,name:'顾景禾',studentId:'00003180',reason:finalReason})
+    await edit.locator('#college').fill('')
+    await profileFill.getByRole('button',{name:'核对可带入的画像字段'}).click()
+    await college('院系 · 已更正学院').waitFor()
+    await applyProfile.click()
     console.log('PASS same-device resume preserves approved edits but omits reason, evidence and export consent')
 
     const unchangedFile = b.metadata.document_id
@@ -516,14 +521,37 @@ async function run() {
     await page.getByText('查看旧理由（仅供对照）',{exact:true}).click()
     await page.getByText(finalReason,{exact:true}).waitFor()
     assert.equal(await page.getByRole('checkbox',{name:/申请理由 ·/}).count(),0)
+    await page.getByText(/院系 · 已更正学院（旧画像值，仅供对照/).waitFor()
+    assert.equal(await page.getByRole('checkbox',{name:/院系 · 已更正学院/}).count(),0)
+    assert.equal(await edit.locator('#college').inputValue(),'')
     await page.getByRole('checkbox',{name:/姓名 · 顾景禾/}).check()
     await page.getByRole('button',{name:'带入选中的旧值'}).click()
     assert.equal(await edit.locator('#name').inputValue(),'顾景禾')
     assert.equal(await edit.locator('#studentId').inputValue(),'')
-    await fill({...examples.scholarship,name:'顾景禾',studentId:'00003180'})
+    await reviseCollege('换版后核对学院')
+    await aDraft.getByRole('button',{name:'保存当前草稿'}).click()
+    await aDraft.getByText('已保存当前原件的草稿字段。',{exact:true}).waitFor()
+    const newDraft = (await storedDrafts()).find(item=>JSON.parse(item.key)[1]===a.id)
+    assert.ok(newDraft)
+    assert.equal('college' in newDraft.values,false)
+    const {college:_,...scholarshipFields} = examples.scholarship
+    await fill({...scholarshipFields,name:'顾景禾',studentId:'00003180'})
+    assert.equal(await edit.locator('#college').inputValue(),'')
+    await profileFill.getByRole('button',{name:'核对可带入的画像字段'}).click()
+    await college('院系 · 换版后核对学院').waitFor()
+    await applyProfile.click()
+    await edit.locator('#college').locator('..').getByText('已从个人画像带入',{exact:true}).waitFor()
+    await reviseCollege('再次核对学院')
+    await blocked('已从画像带入的字段需要重新核对')
+    await edit.getByRole('button',{name:'清除画像带入值'}).click()
+    await profileFill.getByRole('button',{name:'核对可带入的画像字段'}).click()
+    await college('院系 · 再次核对学院').waitFor()
+    await applyProfile.click()
+    const replacedFile = await download('顾景禾_00003180_奖学金.xlsx','xl/worksheets/sheet1.xml',['再次核对学院'],'换版后奖学金.xlsx')
+    assert.equal(replacedFile.text.includes('已更正学院'),false)
     page.once('dialog',dialog=>dialog.accept())
     await aDraft.getByRole('button',{name:'清除本批次保存的草稿'}).click()
-    console.log('PASS same-name reupload starts blank, old reason remains comparison-only, explicit field carry, unaffected DOCX exports')
+    console.log('PASS replaced original exposes old profile as comparison only, excludes it from saved draft, and rechecks current profile before export')
 
     await remove(notice)
     notice = await upload('更新通知.txt','text/plain',sourceText(170))
@@ -648,6 +676,27 @@ async function run() {
     await draftPanel.getByRole('button',{name:'保存当前草稿'}).click()
     await draftPanel.getByText('已保存当前原件的草稿字段。',{exact:true}).waitFor()
     assert.equal((await storedDrafts()).length,1)
+
+    await fill({...examples.photo,name:'沈念秋',studentId:'00004796',reason:docxReason})
+    const beforeAnalysis = await call(batchPath,{token})
+    assert.equal(beforeAnalysis.case_id,null)
+    const otherTab = await context.newPage()
+    try {
+      await blocked('关联事项已变化',async ()=>{
+        const response = await otherTab.request.post(backend+batchPath+'/analyze',{
+          headers:{Authorization:'Bearer '+token},
+        })
+        assert.equal(response.status(),200)
+        const {data:afterAnalysis} = await response.json()
+        assert.ok(afterAnalysis.case_id)
+        assert.equal(afterAnalysis.revision,beforeAnalysis.revision)
+        assert.deepEqual(afterAnalysis.sources.map(source=>source.id),beforeAnalysis.sources.map(source=>source.id))
+      })
+    } finally { await otherTab.close() }
+    await allFields()
+    assert.equal(await edit.locator('#name').inputValue(),'沈念秋')
+    console.log('PASS analysis after confirmation invalidates the previous case association without losing input')
+
     await navigate('/profile')
     await archived(awardTitle).getByText('查看用户确认的来源').waitFor()
     assert.equal(await archived('独立账号记录').count(),0)

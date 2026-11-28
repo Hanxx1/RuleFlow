@@ -1,0 +1,102 @@
+{
+  "purpose": "RF-014 internal review sample only; not a public DTO, EvidenceRef, execution result or real account",
+  "allowed_course_ids": [
+    "synthetic-spring-course",
+    "synthetic-autumn-course"
+  ],
+  "snapshot": {
+    "batch_id": "synthetic-batch",
+    "batch_revision": 1,
+    "sources": [
+      {
+        "source_id": "synthetic-source",
+        "content_hash": "5760a73dd9f6122147d7eb38b276f4c4a97d231160bc2ace7ae4f979bb3ed8c9",
+        "text_origin": "document_lines",
+        "document_ref": {
+          "id": "synthetic-document",
+          "revision": 1,
+          "sha256": "5760a73dd9f6122147d7eb38b276f4c4a97d231160bc2ace7ae4f979bb3ed8c9"
+        },
+        "text": "春季线性代数课程需提交第一份作业。\n秋季线性代数课程需提交第二份作业。\n申请助学金需提交申请表。",
+        "lines": [
+          {
+            "line_id": "synthetic-line-1",
+            "document_id": "synthetic-document",
+            "text": "春季线性代数课程需提交第一份作业。"
+          },
+          {
+            "line_id": "synthetic-line-2",
+            "document_id": "synthetic-document",
+            "text": "秋季线性代数课程需提交第二份作业。"
+          },
+          {
+            "line_id": "synthetic-line-3",
+            "document_id": "synthetic-document",
+            "text": "申请助学金需提交申请表。"
+          }
+        ],
+        "extraction": {
+          "state": "available"
+        },
+        "original": {
+          "state": "present"
+        },
+        "parent_reference_state": "none"
+      }
+    ]
+  },
+  "output": {
+    "batch_id": "synthetic-batch",
+    "batch_revision": 1,
+    "candidates": [
+      {
+        "candidate_id": "synthetic-candidate-1",
+        "kind": "task",
+        "title": "提交作业",
+        "course_id": "synthetic-spring-course",
+        "source_refs": [
+          {
+            "source_id": "synthetic-source",
+            "content_hash": "5760a73dd9f6122147d7eb38b276f4c4a97d231160bc2ace7ae4f979bb3ed8c9",
+            "document_id": "synthetic-document",
+            "document_revision": 1,
+            "line_id": "synthetic-line-1",
+            "quote": "春季线性代数课程需提交第一份作业。"
+          }
+        ]
+      },
+      {
+        "candidate_id": "synthetic-candidate-2",
+        "kind": "task",
+        "title": "提交作业",
+        "course_id": "synthetic-autumn-course",
+        "source_refs": [
+          {
+            "source_id": "synthetic-source",
+            "content_hash": "5760a73dd9f6122147d7eb38b276f4c4a97d231160bc2ace7ae4f979bb3ed8c9",
+            "document_id": "synthetic-document",
+            "document_revision": 1,
+            "line_id": "synthetic-line-2",
+            "quote": "秋季线性代数课程需提交第二份作业。"
+          }
+        ]
+      },
+      {
+        "candidate_id": "synthetic-candidate-3",
+        "kind": "case",
+        "title": "申请助学金",
+        "course_id": null,
+        "source_refs": [
+          {
+            "source_id": "synthetic-source",
+            "content_hash": "5760a73dd9f6122147d7eb38b276f4c4a97d231160bc2ace7ae4f979bb3ed8c9",
+            "document_id": "synthetic-document",
+            "document_revision": 1,
+            "line_id": "synthetic-line-3",
+            "quote": "申请助学金需提交申请表。"
+          }
+        ]
+      }
+    ]
+  }
+}

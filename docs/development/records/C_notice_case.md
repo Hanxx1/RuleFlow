@@ -1,5 +1,182 @@
 # 有绪 CampusWeave｜成员 C 开发工作记录
 
+## RF-014｜多候选输出校验内部实验（2026-11-28）
+
+### 1. 任务信息
+
+C；用户在下一阶段建议后明确“继续”。本轮完成不落库的校验与合成回归切片，供后续公共协议评审；不是正式多事项识别、存储或执行功能。分支 `feat/RF-014-candidate-validation`，独立工作区 `RuleFlow-RF014-candidates`，fetch 后基线 `origin/main` 为 `bbeb9a4`。上一轮正文修复 `9031dea` 仍在独立远端分支，不作为已合入依赖。用户随后明确授权提交并推送本轮 6 个文件；对应 commit 由本节 Git 历史追溯，推送结果以本次会话实际回执为准，未创建 PR。
+
+### 2. 技术实现
+
+新增 `server/app/services/notice_candidate_validation.py`：纯函数 `validate_candidate_output` 与 Fake Provider 接缝 `preview_candidate_output`，严格内部工作模型和只读预览。逐项验证批次、source_id／hash、Document 版本／行、精确短引、显式课程归属、重复及数量／长度边界；模型资格或正式对象字段拒绝，输出 UNKNOWN 并保留核对原因。已知不可用或超时异常转为固定内容无关错误，无 Demo 回退。
+
+新增 `server/tests/test_notice_candidate_validation.py` 43 项用例及 `evidence/C_20261128/rf014_preview_samples.json` 两门同名不同学期课程＋普通事务的合成样例；新增 [校验准备说明](../RF014_CANDIDATE_VALIDATION_PREPARATION.md)，更新 RF-002 入口和本记录。没有路由或现有业务调用新模块；未改公共 Provider、AIAnalysis、API／OpenAPI、数据库、存储、UI、B/D 文件或 Android，无新依赖。
+
+### 3. 设计与关键决策
+
+先复用 `read_source_snapshot` 输出，不建立第二套来源服务或 Evidence。调用方须以认证身份取得真实快照和该身份可用课程集合，纯校验不承担资源授权；未将模型／客户端快照视为凭据。批次 revision 不足以覆盖同版本来源变化，因此保留逐来源 hash、Document 版本及行检查。缺原件但历史行仍在时明确待核对，旧文本不编造行定位；同标题不合并跨学期课程。
+
+结果只表示结构及引用可定位，不证明语义、资格或执行许可；所有候选保持 UNKNOWN 和用户核对要求。接口字段、kind 和本地错误码都是内部评审工作模型，不直接升级为正式 DTO；规则、行动、日期和材料内容验证留后续，避免提前复制既有 Rule／Review 能力。
+
+### 4. 遇到的问题及解决
+
+沙箱 fetch 无法联网，正常本机权限只对已知工作区执行 fetch 成功，未更改全局 Git 配置。首轮测试指定 `.runtime/pytest-rf014-first`，但父 `.runtime` 尚不存在，39 项均为 setup error，未执行产品断言；创建父目录后换新的独立 basetemp 复跑，39 项通过。随后补来源替换、重复身份及长度用例，最终 43 项含在 95 项相关回归中全部通过。未通过删断言、放宽校验或跳过测试取绿灯。
+
+### 5. 测试与验证
+
+Windows，复用 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`，从本次工作区执行：
+
+- `-m pytest --rootdir=. --basetemp=.runtime/pytest-rf014-second server/tests/test_notice_candidate_validation.py -q -p no:cacheprovider --tb=short`：初版 **39 passed，5 项既有弃用警告，2.01 秒**。
+- `-m pytest --rootdir=. --basetemp=.runtime/pytest-rf014-related server/tests/test_notice_candidate_validation.py server/tests/test_ai.py server/tests/test_notice_source_snapshot.py server/tests/test_form_context.py server/tests/test_notice_migration_baseline.py -q -p no:cacheprovider --tb=short`：最终 **95 passed，5 项既有弃用警告，11.42 秒**，含新增 43 项。真实快照用例通过现有 API 上传合成 TXT，跨 owner 读取被拒，校验前后数据库 dump 一致，未创建候选、Case／Evidence／Task。
+- `scripts/check-api-contract.py`：通过，指纹仍为 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`；`scripts/check-docs.py`：271 个本地链接目标通过；`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份副本）及 `git diff --check` 均通过。
+- 未运行完整后端、前端构建、真实模型／外部资源、B 工作区或 Android。Fake Provider 成功／空输出／失败测试不等于真实识别效果或 RF-009/010 完成。
+
+2026-11-28 联调节点复核：单次禁用不可达代理 fetch 成功，`origin/main` 仍为 `bbeb9a4`；本分支 `350d00c` 与远端一致且工作区原本干净，未进入 main。正常本机权限复跑上述五个测试文件，使用 `--basetemp=.runtime/pytest-status-retry-20261128`，**95 passed，5 warnings，9.78 秒**。此前沙箱运行持续无输出，已中止，不计通过。本次只复验内部实验及来源兼容，不代表真实 Provider、候选存储或确认链可联调；本补记保留本地，未提交或推送。
+
+### 6. 运行证据
+
+样例 JSON 与新增测试在本分支实际存在，全部为合成文本及占位 ID；测试输出在当前 Codex 会话，未另存日志或真实通知／个人数据。`.runtime/pytest-rf014-*` 是本次忽略的隔离测试输出，不作为正式业务备份。原始 Codex 会话分享链接或导出待保留；无本轮 APK。
+
+### 7. 未完成与限制
+
+模块未接公开路由、Provider 或页面；没有真实多事项识别、行动／日期／材料／规则内容校验、预算／幂等、存储或执行。内部模型不代表正式契约获批。B/D 需回核来源与归属语义，A/B 协调正式协议；RF-015／016 的 DDL、版本和确认事务继续按唯一决策表确认，CM-007 不消费本模型执行正式写入。快照授权和新鲜度由调用方保障，当前校验不能独立防止传入伪造快照或保证返回后来源不变。
+
+### 2026-11-28 续：规则、材料、行动与日期内容校验
+
+1. **任务信息** — C，RF-014。用户在远端同步与下一阶段建议后明确“开始”。继续使用 `feat/RF-014-candidate-validation` / `350d00c`，fetch 后 `origin/main` 仍为 `bbeb9a4`；原有两行复测记录保留。完成内部内容校验切片，未获新的公共 DTO／Provider／存储实施确认，未将通用开工指令代记为团队签认。本轮尚未提交、推送或创建 PR，RF-014 整卡未完成。
+2. **技术实现** — 新增 `server/app/services/notice_candidate_content.py` 及 `server/tests/test_notice_candidate_content.py`，更新原校验准备说明和本条记录。`candidate_content_sources` 建立仅限当前候选短引的本地校验别名及原引用索引；`validate_candidate_content` 复用 `AIAnalysis`、既有规则／引用／语义检查及 `extract_dates`，返回不可修改的内容／日期 JSON 快照。未改公共 AI、路由、数据库、存储、B/D 文件、前端或 Android，无新依赖。
+3. **设计与关键决策** — 每个候选只消费自己的已核验短引，防止同源不同事项串用依据；本地别名不注册正式 Evidence，不允许用于执行。规则叶节点需引用，AST 有深度／节点预算；模型截止值拒绝，程序日期保持待核对、不自动绑定 Task，时长保留确认提示。资格保持 UNKNOWN，不读画像、不计算通过结论；引用有效不能证明标题或事项划分语义正确。正式模型和附件适用范围保留待评审。
+4. **遇到的问题及解决** — Git 报工作区归属不一致，用单次 `-c safe.directory=<当前已知工作区>` 操作，未改全局配置。首次沙箱 fetch 代理不可达，正常本机权限 fetch 成功。首次沙箱 pytest 无输出，已中止，未计通过；正常本机权限隔离目录重跑成功。复查发现 AST 操作符／字段若为列表或对象，既有校验器可能抛类型异常，本模块提前拒绝并补 3 项安全错误用例；未改既有公共校验器。
+5. **测试与验证** — Windows，复用 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`。首次定向 `-m pytest --rootdir=. --basetemp=.runtime/pytest-rf014-content-retry server/tests/test_notice_candidate_content.py -q -p no:cacheprovider --tb=short`：45 passed、5 warnings、1.18 秒。补真实快照／失效原件／跨候选日期后相关回归157项通过；补畸形AST后最终使用 `--basetemp=.runtime/pytest-rf014-content-final`，测试文件为 `test_notice_candidate_content.py`、`test_notice_candidate_validation.py`、`test_ai.py`、`test_date_candidates.py`、`test_action_candidates.py`、`test_notice_source_snapshot.py`、`test_form_context.py`、`test_notice_migration_baseline.py`（均位于server/tests），参数 `-q -p no:cacheprovider --tb=short --disable-warnings`：**160 passed、5 项既有弃用警告、8.45 秒**，其中新增51项。真实API仅上传合成TXT，在既有授权快照链读取；校验前后数据库dump相同。未执行完整后端、前端构建、真实模型、Office或Android／真机测试；静态及契约检查结果见后续补记。
+
+   静态检查补记：`scripts/check-api-contract.py` 通过，OpenAPI 指纹仍为 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`；`node scripts/check-demo.mjs` 8份副本一致。文档／路径检查首次因脚本的 Git 子进程触发归属校验而失败；仅当前进程通过 `GIT_CONFIG_COUNT/KEY_0/VALUE_0` 信任已知工作区后重跑，`scripts/check-docs.py` **273个本地链接目标通过**（外链未检）、`scripts/check-paths.py` 通过；未修改全局Git配置。已阅读实际文档diff与新增模块，`git diff --check` 和两个新增文件的 `git diff --no-index --check` 无空白错误（no-index因存在新文件差异返回1），仅有既有CRLF转换提示。
+
+6. **运行证据** — 本会话命令回执与新增51项测试；隔离输出 `.runtime/pytest-rf014-content-*` 忽略、不提交。无真实账户资料、校方附件、密钥、新commit／PR或APK。原始Codex会话分享链接或导出待成员保留。
+7. **未完成与限制** — 当前仅内部纯校验，未接真实多事项生成或页面；完整语义、附件适用范围、预算／幂等、候选存储和确认执行未实现。调用方仍负责来源授权、新鲜度及执行前重核；课程集合亦不得由模型授权。B/D需回核输出消费，A/B协调正式协议及Provider接入范围，RF-015与D迁移顺序按唯一决策表确认后实施。工作保留本地等待评审及提交授权，不自动创建PR或合并。
+
+提交授权补记：用户随后明确要求“提交并推送”。本轮提交内容校验模块、51项测试、原准备说明和本人记录，共4个文件，包含此前已保留的两行复测记录；沿 `feat/RF-014-candidate-validation` 推送。前述未提交状态保留为开发阶段快照，最终commit和推送结果以Git回执为准。提供覆盖本分支最终差异的PR DES，不创建PR或合并；生产代码未再调整，沿用本节160项相关回归结果，不重复执行产品测试。
+
+### 2026-11-28 续：PR #52 日期短引及规则叶节点复核
+
+1. **任务信息** — C，RF-014，在 `feat/RF-014-candidate-validation` 上处理 #52 的两条评审反馈，待复核。
+2. **技术实现** — 内部预览保留已核验来源行供日期边界比对。日期被截断时清空具体值并标记 `truncated_date_quote`。规则叶节点用自身声明的短引重跑既有语义校验。
+3. **设计与关键决策** — 日期与规则仍在候选短引范围内解析，真实来源行用于核对日期起止。短引能匹配多处时，每处都须符合日期边界。
+4. **遇到的问题及解决** — `d402ba2` 上新增回归复现了 `2026-12-1` 被误解析为 `2026-12-01`、缺年份边界的短引未提示截断，以及叶节点借用其他规则短引通过。修复后截断日期进入待核对，错误引用被拒绝。
+5. **测试与验证** — `pytest server/tests/test_notice_candidate_validation.py server/tests/test_notice_candidate_content.py` 共 98 项通过，包含第一阶段 43 项及第二阶段原有 51 项和评审新增 4 项。完整后端首轮在仓库内指定临时目录，14 项备份测试触发输出路径保护。改用 `C:/Windows/Temp` 下独立 `--basetemp` 执行 `pytest --rootdir=. server/tests -q -p no:cacheprovider`，436 项通过。OpenAPI 基线与 273 个本地文档链接检查通过。
+6. **运行证据** — 回归测试、命令输出及 [PR #52](https://github.com/Hanxx1/RuleFlow/pull/52)。
+7. **未完成与限制** — 待评审人复核。工作仍限内部校验，未接真实模型、存储或业务执行。正式协议继续评审。
+
+### 2026-11-28 续：PR #52 时间短引截断
+
+1. **任务信息** — C，RF-014，继续处理 #52 的第二轮评审反馈，基于 `b289dd6`。
+2. **技术实现** — 对照短引与真实来源行在对应位置解析出的日期及时间原文，复用已有日期提取器。
+3. **设计与关键决策** — 日期提取器的 `end` 只覆盖年月日，使用包含时间的 `raw` 比对。只有完整匹配才保留具体值。
+4. **遇到的问题及解决** — 修复前短引只到 `17时` 时生成 `17:00`。修复后该短引留空并标记 `truncated_date_quote`，完整 `17时30分` 保留北京时间 `17:30`。
+5. **测试与验证** — `pytest server/tests/test_notice_candidate_validation.py server/tests/test_notice_candidate_content.py server/tests/test_date_candidates.py` 共 111 项通过，含本轮两个对照用例。在仓库外独立临时目录运行 `pytest --rootdir=. server/tests -q -p no:cacheprovider`，438 项通过。OpenAPI 基线检查通过。
+6. **运行证据** — 本轮回归和命令输出，以及 [PR #52](https://github.com/Hanxx1/RuleFlow/pull/52)。
+7. **未完成与限制** — 待评审人复核，校验仍限内部预览，未联调真实模型或正式办理流程。
+
+## RF-013 与 CM-004｜正文入口核查和课程资料交接（2026-11-27）
+
+### 1. 任务信息
+
+C；用户转达 B 已用真实校方通知正文和附件跑通双表填写／导出，但整页网页导入仍夹带导航，要求核查对应分支并更新文档，同时对齐 CM-004 的课程身份、资料授权和删课／恢复失效反馈。状态：C 侧核查及可评审交接文档已完成，待 B 技术回核；未完成网页提取修复或 CM-004 真实关联实现。分支 `docs/RF-013-CM-004-integration-handoff`，独立工作区 `RuleFlow-RF013-CM004-handoff`，基于实际 fetch 后 `origin/main` 的 `f6aec68`。用户随后明确授权提交并推送这三个文档；对应 commit 由本节 Git 历史追溯，推送结果以本次会话实际回执为准，未创建 PR。
+
+### 2. 技术实现
+
+新增 [正文入口与课程资料联调交接](../RF013_CM004_INTEGRATION_HANDOFF.md)，更新 [来源移交说明](C_RF013_source_handoff.md) 顶部当前状态及本记录。核对网页获取→`parse_url_blocks`→`parse_bytes`→`html_blocks`、form-context 只读快照与 `readFormOriginal` 字节核验、课程档案 id／Workspace owner 和整体 revision、知识库检索请求及索引删除行为。未改正式业务代码、API／DTO、数据库、共享存储、B/D 记录或 Android。
+
+### 3. 设计与关键决策
+
+Git 历史确认 `de7a493` 已经 PR #40／`054a8d6` 进入 main，快照、HTTP 和类型化客户端亦已集成；旧文档“本地待评审”仅保留作历史。form-context 读取已存正文，不二次清洗。当前 `html_blocks` 未命中正文容器时回退 body，可包含 div 导航。可供 B 立即联调的是经用户核对的粘贴正文＋现有附件来源＋当前 revision 的 form-context；粘贴来源不生成正式行定位。
+
+CM-004 沿用团队现有多课共享、解除关系保留原件、删课影响预览、默认安全恢复及失效待核对行为。整理 C 的 `courseProfiles[].id` 与 B 消费边界，明确本机 id 不授予服务端权限、Workspace revision 不是单课版本、source／knowledge／Document／chunk 身份不可混用。现有知识检索无课程或资料 ID 范围字段，不能宣称已完成课程范围隔离。回执分类是评审语义，不擅自批准公共枚举、URL、关联存储或迁移；未联系或代记 B 已确认，也未改 D 唯一决策表。
+
+### 4. 遇到的问题及解决
+
+首次 fetch 因本机代理 127.0.0.1 不可达；获工具授权后单次禁用代理获取 origin/main 成功，未改全局配置。原 `RuleFlow` 工作区在 `feat/RF-013-verified-original-read` 且已有 `SPRINT_01_TASKS.md` 本地差异，完整保留，另建文档工作区。
+
+首次测试误用了不存在的 `test_form_context_service.py`，报路径不存在、0 项执行，随后按实际文件名纠正。两次沙箱 pytest 持续无输出，已中断，不计通过；正常本机权限下以明确 rootdir 重跑实际三个测试文件成功。真实 B 网页样本未提供，本次只能复现导航混入的一条合成路径，未声称定位所有校方网页。
+
+### 5. 测试与验证
+
+Windows，复用已有 `RuleFlow/.runtime/c-venv`，在本次独立工作区执行：
+
+- `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8 -m pytest --rootdir=. server/tests/test_form_context.py server/tests/test_notice_source_snapshot.py server/tests/test_parsing.py -q -p no:cacheprovider`：**45 passed，5 项既有弃用警告，11.48 秒**。隔离测试数据库和上传根；未调用真实校方网页或模型。
+- 合成 HTML 直接调用现有 `html_blocks`：带 article 正文容器只输出 `Notice body`；普通 div 正文触发回退时输出 `Navigation` 与 `Notice body`，与代码边界相符。未新增或修改测试文件。
+- `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8 scripts/check-docs.py`：最终 **264 个本地链接目标通过**；`scripts/check-paths.py`：通过。
+- `git diff --check`：通过。仅文档改动，未执行前端构建、B 双表导出复现、CM-004 真实关联测试、Android 或真机验收。
+
+### 6. 运行证据
+
+已有实现提交 `e10f129`／`f1bf3b4`／`ee25e39`／`de7a493` 及 main 集成提交可由 Git 历史核对；本轮测试与合成验证输出在当前 Codex 会话，未另存日志文件。B 真实样本／双表导出及原始会话证据位置待补充；本轮原始 Codex 会话分享链接或导出待保留。未提交真实通知、附件、个人资料或密钥。
+
+### 7. 未完成与限制
+
+网页净化尚未修复；B 的双表成功为用户转达，未独立复验，不将 H06 全部边界、H08 或 RF 整卡标为完成。CM-004 需 B 回核课程／资料身份映射、服务端权限及限定资料集合检索、版本和逐项失效回执，并提供分支及测试证据；C 串页面、D 核时间和任务影响，公共接口及跨端失败恢复按原审查规则执行。当前课程删除和恢复仍为只读预览；真实解绑、恢复写入、更新删除及缓存生命周期未在本轮实现。无本次 APK。
+
+### 续记：RF-013 网页正文表单容器修复（2026-11-27）
+
+#### 1. 任务信息
+
+C；用户明确“开始开发”后实施网页正文提取最小修复。fetch 最新 main 为 `bbeb9a4`，已含 PR #50 的 `296df36` 交接文档；从该基线创建独立分支 `fix/RF-013-html-body-extraction`，工作区 `RuleFlow-RF013-html-body`。状态：修复及后端完整回归通过，待交叉评审。用户随后明确授权提交并推送本次 6 个文件；对应 commit 由本节 Git 历史追溯，推送结果以本次会话实际回执为准，未创建 PR。CM-004 本轮不改公共接口。
+
+#### 2. 技术实现
+
+修改 `server/app/parsing.py::html_blocks`：在删除 form 前定位已有正文选择器，只保留包裹该正文的 form；无关表单仍移除，input/button/select/textarea 等交互控件不进入正文。未新增选择器、依赖或正文猜测算法，原有行内文字、换行、表格分隔保持。
+
+`server/tests/test_html_blocks.py` 新增 9 项结构回归（含七种既有容器），`server/tests/test_form_context.py` 新增 1 项 URL 来源导入→Document 原行→form-context 回归，验证附件候选、原件字节/hash及真实行 ID。同步更新来源移交和联调交接说明。共 6 个修改文件，无数据库、共享接口、B 页面或 Android 修改。
+
+#### 3. 设计与关键决策
+
+从 B 远端 `feat/RF-012-device-draft-retention` 的工作记录定位[西北大学历史通知](https://www.nwu.edu.cn/info/1101/13884.htm)，实际获取公开 HTML。正文结构为 `form > #vsb_content > .v_news_content`；旧代码先删除 form，导致正文丢失，回退后返回 69 段、1403 字符，首段为导航，资助正文缺失。采用容器优先的最小修复，保留搜索／登录表单清理，不按中文关键词猜删正文，也不修改已保存来源或 Evidence 行。
+
+只影响新解析。B 使用修复版后需显式新导入网页，按新 source_id／Document 行核对；旧噪声不因 form-context 重读而改变，新来源不能静默继承旧草稿身份。
+
+#### 4. 遇到的问题及解决
+
+沙箱 Git fetch 和网页获取受网络限制，正常本机权限复跑成功。沙箱 pytest 初次因系统临时目录权限产生 32 项 setup error，不计产品测试结果；正常权限下修复前为 9 failed／23 passed，均为新增正文丢失或控件反例，修复后 32 passed。
+
+首轮完整后端为 334 passed／14 failed，失败集中在 `test_server_data_backup.py`；单独首错复验为 `backup FAILED OUTPUT_IN_REPOSITORY`。确认默认临时目录的祖先 `C:/Users/Logic/.git` 存在，既有备份保护按设计拒绝该输出。未删除仓库标记或放宽保护，改用仓库外、预先确认不存在的专用 `C:/Windows/Temp/campusweave-rf013-20261127-a8d731` 复验，348 项通过。检查原工作区时沙箱身份触发 Git 所有权错误，正常用户权限只读复核成功，未改全局 safe.directory；原计划文档差异保留。
+
+#### 5. 测试与验证
+
+Windows，复用已有 `.runtime/c-venv`；以下命令从本次工作区执行，Python 为 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`。
+
+- `-m pytest --rootdir=. server/tests/test_html_blocks.py server/tests/test_form_context.py -q -p no:cacheprovider`：修复后 **32 passed，5 项既有弃用警告，5.40 秒**。
+- `-m pytest --rootdir=. --basetemp=C:/Windows/Temp/campusweave-rf013-20261127-a8d731 server/tests -q -p no:cacheprovider`：最终 **348 passed，5 项既有弃用警告，55.76 秒**。使用隔离数据库及合成文件，未跳过或修改备份保护断言。
+- 公开网页本地解析：获取 72,550 字节，SHA-256 `bc5d395179c2af25321d5965b0ae12dedead76fb9abb65b6ae093f604dd31f2e`；修复后 **30 段、790 字符**，忽略空白后与 `.v_news_content` 完整文字相等，检查的导航文字未混入、资助正文存在。该 hash 只标识本次获取，网页后续可能变化；未获取附件或执行双表导出。
+- `scripts/check-api-contract.py`：通过，OpenAPI 保持接受基线 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`。`scripts/check-docs.py`：265 个本地链接目标通过；`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份副本）及 `git diff --check` 均通过。
+- 未运行前端构建、B 双表浏览器链或 Android；无 APK。
+
+#### 6. 运行证据
+
+本次原始网页和仅含 URL／大小／hash／检查结果的 JSON 在本机忽略目录 `.runtime/html-body/nwu-notice.html`、`.runtime/html-body/verification.json`，未提交网页原件或个人数据。新增回归均为合成文本及 HTML，跟随本任务分支供评审。失败、修复后测试和真实网页验证输出保留在本次 Codex 会话；原始会话分享链接或导出仍待保留。
+
+#### 7. 未完成与限制
+
+修复的是既有容器被外层 form 误删的路径；没有正文容器、动态渲染、选中 main 过宽等网页仍可能失败或夹带内容，不承诺任意网页纯正文。旧批次不会自动清洗，未验 B 完整双表导出、真实网络导入全链或真机，RF-013 整卡与 CM-004 接口未标完成。CM-004 继续按原文档由 B/C 回核身份、权限和失效反馈。
+
+#### 2026-11-28 续：PR #51 搜索表单抢占正文
+
+1. **任务信息** — C，RF-013，在 `fix/RF-013-html-body-extraction` 上处理 #51 的评审反馈，待复核。
+2. **技术实现** — `html_blocks` 在匹配正文选择器前移除明确声明 `role="search"` 的表单。新增搜索帮助 `.entry-content` 与后续 `<article>` 并存的回归，并断言正文保留截止日期。
+3. **设计与关键决策** — 保留普通 CMS 外层表单的正文定位流程，依据页面声明的角色识别搜索表单。
+4. **遇到的问题及解决** — `9031dea` 先命中搜索提示的正文类名，新增测试实际返回“搜索帮助”。提前清理搜索表单后选中通知文章。
+5. **测试与验证** — `pytest server/tests/test_html_blocks.py server/tests/test_form_context.py` 共 33 项通过，涵盖原有 CMS 表单和来源读取。完整后端首轮在仓库内指定临时目录，14 项备份测试触发输出路径保护。改用 `C:/Windows/Temp` 下独立 `--basetemp` 执行 `pytest --rootdir=. server/tests -q -p no:cacheprovider`，349 项通过。OpenAPI 基线与 265 个本地文档链接检查通过。
+6. **运行证据** — 回归测试、命令输出及 [PR #51](https://github.com/Hanxx1/RuleFlow/pull/51)。
+7. **未完成与限制** — 待评审人复核。旧来源需重新导入，本轮未复验真实网页、双表导出或真机。
+
+#### 2026-11-28 续：PR #51 原生搜索区域
+
+1. **任务信息** — C，RF-013，继续处理 #51 的第二轮评审反馈，基于 `305d4e0`。
+2. **技术实现** — `html_blocks` 在选择正文容器前移除原生 `<search>` 区域，并将原搜索表单测试扩展为两种结构。
+3. **设计与关键决策** — 用原生元素及显式角色识别搜索区域，普通 CMS 外层表单仍按正文容器处理。
+4. **遇到的问题及解决** — 修复前原生 `<search>` 内的 `.entry-content` 抢先匹配，回归实测只返回搜索帮助。修复后只返回后续通知文章及其截止日期。
+5. **测试与验证** — `pytest server/tests/test_html_blocks.py server/tests/test_form_context.py` 共 34 项通过，含原有 CMS 表单用例。在仓库外独立临时目录运行 `pytest --rootdir=. server/tests -q -p no:cacheprovider`，350 项通过。OpenAPI 基线检查通过。
+6. **运行证据** — 本轮回归和命令输出，以及 [PR #51](https://github.com/Hanxx1/RuleFlow/pull/51)。
+7. **未完成与限制** — 待评审人复核，未复验真实网页、双表导出或真机。
+
 ## RF-011/013｜C 侧原件读取与字节核验（2026-11-25）
 
 ### 1. 任务信息

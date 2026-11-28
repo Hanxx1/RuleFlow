@@ -487,13 +487,19 @@ def patch_vault_item(item_id:str,body:VaultPatch,user=Depends(current_user)):
  if not fields:raise HTTPException(422,'至少提供一个材料字段')
  category=body.category if 'category' in fields else current['category']
  if category not in VAULT_CATEGORIES:raise HTTPException(422,'无效材料分类')
+ if 'name' in fields and body.name is None:raise HTTPException(422,'name 不能为 null')
+ if body.case_ids is None and body.task_ids is None:
+  with conn() as c:
+   c.execute('UPDATE vault_items SET name=COALESCE(?,name),category=COALESCE(?,category),updated_at=? WHERE id=? AND owner_id=?',
+             (body.name,body.category,stamp(),item_id,user['id']))
+  return data(vault_item_json(owned('vault_items',item_id,user['id'])))
  with conn() as c:
   current_cases=[row['case_id'] for row in c.execute('SELECT case_id FROM vault_case_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id)).fetchall()]
   current_tasks=[row['task_id'] for row in c.execute('SELECT task_id FROM vault_task_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id)).fetchall()]
- linked_cases=body.case_ids if body.case_ids is not None else current_cases;linked_tasks=body.task_ids if body.task_ids is not None else current_tasks;validate_vault_links(linked_cases,linked_tasks,user['id']);item_name=body.name if 'name' in fields else current['name']
- if item_name is None:raise HTTPException(422,'name 不能为 null')
+ linked_cases=body.case_ids if body.case_ids is not None else current_cases;linked_tasks=body.task_ids if body.task_ids is not None else current_tasks;validate_vault_links(linked_cases,linked_tasks,user['id'])
  with conn() as c:
-  c.execute('UPDATE vault_items SET name=?,category=?,updated_at=? WHERE id=? AND owner_id=?',(item_name,category,stamp(),item_id,user['id']))
+  c.execute('UPDATE vault_items SET name=COALESCE(?,name),category=COALESCE(?,category),updated_at=? WHERE id=? AND owner_id=?',
+            (body.name,body.category,stamp(),item_id,user['id']))
   c.execute('DELETE FROM vault_case_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id));c.execute('DELETE FROM vault_task_links WHERE owner_id=? AND vault_item_id=?',(user['id'],item_id))
   for case_id in linked_cases:c.execute('INSERT INTO vault_case_links(owner_id,vault_item_id,case_id) VALUES(?,?,?)',(user['id'],item_id,case_id))
   for task_id in linked_tasks:c.execute('INSERT INTO vault_task_links(owner_id,vault_item_id,task_id) VALUES(?,?,?)',(user['id'],item_id,task_id))

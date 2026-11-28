@@ -11,11 +11,21 @@ MAX_TEXT=500_000
 
 def html_blocks(raw):
  soup=BeautifulSoup(raw,'html.parser')
- for element in soup.select('script,style,nav,footer,form'):element.decompose()
+ for element in soup.select('script,style,nav,footer,input,button,select,textarea'):
+  if element.parent is not None:element.decompose()
+ # Search regions can use a body class without containing the notice.
+ for region in soup.select('search, form[role~="search" i]'):
+  if region.parent is not None:region.decompose()
  content=None
  for selector in ('.v_news_content','.wp_articlecontent','.article-content','.news-content','.entry-content','article','main'):
   content=soup.select_one(selector)
   if content is not None:break
+ # University CMS pages may wrap the article in a form. Locate it before
+ # dropping unrelated search/login forms, or the real notice is lost.
+ for form in soup.find_all('form'):
+  if form.parent is None:continue
+  if content is not None and (form is content or form in content.parents):continue
+  form.decompose()
  content=content if content is not None else soup.body or soup
  for br in content.find_all('br'):br.replace_with('\n')
  tags={'p','li','tr','h1','h2','h3','h4','blockquote','pre'}

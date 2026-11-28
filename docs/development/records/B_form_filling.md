@@ -1,5 +1,15 @@
 # 有绪 CampusWeave｜B 个人资料与智能填表工作记录
 
+## RF-038／039｜Vault 资料改名和分类保留关联（2026-11-26）
+
+1. **任务信息** — B，`fix/RF-038-vault-metadata-links`，基于 `a8374ab`。本次修复已有资料编辑丢关联的缺陷。
+2. **技术实现** — `VaultView.vue` 按实际编辑字段提交 PATCH。多关联资料在该面板可编辑名称和分类。已有单项关联的显式修改继续调用既有 PATCH。后端只修改元数据时直接更新 Vault 条目，不删除或重建 Case／Task 关系。
+3. **设计与关键决策** — 复用既有 PATCH 忽略未发送字段的契约，避免旧页面把读到的部分关联当成新的整组关系。独立 Task 的新挂载和逐条解绑后续按 B/D 已有决定联调。
+4. **问题及解决** — 原页面打开多关联记录只读取第一项，保存时把首项写成完整集合。现在仅在单项关联明确改变时发送关联字段。服务端改名和分类与关联写入隔离。
+5. **测试与验证** — Vault 分支 `npm.cmd --prefix mobile test` 232 项通过，Web 构建通过。四项前端 Vault 用例验证改名、改分类、单关联修改和无改动保存。隔离后端在禁止删除链接的触发器下验证改名与改分类，核对两处任务、源文件字节、其他账户拒绝及既有显式关联更新。Vault 与来源合计 48 项通过。Edge 移动视口连接实际本机 API，验证改名和分类请求、两处关系及原件字节。
+6. **运行证据** — `mobile/src/views/VaultView.rename.test.ts`、`server/tests/test_d_task_handoff.py`。B 独立工作区的 `.runtime/saved-form-evidence/rf028-verified/vault-browser.log` 和 `vault-after-rename.png` 使用合成账号和文件。
+7. **未完成与限制** — 独立 Task 的正式挂载、逐条解绑和并发关系编辑还需 B/D 联调。修复保护后续修改，历史已丢失的关系需要有原始依据才能恢复。本轮无 APK。
+
 ## RF-004｜真实通知与原始申请表核实
 
 1. **任务信息** — B，2026-11-07。原件核验完成，待 A 复核及 C 确认来源关系。分支 `docs/RF-004-template-verification`。
