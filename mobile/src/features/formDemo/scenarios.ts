@@ -56,7 +56,7 @@ export const scenarios: Scenario[] = [
     source:'https://xgc.nau.edu.cn/2026/0924/c3439a162174/page.htm',
     asset:'scholarship.xlsx',format:'xlsx',provenance:'校方 XLSX 原模板',
     manual:'申请人手签、推荐理由、院系意见、盖章及相关审核日期由对应人员办理。',
-    printNote:'原模板默认打印可能裁切申请理由。此文件用于可编辑电子版演示，纸质版待核对校方流程。',
+    printNote:'原模板的固定行高可能裁切打印时的申请理由。电子文件保留完整文字，打印前请核对预览和校方要求。',
     groups:[
       {title:'身份与学籍',fields:cells([
         [name,'A9'],[gender,'B9'],[identity,'C9'],[choice('studentType','学生类型',['本科']),'D9'],
@@ -83,13 +83,14 @@ export const scenarios: Scenario[] = [
     source:'https://finance.gdufe.edu.cn/12856/list.htm',
     asset:'leave.docx',format:'docx',provenance:'校方 2025 年 5 月更新 DOCX 原模板 · 学院联与任课教师联',
     manual:'班长、辅导员、学院及任课教师的签字和盖章由对应人员办理。两联同步填写。',
-    printNote:'较长的输入可能改变分页，打印前请在 Word 中核对两联。',
+    printNote:'较长的事由可能把第二联签章区推到下一页。打印前请在 Word 中核对两联及签章区。',
     groups:[
       {title:'学生资料',fields:[name,studentId,major,{id:'className',label:'班级',max:30,reusable:true},phone]},
       {title:'本次请假',fields:[
         {id:'course',label:'课程',max:30},{id:'teacher',label:'任课教师',max:15},date('start','开始日期'),
         positive('startPeriod','起始节次'),date('end','结束日期'),positive('endPeriod','结束节次'),
-        positive('periodCount','请假总节数'),long('reason','请假事由',100),
+        {...positive('periodCount','请假总节数'),hint:'根据实际课表填写。请假天数和起止节次只用于核对范围。'},
+        {...long('reason','请假事由',100),hint:'填写原因短语，例如陪同家人就医。原表会补上开头的「由于」和标点。'},
       ]},
       {title:'家长知情',fields:[
         {id:'guardian',label:'家长姓名',max:12,sensitive:true},
@@ -178,9 +179,20 @@ export function reviewForm(scenario: Scenario, values: FormValues, hasPhoto: boo
       if (!/^\d{4}年(?:0?[1-9]|1[0-2])月$/.test(value)) errors[field.id] = '请使用 2025年9月 这样的格式'
     }
   }
-  if (values.start && values.end && values.start > values.end) errors.end = '结束日期须晚于或等于开始日期'
+  const start = values.start?.trim()
+  const end = values.end?.trim()
+  if (start && end && start > end) errors.end = '结束日期须晚于或等于开始日期'
   if (scenario.id === 'leave') {
-    if (values.start === values.end && Number(values.startPeriod) > Number(values.endPeriod)) errors.endPeriod = '同日结束节次不能早于起始节次'
+    if (start === end && !errors.start && !errors.end && !errors.startPeriod && !errors.endPeriod) {
+      const span = Number(values.endPeriod)-Number(values.startPeriod)+1
+      if (span<1) errors.endPeriod = '同日结束节次不能早于起始节次'
+      else if (!errors.periodCount && Number(values.periodCount)>span) errors.periodCount = '同日请假总节数不能超过起止节次的范围'
+    }
+    if (!errors.reason && /[（(]\s*具体事由\s*[）)]/.test(values.reason)) {
+      errors.reason = '请替换原表的事由提示，填写实际原因'
+    } else if (!errors.reason && /^(由于|因为)|[，。；！？、,;!?]$/.test(values.reason.trim())) {
+      errors.reason = '请填写原因短语，原表会补上开头和标点'
+    }
     if (values.parentAware === '否') errors.parentAware = '校方原表含家长知情声明，请确认后再导出。'
     if (values.parentAware === '是') reminders.push('学院联与任课教师联均填写家长知情状态。')
   }

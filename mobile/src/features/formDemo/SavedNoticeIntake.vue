@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import {computed,onBeforeUnmount,onMounted,ref} from 'vue'
+import {computed,onBeforeUnmount,onMounted,ref,shallowRef} from 'vue'
 import {ApiError} from '../../core/http'
 import {requirePrivacyReview} from '../../services/privacyGuard'
 import {useImportBatchStore} from '../imports/batchStore'
 import {FormContextInvalid,type FormContext} from '../imports/formContext'
-import {applyNotice,type NoticeSelection} from './noticeIntake'
-import {defaultNotice,isOfficeSource,loadSavedNotice,loadSavedOriginal,originalProblem,recheckSavedForm,
+import {readFormOriginal} from '../imports/formOriginal'
+import {applyNotice,legacyXlsHint,pdfAttachmentHint,type NoticeSelection} from './noticeIntake'
+import GenericMappingReview from './GenericMappingReview.vue'
+import {canWriteMapping,genericScenario,mappedFields,type GenericForm,type GenericMapping,type GenericMappingSelection} from './genericForm'
+import {defaultNotice,isLegacyXlsSource,isOfficeSource,isPdfSource,loadSavedNotice,loadSavedOriginal,originalProblem,recheckSavedForm,
   savedDraftKey,savedNoticeProblem,savedRules,type SavedRuleItem,type ScopeSelection} from './savedNotice'
 
 const props = defineProps<{batchId:string;busy:boolean;progress:Record<string,'editing'|'exported'>}>()
@@ -22,10 +25,13 @@ const excluded = ref<string[]>([])
 const acknowledged = ref(false)
 const busy = ref(false)
 const error = ref('')
+const pendingMapping = shallowRef<{key:string;form:GenericForm}>()
 const former = new Map<string,{sourceId:string;name:string}>()
 let request = 0
 
 const targets = computed(()=>context.value?.sources.filter(isOfficeSource) || [])
+const legacySheets = computed(()=>context.value?.sources.filter(isLegacyXlsSource) || [])
+const pdfSources = computed(()=>context.value?.sources.filter(isPdfSource) || [])
 const target = computed(()=>targets.value.find(source=>source.source_id===selectedId.value))
 const notices = computed(()=>context.value?.sources.filter(source=>source.source_id!==selectedId.value &&
   source.extraction.state==='available') || [])
@@ -43,6 +49,7 @@ const canConfirmNotice = computed(()=>!noticeProblem.value && !rules.value?.unre
 function pause() {
   acknowledged.value = false
   error.value = ''
+  pendingMapping.value = undefined
   emit('invalidate')
 }
 
@@ -50,6 +57,7 @@ function showError(problem: unknown) {
   if (problem instanceof FormContextInvalid ||
       problem instanceof ApiError && (problem.status===401 || problem.status===404 || problem.code==='SOURCE_REFERENCE_INVALID')) {
     context.value = undefined
+    pendingMapping.value = undefined
     emit('invalidate')
   }
   error.value = problem instanceof ApiError && problem.code==='SOURCE_REFERENCE_INVALID'
@@ -140,6 +148,7 @@ async function removeOriginal() {
 }
 
 function scopeValue(item: SavedRuleItem) {
+  if (item.manual) return 'manual'
   if (item.needsScope) return ''
   return item.scope?.length===1 ? item.scope[0] : item.scope?.length ? 'all' : ''
 }
@@ -149,19 +158,20 @@ function setScope(item: SavedRuleItem,event: Event) {
   if (!value) delete selections.value[item.key]
   else if (rules.value) {
     const candidates = rules.value.targets.map(target=>target.id)
-    selections.value[item.key] = {applyTo:value==='all' ? candidates : [value],candidates}
+    selections.value[item.key] = {applyTo:value==='all' ? candidates : value==='manual' ? [] : [value],candidates,manual:value==='manual'}
   }
   pause()
 }
 
-async function openForm() {
+async function openForm(mappingSelection?:GenericMappingSelection) {
   const snapshot = context.value
   const source = target.value
   const selectedNotice = notice.value
   const binding = rules.value
   if (disabled.value || !snapshot || !source || !binding || formProblem.value || binding.analysis.competition) return
-  const version = ++request
   const key = savedDraftKey(snapshot.batch_id,source)
+  if (mappingSelection && pendingMapping.value?.key!==key) return
+  const version = ++request
   const scopes = {...selections.value}
   const exclusions = [...excluded.value]
   const confirmed = acknowledged.value && canConfirmNotice.value
@@ -169,20 +179,37 @@ async function openForm() {
   error.value = ''
   busy.value = true
   try {
+    const checkBinding = (next:FormContext) => {
+      const current = next.sources.find(item=>item.source_id===source.source_id)
+      const currentNotice = next.sources.find(item=>item.source_id===selectedNotice?.source_id)
+      if (!current || savedDraftKey(next.batch_id,current)!==key || next.case_id!==snapshot.case_id ||
+          current.parent_reference_state!==source.parent_reference_state || current.parent_source_id!==source.parent_source_id ||
+          savedRules(next,currentNotice,source.source_id,scopes,exclusions).signature!==binding.signature) {
+        applyContext(next)
+        pause()
+        throw Error('这份表的原件、通知或适用范围已变化。填写值已保留，请重新核对。')
+      }
+      return current
+    }
+    const pinned = await loadSavedNotice(snapshot.batch_id)
+    if (request!==version) return
+    const original = await loadSavedOriginal(pinned,checkBinding(pinned))
+    if (request!==version) return
     const latest = await loadSavedNotice(snapshot.batch_id)
     if (request!==version) return
-    const current = latest.sources.find(item=>item.source_id===source.source_id)
-    const currentNotice = latest.sources.find(item=>item.source_id===selectedNotice?.source_id)
-    if (!current || savedDraftKey(latest.batch_id,current)!==key ||
-        current.parent_reference_state!==source.parent_reference_state || current.parent_source_id!==source.parent_source_id ||
-        savedRules(latest,currentNotice,source.source_id,scopes,exclusions).signature!==binding.signature) {
-      applyContext(latest)
-      pause()
-      throw Error('这份表的原件、通知或适用范围已变化。填写值已保留，请重新核对。')
-    }
-    const scenario = await loadSavedOriginal(current)
-    if (request!==version) return
+    const current = checkBinding(latest)
+    const problem = originalProblem(current)
+    if (problem) throw Error(problem)
     applyContext(latest)
+    let mapping:GenericMapping | undefined
+    if (original.generic) {
+      if (!mappingSelection) {
+        pendingMapping.value = {key,form:original.generic}
+        return
+      }
+      mapping = {form:original.generic,...mappingSelection}
+      if (!mappedFields(mapping).length || mappedFields(mapping).some(item=>!item.choice)) throw Error('原件字段位置待核对，请重新检查。')
+    } else if (mappingSelection) throw Error('原件映射方式已变化，请重新核对。')
     if (confirmed) {
       const candidates = binding.targets.map(item=>item.id)
       for (const item of binding.items) {
@@ -190,15 +217,21 @@ async function openForm() {
       }
       selections.value = scopes
     }
+    const scenario = mapping ? genericScenario(mapping,binding.requirements.physicalPhoto) : original.scenario
+    if (!scenario) throw Error('无法确定原表填写方式。')
     const effective = applyNotice(scenario,binding.requirements)
     const currentKeys = new Set(latest.sources.map(item=>savedDraftKey(latest.batch_id,item)))
     const previousDrafts = [...former.entries()].filter(([old])=>old!==key && !currentKeys.has(old))
       .map(([old,item])=>({key:old,name:item.name}))
     const exportBlocked = notifyProblem || effective.conflict ||
       (binding.unresolved ? '请先确认通知要求分别适用哪些附件。'
-        : !confirmed ? '请先核对适用于此表的通知要求，再确认导出。' : '')
+        : !confirmed ? '请先核对适用于此表的通知要求，再确认导出。' : '') ||
+      (mapping && !canWriteMapping(mapping) ? '还有无法安全写入的字段，可复制清单后在原件中填写。' : '')
+    pendingMapping.value = undefined
     emit('accept',{
-      id:key,draftKey:key,currentDraftKeys:[...currentKeys],caseId:latest.case_id,previousDrafts,
+      id:mapping ? key+':'+JSON.stringify([mapping.section,mappedFields(mapping).map(item=>item.choice)]) : key,
+      ...(!mapping ? {draftKey:key,currentDraftKeys:[...currentKeys],previousDrafts} : {}),
+      caseId:latest.case_id,genericMapping:mapping,progressId:key,
       scenario:effective.scenario,attachment:source.name,
       requirements:binding.requirements,
       manualReviews:binding.requirements.evidence.filter(item=>item.kind==='review').length,
@@ -212,8 +245,10 @@ async function openForm() {
             return recheckSavedForm(next,source,key,selectedNotice?.source_id || '',binding.signature,scopes,exclusions)
           }
           const current = recheck(rechecked)
-          await loadSavedOriginal(current)
-          recheck(await loadSavedNotice(snapshot.batch_id))
+          await readFormOriginal(rechecked,current.source_id)
+          const latestContext = await loadSavedNotice(snapshot.batch_id)
+          if (request!==version) throw Error('填写上下文已切换，请重新核对。')
+          recheck(latestContext)
         } catch (problem) {
           if (request===version && (problem instanceof FormContextInvalid ||
             problem instanceof ApiError && (problem.status===401 || problem.code==='SOURCE_REFERENCE_INVALID' || problem.code==='BATCH_NOT_FOUND'))) {
@@ -248,7 +283,22 @@ onBeforeUnmount(()=>{request++})
     <p v-if="error" role="alert">{{ error }}</p>
     <template v-if="context">
       <h3>申请表候选</h3>
-      <p v-if="!targets.length">没有可识别的 DOCX 或 XLSX 附件。请从来源页核对。</p>
+      <p v-if="!targets.length && !legacySheets.length">没有可识别的 DOCX 或 XLSX 附件。请从来源页核对。</p>
+      <section v-if="legacySheets.length" aria-label="待手工填写的 XLS 原件">
+        <h3>待手工填写的 XLS 原件</h3>
+        <ul><li v-for="item in legacySheets" :key="item.source_id">{{ item.name }}</li></ul>
+        <p>{{ legacyXlsHint }}</p>
+      </section>
+      <section v-if="pdfSources.length" aria-label="PDF 附件">
+        <h3>PDF 附件</h3>
+        <ul>
+          <li v-for="item in pdfSources" :key="item.source_id">
+            {{ item.name }}
+            <p v-if="originalProblem(item)">{{ originalProblem(item) }}</p>
+          </li>
+        </ul>
+        <p>{{ pdfAttachmentHint }} 可回到来源页查看原件状态。</p>
+      </section>
       <ul>
         <li v-for="item in targets" :key="item.source_id">
           <label>
@@ -298,6 +348,7 @@ onBeforeUnmount(()=>{request++})
                 <option value="">待确认适用附件</option>
                 <option v-for="option in rules.targets" :key="option.id" :value="option.id">{{ option.name }} · {{ option.id.slice(-6) }}</option>
                 <option v-if="rules.targets.length>1" value="all">以上全部申请表</option>
+                <option value="manual">待人工办理，暂不应用到表格</option>
               </select>
             </label>
           </li>
@@ -311,7 +362,9 @@ onBeforeUnmount(()=>{request++})
             <input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="emit('invalidate')">
             我已核对这份表的通知原文及提交要求
           </label>
-          <button type="button" :disabled="disabled || Boolean(formProblem)" @click="openForm">核验并填写选中原表</button>
+          <button type="button" :disabled="disabled || Boolean(formProblem)" @click="openForm()">核验并填写选中原表</button>
+          <GenericMappingReview v-if="pendingMapping" :key="pendingMapping.key" :form="pendingMapping.form"
+            :disabled="disabled" @accept="openForm"/>
         </template>
       </template>
     </template>

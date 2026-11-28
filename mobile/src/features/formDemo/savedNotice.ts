@@ -1,6 +1,7 @@
-import {ApiError,api,apiBlob} from '../../core/http'
+import {ApiError,api} from '../../core/http'
 import {readFormContext,type FormContext,type FormContextSource} from '../imports/formContext'
-import {analyzeNotice,matchAttachment,noticeTargetMatches,type NoticeEvidence} from './noticeIntake'
+import {readFormOriginal} from '../imports/formOriginal'
+import {analyzeNotice,isLegacyXls,isPdfAttachment,matchAttachment,noticeTargetMatches,type NoticeEvidence} from './noticeIntake'
 
 export async function loadSavedNotice(batchId: string) {
   const read = async () => {
@@ -17,6 +18,9 @@ export async function loadSavedNotice(batchId: string) {
 
 export const isOfficeSource = (source: FormContextSource) =>
   /\.(docx|xlsx)$/i.test(source.document_ref?.name || source.name)
+export const isLegacyXlsSource = (source:FormContextSource) => isLegacyXls(source.document_ref?.name || source.name)
+
+export const isPdfSource = (source:FormContextSource) => isPdfAttachment(source.document_ref?.name || source.name)
 
 export function originalProblem(source: FormContextSource) {
   if (source.original.state==='missing') return '原件已缺失，请从来源页重新导入。'
@@ -25,14 +29,15 @@ export function originalProblem(source: FormContextSource) {
   return ''
 }
 
-export async function loadSavedOriginal(source: FormContextSource) {
+export async function loadSavedOriginal(snapshot: FormContext,source: FormContextSource) {
   const problem = originalProblem(source)
   const document = source.document_ref
   if (problem || !document) throw Error(problem)
-  const blob = await apiBlob('/api/v1/documents/'+encodeURIComponent(document.id)+'/content')
-  const match = await matchAttachment(new File([blob],document.name,{type:document.mime}),document)
-  if (!match.scenario) throw Error(match.error || '此原表待核对。')
-  return match.scenario
+  const blob = await readFormOriginal(snapshot,source.source_id)
+  const match = await matchAttachment(new File([blob],document.name,{type:document.mime}),document,true)
+  if (match.scenario) return {scenario:match.scenario}
+  if (match.generic) return {generic:match.generic}
+  throw Error(match.error || '此原表待核对。')
 }
 
 export function savedDraftKey(batchId: string,source: FormContextSource) {
@@ -47,11 +52,12 @@ export function defaultNotice(context: FormContext,target: FormContextSource) {
   if (target.parent_reference_state==='valid') {
     return candidates.find(source=>source.source_id===target.parent_source_id)?.source_id || ''
   }
-  const primary = candidates.filter(source=>!isOfficeSource(source) || /通知|公告|通告/.test(source.name))
+  const primary = candidates.filter(source=>!isLegacyXlsSource(source) &&
+    (!isOfficeSource(source) || /通知|公告|通告/.test(source.name)))
   return primary.length===1 ? primary[0].source_id : ''
 }
 
-export type ScopeSelection = {applyTo:readonly string[]; candidates:readonly string[]}
+export type ScopeSelection = {applyTo:readonly string[]; candidates:readonly string[]; manual?:boolean}
 export type ScopeSelections = Readonly<Record<string,ScopeSelection>>
 
 export function savedRules(context: FormContext,notice: FormContextSource | undefined,
@@ -72,26 +78,28 @@ export function savedRules(context: FormContext,notice: FormContextSource | unde
     const suggested = references.length===1 ? references[0] : targets.length===1 && !named ? targets[0] : undefined
     const scope = chosen?.applyTo ?? (suggested ? [suggested.id] : undefined)
     const affectsTarget = !references.length || references.some(ref=>ref.id===targetId)
-    const needsScope = item.kind!=='review' && affectsTarget && (!scope ||
+    const needsScope = item.kind!=='review' && !chosen?.manual && affectsTarget && (!scope ||
       Boolean(chosen && !chosen.candidates.includes(targetId) && !scope.includes(targetId)))
-    return {...item,key,lineId:line?.line_id,lineNumber:line?.line_number,locator:line?.locator,scope,needsScope}
+    return {...item,key,lineId:line?.line_id,lineNumber:line?.line_number,locator:line?.locator,scope,needsScope,manual:Boolean(chosen?.manual)}
   })
   const selected = items.filter(item=>item.scope?.includes(targetId) ||
     (item.kind==='review' && item.scope===undefined))
   const ids = new Set(selected.map(item=>item.id))
   const requirements = analyzeNotice(text,clause=>ids.has(clause.id))
+  const manual = items.filter(item=>item.manual)
+  requirements.evidence.push(...manual.map(item=>({...item,kind:'review' as const})))
   const unresolved = items.some(item=>item.needsScope)
   const recognizedLines = new Set(items.map(item=>item.line))
   const otherLines = text.split(/\r?\n/).filter((line,index)=>line.trim() && !recognizedLines.has(index+1))
   // A replaced formal line, a changed applicable clause or a new unresolved rule requires review.
   const signature = JSON.stringify([
-    notice?.source_id,unresolved,selected.map(item=>item.key),otherLines,requirements.competitionEvidence?.text,
+    notice?.source_id,unresolved,selected.map(item=>item.key),manual.map(item=>item.key),otherLines,requirements.competitionEvidence?.text,
   ])
   return {items,targets,requirements,unresolved,signature,analysis}
 }
 
 export type SavedRuleItem = NoticeEvidence & {
-  key:string; lineId?:string; lineNumber?:number; locator?:string|null; scope?:readonly string[];needsScope:boolean
+  key:string; lineId?:string; lineNumber?:number; locator?:string|null; scope?:readonly string[];needsScope:boolean;manual:boolean
 }
 
 export function savedNoticeProblem(target: FormContextSource,notice: FormContextSource | undefined) {

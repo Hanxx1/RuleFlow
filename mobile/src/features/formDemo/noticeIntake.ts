@@ -1,8 +1,9 @@
 import {strFromU8,unzipSync} from 'fflate'
 import templateData from './templateData.json'
+import {inspectGenericForm,type GenericForm,type GenericMapping} from './genericForm'
 import {competitionSource,scenarioFields,scenarios,type FormValues,type Scenario} from './scenarios'
 
-export type AttachmentMatch = {name: string; scenario?: Scenario; error?: string; sha256?: string}
+export type AttachmentMatch = {name: string; scenario?: Scenario; generic?: GenericForm; error?: string; sha256?: string}
 type NoticeClause = {id: number; line: number; text: string}
 export type NoticeEvidence = NoticeClause & {kind: 'length' | 'filename' | 'photo' | 'review'}
 export type NoticeTarget = {id: number | string; name: string; title?: string}
@@ -14,6 +15,8 @@ export type NoticeSelection = {
   previousDrafts?: {key:string; name:string}[]
   exportBlocked?: string
   verifyExport?: () => Promise<void>
+  genericMapping?: GenericMapping
+  progressId?: string
 }
 type NamingRule = {parts: string[]; joiner: string; extension?: string}
 export type NoticeRequirements = {
@@ -28,9 +31,16 @@ export type NoticeRequirements = {
 
 const fileLimit = 10*1024*1024
 const textLimit = 30_000
+export const isLegacyXls = (name:string) => /\.xls$/i.test(name)
+export const legacyXlsHint = '旧版 XLS 请保留原件，按校方要求手工填写。校方明确接受 XLSX 时，可在 Excel 或 WPS 中另存为。仅修改后缀无法转换格式。打印前请检查长文本是否完整。'
 
-export async function matchAttachment(file: File, expected?: {sha256:string;size:number}): Promise<AttachmentMatch> {
+export const isPdfAttachment = (name:string) => /\.pdf$/i.test(name)
+export const pdfAttachmentHint = '如为申请表，请保留 PDF 原件并按校方要求处理。可填写的 PDF 可在支持表单的阅读器中填写。普通 PDF 或扫描件请核对是否要打印填写。签字、盖章和审批由对应人员处理。'
+
+export async function matchAttachment(file: File, expected?: {sha256:string;size:number},inspectUnknown=false): Promise<AttachmentMatch> {
   const name = file.name
+  if (isLegacyXls(name)) return {name,error:legacyXlsHint}
+  if (isPdfAttachment(name)) return {name,error:pdfAttachmentHint}
   if (!/\.(docx|xlsx)$/i.test(name)) return {name,error:'当前仅核对 DOCX、XLSX 原表。'}
   if (file.size>fileLimit || file.size<4) return {name,error:'文件大小不符合本机核对限制。'}
   const bytes = await file.arrayBuffer()
@@ -43,7 +53,12 @@ export async function matchAttachment(file: File, expected?: {sha256:string;size
   if (signature.join(',')!=='80,75,3,4') return {name,error:'文件内容与 DOCX/XLSX 格式不符。'}
   const hashes: Record<string,string> = templateData.sourceHashes
   const scenario = scenarios.find(item=>hashes[item.id]===hash && name.toLowerCase().endsWith('.'+item.format))
-  return scenario ? {name,scenario,sha256:hash} : {name,sha256:hash,error:'未核验此原件或版本。请核对校方空白原表，当前待人工映射。'}
+  if (scenario) return {name,scenario,sha256:hash}
+  if (inspectUnknown) {
+    try { return {name,sha256:hash,generic:inspectGenericForm(new Uint8Array(bytes),name)} }
+    catch (error) { return {name,sha256:hash,error:error instanceof Error ? error.message : '无法读取原表结构。'} }
+  }
+  return {name,sha256:hash,error:'未核验此原件或版本。请核对校方空白原表，当前待人工映射。'}
 }
 
 export function preserveAttachmentKeys(previous: readonly AttachmentMatch[], keys: readonly string[],
@@ -166,7 +181,7 @@ export function analyzeNotice(text: string, include: (clause: NoticeClause)=>boo
         continue
       }
     }
-    if (/必须|必填|填写|格式|字体|字号|宋体|黑体|仿宋|楷体|小四|行距|签字|手签|盖章|提交|截止|打印|照片|附件|证明|上传/.test(text)) {
+    if (/必须|必填|填写|格式|字体|字号|宋体|黑体|仿宋|楷体|小四|行距|签字|手签|盖章|提交|截止|打印|照片|附件|证明|上传|邮件|扫描|压缩包/.test(text)) {
       result.evidence.push({...evidence,kind:'review'})
     }
   }

@@ -72,14 +72,18 @@ const base = process.env.FORM_DEMO_URL || 'http://127.0.0.1:5187'
       await page.getByRole('textbox',{name:'文件名（不含扩展名）'}).fill(stem)
       await page.getByRole('button',{name:'保存补录并预览'}).click()
       await page.getByText(/可复用资料已保存在本机/).waitFor()
+      const delivery = page.getByRole('region',{name:'版式与交付检查'})
+      const expected = '演示-'+stem+'.'+format.toLowerCase()
+      await delivery.getByText(expected,{exact:true}).waitFor()
+      assert.match(await delivery.innerText(),format==='XLSX'?/Excel 或 WPS 表格/:/Word 或 WPS 文字/)
       await page.getByRole('checkbox',{name:/我确认/}).check()
       const [download] = await Promise.all([
         page.waitForEvent('download'),
         page.getByRole('button',{name:new RegExp('确认并下载 '+format)}).click(),
       ])
-      assert.equal(download.suggestedFilename(),'演示-'+stem+'.'+format.toLowerCase())
+      assert.equal(download.suggestedFilename(),expected)
       await download.saveAs(path.join(output,download.suggestedFilename()))
-      assert.match(await page.getByRole('status').last().innerText(),/已生成/)
+      assert.match(await page.getByRole('status').last().innerText(),/已发起文件下载/)
       console.log('PASS offline flow',title,download.suggestedFilename())
     }
 
