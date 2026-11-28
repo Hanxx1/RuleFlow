@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import {computed,onBeforeUnmount,onMounted,ref,shallowRef} from 'vue'
+import {computed,defineAsyncComponent,onBeforeUnmount,onMounted,ref,shallowRef} from 'vue'
 import {ApiError} from '../../core/http'
 import {requirePrivacyReview} from '../../services/privacyGuard'
 import {useImportBatchStore} from '../imports/batchStore'
 import {FormContextInvalid,type FormContext} from '../imports/formContext'
 import {readFormOriginal} from '../imports/formOriginal'
-import {applyNotice,legacyXlsHint,pdfAttachmentHint,type NoticeSelection} from './noticeIntake'
+import {applyNotice,isExtendedOriginal,type NoticeSelection} from './noticeIntake'
+import {useAccountStore} from '../../stores/account'
+import {readFormDrafts,readDraftReference} from './savedFormDrafts'
+import {restorePositions,storePositions} from './genericDraftMapping'
 import GenericMappingReview from './GenericMappingReview.vue'
 import {canWriteMapping,genericScenario,mappedFields,type GenericForm,type GenericMapping,type GenericMappingSelection} from './genericForm'
-import {defaultNotice,isLegacyXlsSource,isOfficeSource,isPdfSource,loadSavedNotice,loadSavedOriginal,originalProblem,recheckSavedForm,
+import {defaultNotice,isFillableSource,isOfficeSource,loadSavedNotice,loadSavedOriginal,originalProblem,recheckSavedForm,
   savedDraftKey,savedNoticeProblem,savedRules,type SavedRuleItem,type ScopeSelection} from './savedNotice'
 
+const OriginalCopyEditor = defineAsyncComponent(()=>import('./OriginalCopyEditor.vue'))
+const extended = shallowRef<{file:File;verify:()=>Promise<void>}>()
 const props = defineProps<{batchId:string;busy:boolean;progress:Record<string,'editing'|'exported'>}>()
 const emit = defineEmits<{invalidate:[];accept:[selection:NoticeSelection]}>()
 const context = ref<FormContext>()
@@ -25,13 +30,12 @@ const excluded = ref<string[]>([])
 const acknowledged = ref(false)
 const busy = ref(false)
 const error = ref('')
-const pendingMapping = shallowRef<{key:string;form:GenericForm}>()
+const account = useAccountStore()
+const pendingMapping = shallowRef<{key:string;form:GenericForm;presets:GenericMappingSelection[]}>()
 const former = new Map<string,{sourceId:string;name:string}>()
 let request = 0
 
-const targets = computed(()=>context.value?.sources.filter(isOfficeSource) || [])
-const legacySheets = computed(()=>context.value?.sources.filter(isLegacyXlsSource) || [])
-const pdfSources = computed(()=>context.value?.sources.filter(isPdfSource) || [])
+const targets = computed(()=>context.value?.sources.filter(isFillableSource) || [])
 const target = computed(()=>targets.value.find(source=>source.source_id===selectedId.value))
 const notices = computed(()=>context.value?.sources.filter(source=>source.source_id!==selectedId.value &&
   source.extraction.state==='available') || [])
@@ -47,6 +51,7 @@ const disabled = computed(()=>props.busy || busy.value)
 const canConfirmNotice = computed(()=>!noticeProblem.value && !rules.value?.unresolved)
 
 function pause() {
+  extended.value = undefined
   acknowledged.value = false
   error.value = ''
   pendingMapping.value = undefined
@@ -171,6 +176,7 @@ async function openForm(mappingSelection?:GenericMappingSelection) {
   if (disabled.value || !snapshot || !source || !binding || formProblem.value || binding.analysis.competition) return
   const key = savedDraftKey(snapshot.batch_id,source)
   if (mappingSelection && pendingMapping.value?.key!==key) return
+  extended.value = undefined
   const version = ++request
   const scopes = {...selections.value}
   const exclusions = [...excluded.value]
@@ -193,6 +199,21 @@ async function openForm(mappingSelection?:GenericMappingSelection) {
     }
     const pinned = await loadSavedNotice(snapshot.batch_id)
     if (request!==version) return
+    if (source.document_ref && isExtendedOriginal(source.document_ref.name)) {
+      if (!confirmed || notifyProblem) throw Error(notifyProblem || '请先确认此附件的通知和适用范围。')
+      const read = async (next:FormContext) => {
+        if (request!==version || !acknowledged.value) throw Error('来源已切换，请重新核对。')
+        const current = checkBinding(next)
+        const blob = await readFormOriginal(next,current.source_id)
+        const latest = await loadSavedNotice(snapshot.batch_id)
+        if (request!==version || !acknowledged.value) throw Error('来源已切换，请重新核对。')
+        checkBinding(latest)
+        return blob
+      }
+      const blob = await read(pinned)
+      extended.value = {file:new File([blob],source.document_ref.name),verify:async()=>{await read(await loadSavedNotice(snapshot.batch_id))}}
+      return
+    }
     const original = await loadSavedOriginal(pinned,checkBinding(pinned))
     if (request!==version) return
     const latest = await loadSavedNotice(snapshot.batch_id)
@@ -204,7 +225,23 @@ async function openForm(mappingSelection?:GenericMappingSelection) {
     let mapping:GenericMapping | undefined
     if (original.generic) {
       if (!mappingSelection) {
-        pendingMapping.value = {key,form:original.generic}
+        const presets:GenericMappingSelection[] = []
+        const owner = account.user?.id
+        const epoch = account.formDraftEpoch
+        if (owner && epoch!==null) {
+          try {
+            for (const draft of await readFormDrafts({owner,epoch},snapshot.batch_id)) {
+              const reference = readDraftReference(draft.key)
+              if (!reference?.positions || JSON.stringify(JSON.parse(draft.key).slice(0,5))!==key) continue
+              const preset = await restorePositions(original.generic,reference.positions)
+              if (preset) presets.push(preset)
+            }
+          } catch {
+            error.value = '保存的字段位置暂不能读取，可以重新核对原件。'
+          }
+        }
+        if (request!==version || account.user?.id!==owner || epoch!==account.formDraftEpoch) return
+        pendingMapping.value = {key,form:original.generic,presets}
         return
       }
       mapping = {form:original.generic,...mappingSelection}
@@ -227,10 +264,12 @@ async function openForm(mappingSelection?:GenericMappingSelection) {
       (binding.unresolved ? '请先确认通知要求分别适用哪些附件。'
         : !confirmed ? '请先核对适用于此表的通知要求，再确认导出。' : '') ||
       (mapping && !canWriteMapping(mapping) ? '还有无法安全写入的字段，可复制清单后在原件中填写。' : '')
+    const draftKey = mapping ? JSON.stringify([...JSON.parse(key),await storePositions(mapping)]) : key
+    if (request!==version) return
     pendingMapping.value = undefined
     emit('accept',{
       id:mapping ? key+':'+JSON.stringify([mapping.section,mappedFields(mapping).map(item=>item.choice)]) : key,
-      ...(!mapping ? {draftKey:key,currentDraftKeys:[...currentKeys],previousDrafts} : {}),
+      draftKey,currentDraftKeys:[...currentKeys],previousDrafts,
       caseId:latest.case_id,genericMapping:mapping,progressId:key,
       scenario:effective.scenario,attachment:source.name,
       requirements:binding.requirements,
@@ -283,22 +322,7 @@ onBeforeUnmount(()=>{request++})
     <p v-if="error" role="alert">{{ error }}</p>
     <template v-if="context">
       <h3>申请表候选</h3>
-      <p v-if="!targets.length && !legacySheets.length">没有可识别的 DOCX 或 XLSX 附件。请从来源页核对。</p>
-      <section v-if="legacySheets.length" aria-label="待手工填写的 XLS 原件">
-        <h3>待手工填写的 XLS 原件</h3>
-        <ul><li v-for="item in legacySheets" :key="item.source_id">{{ item.name }}</li></ul>
-        <p>{{ legacyXlsHint }}</p>
-      </section>
-      <section v-if="pdfSources.length" aria-label="PDF 附件">
-        <h3>PDF 附件</h3>
-        <ul>
-          <li v-for="item in pdfSources" :key="item.source_id">
-            {{ item.name }}
-            <p v-if="originalProblem(item)">{{ originalProblem(item) }}</p>
-          </li>
-        </ul>
-        <p>{{ pdfAttachmentHint }} 可回到来源页查看原件状态。</p>
-      </section>
+      <p v-if="!targets.length">没有可核对的申请表原件，请从来源页核对。</p>
       <ul>
         <li v-for="item in targets" :key="item.source_id">
           <label>
@@ -318,7 +342,7 @@ onBeforeUnmount(()=>{request++})
         <p>请先移除需要替换的附件，再上传正确版本。当前页面会保留旧填写值供对照。</p>
         <button v-if="target" type="button" :disabled="disabled" @click="removeOriginal">移除所选附件</button>
         <label>选择补充原件
-          <input ref="uploadInput" type="file" accept=".docx,.xlsx,.txt" :disabled="disabled" @change="chooseUpload">
+          <input ref="uploadInput" type="file" accept=".docx,.xlsx,.txt,.xls,.pdf,.png,.jpg,.jpeg" :disabled="disabled" @change="chooseUpload">
         </label>
         <label v-if="uploadFile"><input v-model="uploadConsent" type="checkbox" :disabled="disabled">
           我已核对该文件的隐私并同意上传到当前账户
@@ -359,15 +383,16 @@ onBeforeUnmount(()=>{request++})
         </p>
         <template v-else>
           <label v-if="canConfirmNotice">
-            <input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="emit('invalidate')">
+            <input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="extended=undefined; emit('invalidate')">
             我已核对这份表的通知原文及提交要求
           </label>
           <button type="button" :disabled="disabled || Boolean(formProblem)" @click="openForm()">核验并填写选中原表</button>
-          <GenericMappingReview v-if="pendingMapping" :key="pendingMapping.key" :form="pendingMapping.form"
+          <GenericMappingReview v-if="pendingMapping" :key="pendingMapping.key" :form="pendingMapping.form" :presets="pendingMapping.presets"
             :disabled="disabled" @accept="openForm"/>
         </template>
       </template>
     </template>
+    <OriginalCopyEditor v-if="extended" :key="request" :file="extended.file" :verify="extended.verify" />
   </section>
 </template>
 

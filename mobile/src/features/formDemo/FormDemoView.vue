@@ -16,13 +16,13 @@ import {exportGenericForm,mappedFields} from './genericForm'
 import {createOfficeDelivery,officeFilename} from './officeDelivery'
 import {prepareVaultFormArchive,VaultArchiveUncertain,type VaultArchiveReceipt} from './vaultFormArchive'
 import {noticeFilename,type NoticeSelection} from './noticeIntake'
-import {clearFormDrafts,DraftRevisionConflict,DraftSessionExpired,draftRetentionDays,draftRetentionMs,
+import {allowedValues,clearFormDrafts,DraftRevisionConflict,DraftSessionExpired,draftRetentionDays,draftRetentionMs,
   observeDraftSessionRevocation,readDraftReference,readFormDrafts,recoverableFields,
   saveFormDraft,type DraftSession,type SavedFormDraft} from './savedFormDrafts'
 import {avatarUrl,buildForm} from './exportForm'
 import {awardReason,awardSlots,nextAwardSlot,readAward,writeAward,type DemoAward} from './demoAwards'
 import {loadDemoProfile,profileKey,resolveDemoProfile,updateDemoProfile,type DemoOwner,type DemoProfile,type FormProfileOwner} from './demoProfile'
-import {exampleValues,isCompetitionNotice,leaveDays,proposedFilename,reviewForm,scenarioFields,scenarios,validateFilename,type FormValues,type Scenario} from './scenarios'
+import {exampleValues,isCompetitionNotice,leaveDays,proposedFilename,reviewForm,formTextLength,scenarioFields,scenarios,validateFilename,type FormValues,type Scenario} from './scenarios'
 
 const props = defineProps<{fromNotice?:boolean;savedBatchId?:string}>()
 const account = useAccountStore()
@@ -103,11 +103,11 @@ watch(savedDrafts,records=>{
   },Math.max(0,expires-Date.now()))
 })
 const priorDrafts = computed(()=>{
-  if (!intake.value?.currentDraftKeys) return []
+  if (!intake.value?.currentDraftKeys || intake.value.genericMapping) return []
   const items = new Map((intake.value.previousDrafts || []).filter(item=>drafts.has(item.key))
     .map(item=>[item.key,item.name]))
   for (const item of savedDrafts.value) {
-    if (intake.value.currentDraftKeys.includes(item.key) || items.has(item.key)) continue
+    if (item.scenarioId==='imported-template' || intake.value.currentDraftKeys.includes(item.key) || items.has(item.key)) continue
     const reference = readDraftReference(item.key)
     if (!reference) continue
     const title = scenarios.find(scenario=>scenario.id===item.scenarioId)?.title
@@ -279,7 +279,7 @@ async function acceptIntake(selection: NoticeSelection) {
   const saved = savedDrafts.value.find(item=>item.key===key && item.scenarioId===selection.scenario.id)
   if (!draftRevisions.has(key)) draftRevisions.set(key,saved?.revision ?? 0)
   const restored = saved && !drafts.has(key)
-  if (restored) drafts.set(key,{values:{...saved.values},photo:'',name:''})
+  if (restored) drafts.set(key,{values:allowedValues(selection.scenario,saved.values),photo:'',name:''})
   select(selection.scenario,false,key)
   if (restored) message.value = '已恢复此原件版本保存的草稿。请补齐本次资料并重新确认导出。'
 }
@@ -317,7 +317,8 @@ async function saveDraftProgress() {
   const batch = props.savedBatchId
   const key = intake.value?.draftKey
   if (!batch || !key || exporting.value || draftBusy.value) return
-  const manualValues = Object.fromEntries(Object.entries(values.value)
+  const eligible = new Set(draftFields.value.map(field=>field.id))
+  const manualValues = Object.fromEntries(Object.entries(values.value).filter(([id])=>eligible.has(id))
     .filter(([id])=>!profileFields.value[id] && !awardSources.value[id]))
   const result = await runDraftAction(session=>
     saveFormDraft(session,batch,key,scenario.value.id,manualValues,draftRevisions.get(key) ?? 0))
@@ -749,7 +750,7 @@ function displayed(value: string, sensitive?: boolean) {
         <p v-if="intake">已选原件：{{ intake.attachment }}。</p>
         <p v-if="intake?.exportBlocked" class="warning">{{ intake.exportBlocked }}</p>
         <p v-if="fromNotice && !persistAllowed">本次补录按当前文件管理。</p>
-        <p v-if="intake?.genericMapping">此原表的填写值仅保留在当前页面，需逐项核对未识别区和人工办理项。</p>
+        <p v-if="intake?.genericMapping">请核对未识别区域及人工办理项。</p>
         <details v-if="intake?.genericMapping?.form.manual.length">
           <summary>查看原表保留区域</summary>
           <ul><li v-for="(item,index) in intake.genericMapping.form.manual" :key="index">{{ item.where }} · {{ item.text }}</li></ul>
@@ -817,7 +818,7 @@ function displayed(value: string, sensitive?: boolean) {
         <div class="actions">
           <button type="button" @click="showAll=!showAll">{{ showAll ? '只显示补录字段' : '显示并编辑整张表单' }}</button>
         </div>
-        <AccountProfileFill v-if="savedBatchId && intake && !intake.genericMapping && account.signedIn" :key="intake.id"
+        <AccountProfileFill v-if="intake && (savedBatchId || intake.genericMapping) && account.signedIn" :key="intake.id"
           :scenario="scenario" :case-id="intake.caseId" :values="values" :disabled="saving || exporting"
           @apply="fillFromAccountProfile"/>
         <button v-if="Object.keys(profileFields).length" type="button" :disabled="exporting" @click="clearProfileFields">
@@ -839,6 +840,11 @@ function displayed(value: string, sensitive?: boolean) {
               <textarea v-else-if="field.type==='long'" :id="field.id" v-model="values[field.id]" rows="4" :aria-invalid="Boolean(review.errors[field.id])" @input="changed"></textarea>
               <input v-else :id="field.id" v-model="values[field.id]" :type="field.type==='date'?'date':field.sensitive&&!reveal?'password':'text'"
                 :inputmode="field.type==='number'?'numeric':undefined" :aria-invalid="Boolean(review.errors[field.id])" autocomplete="off" @input="changed">
+              <small v-if="field.type==='long' && (field.min!==undefined || field.max!==undefined)">
+                已填 {{ formTextLength(values[field.id] || '') }} 字（不计空格和换行）
+                <template v-if="field.min!==undefined"> · 至少 {{ field.min }} 字</template>
+                <template v-if="field.max!==undefined"> · 最多 {{ field.max }} 字</template>
+              </small>
               <small v-if="field.hint">{{ field.hint }}</small>
               <small v-if="review.errors[field.id]" class="warning">{{ review.errors[field.id] }}</small>
               <details v-if="profileFields[field.id]">

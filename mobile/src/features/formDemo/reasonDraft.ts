@@ -1,5 +1,5 @@
 import type {AwardUse} from './accountAwardFill'
-import {scenarioFields,type Scenario} from './scenarios'
+import {formTextLength,scenarioFields,type Scenario} from './scenarios'
 
 const purposes: Record<string,string> = {
   leave:'现申请上述时段请假',proof:'现申请办理学历及学位证明',photo:'现申请补发学生证',
@@ -19,7 +19,7 @@ export function reasonAwards(uses:AwardUse[]):ReasonAward[] {
   return uses.filter(use=>Object.keys(use.fields).length===3).map(({entry,source})=>({entry,source}))
 }
 
-export const reasonLength = (text:string) => [...text.trim()].length
+export const reasonLength = formTextLength
 
 export function draftApplicationReason(scenario:Scenario,details:string,awards:ReasonAward[]) {
   const field = reasonField(scenario)

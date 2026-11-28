@@ -2,7 +2,7 @@ import {api} from '../../core/http';
 
 export interface SourceLine {
   line_id:string; document_id:string; line_number:number; text:string;
-  page:number|null; locator:string|null; bbox:number[]|null;
+  page:number|null; locator:string|null; bbox:number[]|[number,number][]|null;
   coordinate_space:string|null; page_width:number|null; page_height:number|null; confidence:number|null;
 }
 export interface SourceDocument {
@@ -61,7 +61,7 @@ export function parseFormContext(value:unknown,batchId:string,revision:number):F
           !integer(line.line_number)||line.line_number<=previous||!string(line.text)||
           !nullableNumber(line.page)||!nullableString(line.locator)||!nullableString(line.coordinate_space)||
           !nullableNumber(line.page_width)||!nullableNumber(line.page_height)||!nullableNumber(line.confidence)||
-          !(line.bbox===null||(Array.isArray(line.bbox)&&line.bbox.length===4&&line.bbox.every((n:unknown)=>typeof n==='number'&&Number.isFinite(n)))))invalid();
+          !(line.bbox===null||(Array.isArray(line.bbox)&&line.bbox.length===4&&(line.bbox.every(Number.isFinite)||line.bbox.every((point:unknown)=>Array.isArray(point)&&point.length===2&&point.every(Number.isFinite))))))invalid();
         previous=line.line_number;lineIds.add(line.line_id);
       }
       if(source.lines.length){

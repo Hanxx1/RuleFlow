@@ -1,7 +1,7 @@
 import {ApiError,api} from '../../core/http'
 import {readFormContext,type FormContext,type FormContextSource} from '../imports/formContext'
 import {readFormOriginal} from '../imports/formOriginal'
-import {analyzeNotice,isLegacyXls,isPdfAttachment,matchAttachment,noticeTargetMatches,type NoticeEvidence} from './noticeIntake'
+import {analyzeNotice,isExtendedOriginal,isLegacyXls,isPdfAttachment,matchAttachment,noticeTargetMatches,type NoticeEvidence} from './noticeIntake'
 
 export async function loadSavedNotice(batchId: string) {
   const read = async () => {
@@ -18,6 +18,8 @@ export async function loadSavedNotice(batchId: string) {
 
 export const isOfficeSource = (source: FormContextSource) =>
   /\.(docx|xlsx)$/i.test(source.document_ref?.name || source.name)
+export const isFillableSource = (source:FormContextSource) =>
+  isOfficeSource(source) || isExtendedOriginal(source.document_ref?.name || source.name)
 export const isLegacyXlsSource = (source:FormContextSource) => isLegacyXls(source.document_ref?.name || source.name)
 
 export const isPdfSource = (source:FormContextSource) => isPdfAttachment(source.document_ref?.name || source.name)
@@ -53,7 +55,7 @@ export function defaultNotice(context: FormContext,target: FormContextSource) {
     return candidates.find(source=>source.source_id===target.parent_source_id)?.source_id || ''
   }
   const primary = candidates.filter(source=>!isLegacyXlsSource(source) &&
-    (!isOfficeSource(source) || /通知|公告|通告/.test(source.name)))
+    (!isFillableSource(source) || /通知|公告|通告/.test(source.name)))
   return primary.length===1 ? primary[0].source_id : ''
 }
 
@@ -63,7 +65,7 @@ export type ScopeSelections = Readonly<Record<string,ScopeSelection>>
 export function savedRules(context: FormContext,notice: FormContextSource | undefined,
                            targetId: string,selections: ScopeSelections,excluded: readonly string[]) {
   const targets = context.sources.filter(source=>source.source_id!==notice?.source_id &&
-    isOfficeSource(source) && !excluded.includes(source.source_id) &&
+    isFillableSource(source) && !excluded.includes(source.source_id) &&
     (source.parent_reference_state!=='valid' || source.parent_source_id===notice?.source_id))
     .map(source=>({id:source.source_id,name:source.name}))
   const text = notice?.extraction.state==='available' && notice.text && notice.text.length<=30_000 ? notice.text : ''

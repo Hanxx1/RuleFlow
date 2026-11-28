@@ -155,6 +155,8 @@ export function scenarioFields(scenario: Scenario) {
   return scenario.groups.flatMap(group=>group.fields)
 }
 
+export const formTextLength = (value:string) => [...value.replace(/\s/gu,'')].length
+
 export function reviewForm(scenario: Scenario, values: FormValues, hasPhoto: boolean) {
   const errors: Record<string,string> = {}
   const reminders: string[] = []
@@ -164,9 +166,9 @@ export function reviewForm(scenario: Scenario, values: FormValues, hasPhoto: boo
       if (!field.optional) errors[field.id] = '请补充'+field.label
       continue
     }
-    const length = [...value].length
-    if (field.max && length > field.max) errors[field.id] = '最多填写 '+field.max+' 字'
-    if (field.min && length < field.min) errors[field.id] = '至少填写 '+field.min+' 字'
+    const length = field.type==='long' ? formTextLength(value) : [...value].length
+    if (field.max!==undefined && length > field.max) errors[field.id] = '最多填写 '+field.max+' 字'
+    if (field.min!==undefined && length < field.min) errors[field.id] = '至少填写 '+field.min+' 字'
     if (field.choices && !field.choices.includes(value)) errors[field.id] = '请选择模板允许的选项'
     if (field.type === 'number' && !/^[1-9]\d{0,5}$/.test(value)) errors[field.id] = '请填写正整数'
     if (field.type === 'date') {

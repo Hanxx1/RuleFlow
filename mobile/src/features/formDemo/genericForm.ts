@@ -27,7 +27,7 @@ export type GenericForm = {
   sections: FormSection[]
   photoSlot: boolean
 }
-export type GenericMappingSelection = {choices:Record<string,string>; section?:string}
+export type GenericMappingSelection = {choices:Record<string,string>; section?:string; school?:string}
 export type GenericMapping = GenericMappingSelection & {form:GenericForm}
 type Layout = {fields:Candidate[]; manual:GenericForm['manual']; photoSlot:boolean}
 
@@ -102,6 +102,21 @@ function wordInput(cell: Element | undefined, long: boolean) {
   return paragraph
 }
 
+function wordFullRow(row: Element | undefined) {
+  const cells = children(row,word,'tc')
+  if (cells.length!==1 || first(first(row,word,'trPr'),word,'gridBefore') ||
+      first(first(row,word,'trPr'),word,'gridAfter')) return undefined
+  const cell = cells[0]
+  const properties = first(cell,word,'tcPr')
+  if (first(properties,word,'vMerge') || first(properties,word,'hMerge')) return undefined
+  return {cell,span:first(properties,word,'gridSpan')?.getAttributeNS(word,'val') || '1'}
+}
+
+function canExpand(row: Element | undefined) {
+  return !children(first(row,word,'trPr'),word,'trHeight')
+    .some(height=>height.getAttributeNS(word,'hRule')==='exact')
+}
+
 function inlineField(text: string) {
   const match = /^(.{1,24}?[：:])([\s_＿]*(?:-\s*学年第\s*学期)?[\s_＿]*)$/s.exec(text)
   if (!match) return
@@ -135,7 +150,8 @@ function wordLayout(parts: Package): Layout {
       const runs = nodes(element,word,'t')
       if (inline) layout.fields.push({field:inline.field,label:text,where:'正文',
         slot:runs.length===1 && plainParagraph(element)
-          ? {...location(mainWord,runs[0],'wordText','正文'),prefix:inline.prefix} : undefined})
+          ? {...location(mainWord,inline.field.type==='long' ? element : runs[0],
+            inline.field.type==='long' ? 'paragraph' : 'wordText','正文'),prefix:inline.prefix} : undefined})
       continue
     }
     if (element.localName!=='tbl') continue
@@ -158,18 +174,32 @@ function wordLayout(parts: Package): Layout {
           continue
         }
         const cell = cells[index]
-        const target = wordInput(cells[index+1],detectField(text)?.type==='long')
-        const field = detectField(text,recognizable && Boolean(target))
+        const nextCell = cells[index+1]
+        const field = detectField(text,recognizable && Boolean(wordInput(nextCell,false)))
         if (field) {
+          const long = field.type==='long'
+          let target = (!long || canExpand(row)) ? wordInput(nextCell,long) : undefined
+          let targetWhere = rowWhere+' · 第 '+(index+2)+' 格'
+          if (long && cells.length===1 && !target) {
+            const labelRow = wordFullRow(row)
+            const nextRow = rows[rowIndex+1]
+            const inputRow = wordFullRow(nextRow)
+            if (labelRow && inputRow && labelRow.span===inputRow.span && canExpand(nextRow) &&
+                !reservedLabel(cellText(inputRow.cell))) {
+              target = wordInput(inputRow.cell,true)
+              targetWhere = '表 '+tableNumber+' · 第 '+(rowIndex+2)+' 行 · 第 1 格'
+            }
+          }
           layout.fields.push({field,label:text,where,slot:target
-            ? location(mainWord,target,'paragraph',rowWhere+' · 第 '+(index+2)+' 格') : undefined})
+            ? location(mainWord,target,'paragraph',targetWhere) : undefined})
           continue
         }
         const inline = inlineField(text)
         const runs = nodes(cell,word,'t')
-        if (inline) layout.fields.push({field:inline.field,label:text,where,slot:runs.length===1 &&
+        if (inline) layout.fields.push({field:inline.field,label:text,where,slot:runs.length===1 && (inline.field.type!=='long' || canExpand(row)) &&
           children(cell,word,'p').length===1 && plainParagraph(children(cell,word,'p')[0])
-          ? {...location(mainWord,runs[0],'wordText',where),prefix:inline.prefix} : undefined})
+          ? {...location(mainWord,inline.field.type==='long' ? children(cell,word,'p')[0] : runs[0],
+            inline.field.type==='long' ? 'paragraph' : 'wordText',where),prefix:inline.prefix} : undefined})
       }
     }
   }
@@ -226,6 +256,11 @@ function sheetLayout(parts: Package): Layout {
   const doc = parse(parts[workbook],sheet,'workbook')
   const relDoc = parse(parts['xl/_rels/workbook.xml.rels'],relationshipNS,'Relationships')
   const shared = strings(parts)
+  const styles = parts['xl/styles.xml']
+    ? children(first(parse(parts['xl/styles.xml'],sheet,'styleSheet').documentElement,sheet,'cellXfs'),sheet,'xf')
+    : []
+  const wraps = (cell:Element) => ['1','true'].includes(
+    first(styles[Number(cell.getAttribute('s'))],sheet,'alignment')?.getAttribute('wrapText') || '')
   const layout: Layout = {fields:[],manual:[],photoSlot:false}
   const relationships = new Map(nodes(relDoc,relationshipNS,'Relationship').filter(item=>
     item.getAttribute('Type')===rel+'/worksheet' && item.getAttribute('TargetMode')!=='External')
@@ -297,10 +332,19 @@ function sheetLayout(parts: Package): Layout {
             ? {...location(part,cell.element,'cell',where),prefix:inline.prefix} : undefined})
           continue
         }
-        const target = horizontal ? (example ? dataRow : rowAfter)?.find(other=>other.position.column===cell.position.column) : beside(cell)
-        const blank = target && emptyPlaceholder(target.text)
-        const field = detectField(cell.text,header && Boolean(blank))
+        let target = horizontal ? (example ? dataRow : rowAfter)?.find(other=>other.position.column===cell.position.column) : beside(cell)
+        const field = detectField(cell.text,header && Boolean(target && emptyPlaceholder(target.text)))
         if (!field) continue
+        if (!horizontal && !target && field.type==='long' && row.filter(item=>item.text.trim()).length===1) {
+          const labelArea = merged(cell)
+          const below = rowAfter?.find(other=>other.position.column===cell.position.column)
+          const inputArea = below && merged(below)
+          if (labelArea?.start.row===rowIndex && labelArea.end.row===rowIndex && below && wraps(below.element) &&
+              inputArea?.start.row===rowIndex+1 && inputArea.start.column===labelArea.start.column &&
+              inputArea.end.column===labelArea.end.column &&
+              rowAfter?.every(other=>emptyPlaceholder(other.text) && !first(other.element,sheet,'f'))) target = below
+        }
+        const blank = target && emptyPlaceholder(target.text)
         const choices = field.id==='type' && target ? checkboxOptions(target.text) : []
         const suffix = field.type==='long' && target ? signatureTail(target.text) : undefined
         const slot = writable(target) && (blank || choices.length || suffix)
@@ -381,9 +425,9 @@ export function genericScenario(mapping: GenericMapping, physicalPhoto: boolean)
   const pastePhoto = mapping.form.manual.some(({text})=>/照片|贴照/.test(text) &&
     /粘贴|贴照|贴.*照片|照片.*贴/.test(text) && !/免贴|无需|不(?:用|要)粘贴/.test(text))
   return {
-    id:'imported-template',title:mapping.form.name.replace(/\.(docx|xlsx)$/i,''),school:'',source:'',asset:'',
+    id:'imported-template',title:mapping.form.name.replace(/\.(docx|xlsx)$/i,''),school:mapping.school?.trim() || '',source:'',asset:'',
     format:mapping.form.format,provenance:'依据本次导入的原表',
-    groups:[{title:'原表字段',fields:mappedFields(mapping).map(item=>({...item.field,
+    groups:[{title:'原表字段',fields:mappedFields(mapping).map(item=>({...item.field,export:item.slot ? undefined : false,
       hint:item.where+' · '+(item.slot ? '填入 '+item.slot.where : '位置待核对，列入填写清单'),
     }))}],
     manual:'请核对原表的未识别区域、签字、审核和提交要求。',

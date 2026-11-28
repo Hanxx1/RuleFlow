@@ -22,6 +22,20 @@ describe('confirmed account profile for form completion',()=>{
     expect(major.refs[0].quote).toContain('计算机科学')
   })
 
+  it('requires an explicit matching school and a writable slot on an unfamiliar original',()=>{
+    const workspace = {...emptyWorkspace('generic-user'),assertions:[...school,...sample]}
+    const generic = {...form,id:'imported-template',school:''}
+    expect(reviewAccountProfile(workspace,generic,'',{},today).candidates).toEqual([])
+    generic.school='其他学校'
+    expect(reviewAccountProfile(workspace,generic,'',{},today).candidates).toEqual([])
+    generic.school='南京审计大学'
+    const selected=reviewAccountProfile(workspace,generic,'',{major:'手填专业'},today).candidates
+    expect(selected.some(item=>item.id==='major')).toBe(false)
+    expect(selected.find(item=>item.id==='college')?.refs.map(ref=>ref.id)).toEqual([sample[0].id,school[0].id])
+    const changed={...workspace,assertions:[...school,...formAssertions({college:'新院系'})]}
+    expect(staleProfileLabels(selected,reviewAccountProfile(changed,generic,'',{},today).candidates)).toContain('院系')
+  })
+
   it('rejects another school and templates for historical credentials',()=>{
     const profile = {...emptyWorkspace('test-a'),assertions:formAssertions({school:'其他学校',major:'外校专业'})}
     expect(reviewAccountProfile(profile,form,'',{},today)).toMatchObject({candidates:[],issue:'画像学校与此原表适用的学校不同，仍可手工填写。'})
