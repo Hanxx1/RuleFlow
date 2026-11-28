@@ -28,6 +28,7 @@ const selectedNotices = ref<Record<string,string>>({})
 const selections = ref<Record<string,ScopeSelection>>({})
 const excluded = ref<string[]>([])
 const acknowledged = ref(false)
+const competitionFill = ref(false)
 const busy = ref(false)
 const error = ref('')
 const account = useAccountStore()
@@ -173,7 +174,7 @@ async function openForm(mappingSelection?:GenericMappingSelection) {
   const source = target.value
   const selectedNotice = notice.value
   const binding = rules.value
-  if (disabled.value || !snapshot || !source || !binding || formProblem.value || binding.analysis.competition) return
+  if (disabled.value || !snapshot || !source || !binding || formProblem.value || (binding.analysis.competition && !competitionFill.value)) return
   const key = savedDraftKey(snapshot.batch_id,source)
   if (mappingSelection && pendingMapping.value?.key!==key) return
   extended.value = undefined
@@ -271,10 +272,18 @@ async function openForm(mappingSelection?:GenericMappingSelection) {
       id:mapping ? key+':'+JSON.stringify([mapping.section,mappedFields(mapping).map(item=>item.choice)]) : key,
       draftKey,currentDraftKeys:[...currentKeys],previousDrafts,
       caseId:latest.case_id,genericMapping:mapping,progressId:key,
+      noticeText:selectedNotice?.text || undefined,
       scenario:effective.scenario,attachment:source.name,
       requirements:binding.requirements,
       manualReviews:binding.requirements.evidence.filter(item=>item.kind==='review').length,
       exportBlocked,
+      verifyAssistantContext:async()=>{
+        const updated = await loadSavedNotice(snapshot.batch_id)
+        const currentNotice = updated.sources.find(item=>item.source_id===selectedNotice?.source_id)
+        if (request!==version || currentNotice?.text!==selectedNotice?.text) {
+          throw Error('智能填写引用的通知已变化，请重新核验并生成。')
+        }
+      },
       verifyExport:async()=>{
         try {
           const rechecked = await loadSavedNotice(snapshot.batch_id)
@@ -381,7 +390,11 @@ onBeforeUnmount(()=>{request++})
         <p v-if="rules.analysis.competition">
           {{ rules.analysis.competitionEvidence?.text }} <RouterLink to="/plan/schedule">转到日程安排</RouterLink>
         </p>
-        <template v-else>
+        <label v-if="rules.analysis.competition">
+          <input v-model="competitionFill" type="checkbox" :disabled="disabled" @change="pause">
+          本次仍需填写所选报名附件
+        </label>
+        <template v-if="!rules.analysis.competition || competitionFill">
           <label v-if="canConfirmNotice">
             <input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="extended=undefined; emit('invalidate')">
             我已核对这份表的通知原文及提交要求

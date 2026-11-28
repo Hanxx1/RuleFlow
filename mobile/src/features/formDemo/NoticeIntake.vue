@@ -27,6 +27,7 @@ const scopes = ref<Record<number,string>>({})
 const selected = ref(-1)
 const inspected = ref<NoticeRequirements>()
 const acknowledged = ref(false)
+const competitionFill = ref(false)
 const accepted = ref(false)
 const loading = ref(false)
 const error = ref('')
@@ -79,6 +80,7 @@ function pauseForm() {
 
 function invalidate() {
   inspected.value = undefined
+  competitionFill.value = false
   selected.value = -1
   scopes.value = {}
   error.value = ''
@@ -190,7 +192,7 @@ function pick(index: number) {
 async function accept(mappingSelection?:GenericMappingSelection) {
   const current = candidate.value
   if (disabled.value || accepted.value || !current || current.conflict || !acknowledged.value ||
-      unassigned.value || inspected.value?.competition) return
+      unassigned.value || inspected.value?.competition && !competitionFill.value) return
   const index = selected.value
   const key = attachmentKeys.value[index]
   if (isExtendedOriginal(files.value[index].name)) {
@@ -230,7 +232,7 @@ async function accept(mappingSelection?:GenericMappingSelection) {
   pendingMapping.value = undefined
   accepted.value = true
   emit('accept',{id:mapping ? key+':'+JSON.stringify([mapping.section,mappedFields(mapping).map(item=>item.choice)]) : key,
-    progressId:key,scenario,requirements:current.requirements,attachment:current.attachment,
+    progressId:key,noticeText:text.value,scenario,requirements:current.requirements,attachment:current.attachment,
     manualReviews:manualReviews.value,genericMapping:mapping,exportBlocked})
 }
 </script>
@@ -292,7 +294,11 @@ async function accept(mappingSelection?:GenericMappingSelection) {
       </ol>
       <p v-if="unassigned && targets.length && !inspected.competition" role="alert">请确认上方未分配的要求适用哪份附件，或标记待人工核对。</p>
       <p v-if="candidate?.conflict && !inspected.competition" role="alert">{{ candidate.attachment }} · {{ candidate.conflict }}</p>
-      <template v-if="!inspected.competition">
+      <label v-if="inspected.competition && formIndexes.length">
+        <input v-model="competitionFill" type="checkbox" :disabled="disabled" @change="pauseForm">
+        本次仍需填写所选报名附件
+      </label>
+      <template v-if="!inspected.competition || competitionFill">
         <label><input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="accepted=false; extended=undefined; pendingMapping=undefined; emit('invalidate')"> 我已核对通知原文和需人工办理的要求</label>
         <button type="button" :disabled="disabled || accepted || !candidate || Boolean(candidate.conflict) || unassigned || !acknowledged" @click="accept()">{{ accepted?'已启用该申请表':'按此通知填写选中原表' }}</button>
         <GenericMappingReview v-if="pendingMapping" :key="attachmentKeys[selected]" :form="pendingMapping" :disabled="disabled" @accept="accept"/>

@@ -7,12 +7,23 @@ import sys
 
 import pytest
 
+# Live credentials are only restored for explicitly opted-in tests.
+_live_model_environment = {
+    name: os.environ[name] for name in ('LLM_BASE_URL', 'LLM_MODEL', 'LLM_API_KEY') if name in os.environ
+} if os.getenv('RUN_LIVE_FORM_AI') == '1' else {}
+
 _collection_root = tempfile.TemporaryDirectory(prefix='ruleflow-tests-')
 os.environ.update(DATABASE_PATH=':memory:', DEMO_MODE='false', APP_ENV='development',
                   LLM_BASE_URL='', LLM_MODEL='', LLM_API_KEY='',
                   VAULT_UPLOAD_ROOT=str(Path(_collection_root.name) / 'vault'),
                   DEMO_UPLOAD_ROOT=str(Path(_collection_root.name) / 'demo'),
                   DOCUMENT_UPLOAD_ROOT=str(Path(_collection_root.name) / 'documents'))
+
+@pytest.fixture
+def enable_live_form_model(monkeypatch):
+    for name, value in _live_model_environment.items():
+        monkeypatch.setenv(name, value)
+
 
 @pytest.fixture(autouse=True)
 def isolated_application(monkeypatch, tmp_path_factory):

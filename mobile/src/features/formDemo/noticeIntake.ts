@@ -16,8 +16,10 @@ export type NoticeSelection = {
   previousDrafts?: {key:string; name:string}[]
   exportBlocked?: string
   verifyExport?: () => Promise<void>
+  verifyAssistantContext?: () => Promise<void>
   genericMapping?: GenericMapping
   progressId?: string
+  noticeText?: string
 }
 type NamingRule = {parts: string[]; joiner: string; extension?: string}
 export type NoticeRequirements = {
