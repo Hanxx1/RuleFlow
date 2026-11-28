@@ -2,6 +2,8 @@
 
 核对日期：2026-11-27；C 侧代码走读与交接准备。基线：fetch 后的 `origin/main`，`f6aec68`。本文沿用已确认产品行为，不新增公共协议或代记 B 签认。
 
+**后续修复（同日，待评审）：**原交接说明已随 PR #50 进入 `bbeb9a4`。`fix/RF-013-html-body-extraction` 在该基线上修复 CMS 的 form 包裹正文时正文被误删的问题；没有变更 CM-004 接口或产品约定。下文导航边界以修复说明为准，交接时分支及验证结论保留历史含义。
+
 ## 1. 正文提取入口与相关分支
 
 | 能力 | 现有入口与版本 | 可用于联调的范围 |
@@ -21,11 +23,15 @@
 
 ### 导航混入的实际边界
 
-`html_blocks` 删除 `script/style/nav/footer/form`，依次查找 `.v_news_content`、`.wp_articlecontent`、`.article-content`、`.news-content`、`.entry-content`、`article`、`main`；无命中则回退到 `body` 或整个 soup。普通 div 中的导航文字不会被上述标签规则移除；选到过宽的 main 也可能包含无关段落。
+`html_blocks` 原实现先删除 `script/style/nav/footer/form`，再依次查找 `.v_news_content`、`.wp_articlecontent`、`.article-content`、`.news-content`、`.entry-content`、`article`、`main`；无命中则回退到 `body` 或整个 soup。普通 div 中的导航文字不会被上述标签规则移除；选到过宽的 main 也可能包含无关段落。
 
 本次直接调用现有函数的合成验证：同一份带 div 导航的 HTML，有 `article` 时返回 `['Notice body']`；正文也放在普通 div 时返回 `['Navigation', 'Notice body']`。这解释了当前反馈的一条可复现路径，未取得 B 的实际网页样本，不能断言真实样本必定走相同路径。
 
+后续已从 B 远端工作记录定位到[西北大学通知](https://www.nwu.edu.cn/info/1101/13884.htm)，并于本日获取公开 HTML 核对：正文实际是 `form > #vsb_content > .v_news_content`。原实现删除 form 后返回 69 段导航等内容，真实正文丢失。修复改为先定位正文再移除无关表单，保留正文外层 form 并清除交互控件；本地解析得到 30 段、790 字符，忽略空白后与完整正文一致。此结论只覆盖已检查样本和结构回归，不保证所有网页纯正文；无容器回退的合成反例依然存在。未下载附件或执行 B 导出。
+
 可立即联调：用户核对并粘贴通知正文，经 `POST /api/v1/import-batches/{batch_id}/sources/text`（`{text,title?,consent:true}`）保存，附件沿现有来源流程获取，再读取批次当前 revision 和 form-context。粘贴来源为 `legacy_text`，不生成 Document 行，不把显示行号伪装为正式 Evidence。已经保存的网页噪声不会因重读 form-context 消失；不得在消费端静默重排真实行后沿用旧 line_id。
+
+在本修复经评审并用于联调后，B 可从原有 `sources/url` 入口显式新导入上述网页，再按新来源和 Document 行消费正文。旧批次、旧行及旧草稿不自动迁移，也不以新 source_id 继承旧来源身份。
 
 `form-context` 保留已有 Bearer 鉴权及 `data/request_id` 包络；401、404、409 `IMPORT_BATCH_STALE`、409 `SOURCE_REFERENCE_INVALID`、422 等按真实错误处理，响应 no-store。原件存在与解析成功分开判断，完整约束见 [来源移交说明](records/C_RF013_source_handoff.md)。用户转达 B 已用真实校方正文和附件跑通双表填写及导出；这是 B 的联调反馈，本次未独立复现，不据此把网页净化、H06 全部边界或 H08 真机验收标为通过。
 
@@ -60,4 +66,4 @@ B 回核时需提供：采用的课程与资料身份映射、权限及范围过
 
 ## 3. 本轮验证与限制
 
-本次仅文档更新、现有代码走读及合成函数验证，未修改业务代码、公共 API、存储或迁移。实际测试及文档检查结果统一记录于 [C 工作记录](records/C_notice_case.md)。未联系或代替 B 签认；真实通知样本、双表导出结果及原始会话证据待 B 提供可复查位置。无本次 APK。
+初次交接仅文档更新、代码走读及合成函数验证；后续正文修复只改解析函数和回归测试，不改公共 API、存储或迁移。实际测试及文档检查结果统一记录于 [C 工作记录](records/C_notice_case.md)。未联系或代替 B 签认；西北大学公开网页已单独获取验证，B 双表导出结果及原始会话证据仍需提供可复查位置。无本次 APK。
