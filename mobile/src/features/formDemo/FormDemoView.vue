@@ -7,6 +7,8 @@ import NoticeIntake from './NoticeIntake.vue'
 import SavedNoticeIntake from './SavedNoticeIntake.vue'
 import AccountProfileFill from './AccountProfileFill.vue'
 import AccountAwardFill from './AccountAwardFill.vue'
+import SmartFormFill from './SmartFormFill.vue'
+import {accountFacts,checkAssistantValue,type Approved,type Plan,type Source} from './formAssistant'
 import ApplicationReasonDraft from './ApplicationReasonDraft.vue'
 import {experienceSource,loadExperiences} from '../experience/archive'
 import {reviewAccountProfile,staleProfileLabels,type ProfileCandidate} from './accountFormProfile'
@@ -67,12 +69,15 @@ const archive = computed(()=>profile.value.awards)
 const reasonSuggestion = ref('')
 const acceptedReason = ref<ReasonVersion>()
 const reasonEditorKey = ref(0)
+const assisted = ref<Record<string,Approved>>({})
+const assistantRules = ref<Record<string,{plan:Plan;refs:Source[]}>>({})
 const profileFields = ref<Record<string,ProfileCandidate>>({})
 const awardUses = ref<AwardUse[]>([])
 const reasonSources = computed(()=>reasonAwards(awardUses.value))
 const awardSources = computed(()=>Object.fromEntries(awardUses.value.flatMap(use=>
   Object.keys(use.fields).map(id=>[id,use.source]))))
 const drafts = new Map<string,{values:FormValues;photo:string;name:string;
+  assisted?:Record<string,Approved>;assistantRules?:typeof assistantRules.value;assistantContext?:string;
   profileFields?:Record<string,ProfileCandidate>;awardUses?:AwardUse[];acceptedReason?:ReasonVersion}>()
 const attachmentProgress = ref<Record<string,'editing'|'exported'>>({})
 const exporting = ref(false)
@@ -129,7 +134,17 @@ const draftExpiryLabel = computed(()=>currentSavedDraft.value
   ? new Date(currentSavedDraft.value.savedAt+draftRetentionMs).toLocaleString('zh-CN') : '')
 
 
-const review = computed(()=>reviewForm(scenario.value,values.value,Boolean(photo.value)))
+const review = computed(()=>{
+  const result=reviewForm(scenario.value,values.value,Boolean(photo.value))
+  for (const field of scenarioFields(scenario.value)) {
+    const rule=assistantRules.value[field.id]
+    if (rule && !result.errors[field.id]) {
+      const issue=checkAssistantValue(field,rule.plan,values.value[field.id] || '')
+      if (issue) result.errors[field.id]=issue
+    }
+  }
+  return result
+})
 const count = computed(()=>Object.keys(review.value.errors).length)
 const groups = computed(()=>scenario.value.groups.map(group=>({
   ...group,fields:showAll.value?group.fields:group.fields.filter(field=>completion.value.includes(field.id)),
@@ -156,6 +171,9 @@ const competition = computed(()=>isCompetitionNotice(notice.value))
 
 function changed() {
   formVersion++
+  for (const [key,item] of Object.entries(assisted.value)) {
+    if (values.value[key]!==item.value) delete assisted.value[key]
+  }
   for (const key of Object.keys(profileFields.value)) {
     if (values.value[key]!==profileFields.value[key].value) delete profileFields.value[key]
   }
@@ -168,8 +186,15 @@ function changed() {
   problem.value = ''
 }
 
+function assistantContext() {
+  const selection=intake.value
+  return selection ? JSON.stringify([selection.caseId,selection.noticeText,selection.requirements]) : ''
+}
+
 function rememberDraft(key: string) {
   drafts.set(key,{values:{...values.value},photo:photo.value,name:nameOverride.value,
+    assisted:{...assisted.value},assistantRules:{...assistantRules.value},
+    assistantContext:assistantContext(),
     profileFields:{...profileFields.value},awardUses:awardUses.value,acceptedReason:acceptedReason.value})
 }
 
@@ -184,6 +209,12 @@ function select(next: Scenario, saveCurrent = true, draftKey = next.id) {
   scenario.value = next
   const draft = drafts.get(draftKey)
   values.value = draft ? {...draft.values} : intake.value?.genericMapping ? {} : resolveDemoProfile(next,profile.value)
+  const contextMatches=draft?.assistantContext===assistantContext()
+  if (!contextMatches) for (const [id,item] of Object.entries(draft?.assisted || {})) {
+    if (values.value[id]===item.value) delete values.value[id]
+  }
+  assisted.value = contextMatches ? {...draft?.assisted} : {}
+  assistantRules.value = contextMatches ? {...draft?.assistantRules} : {}
   profileFields.value = {...draft?.profileFields}
   awardUses.value = draft?.awardUses || []
   photo.value = draft?.photo || ''
@@ -319,13 +350,14 @@ async function saveDraftProgress() {
   if (!batch || !key || exporting.value || draftBusy.value) return
   const eligible = new Set(draftFields.value.map(field=>field.id))
   const manualValues = Object.fromEntries(Object.entries(values.value).filter(([id])=>eligible.has(id))
-    .filter(([id])=>!profileFields.value[id] && !awardSources.value[id]))
+    .filter(([id])=>!profileFields.value[id] && !awardSources.value[id] && !assisted.value[id]))
   const result = await runDraftAction(session=>
     saveFormDraft(session,batch,key,scenario.value.id,manualValues,draftRevisions.get(key) ?? 0))
   if (!result) return
   draftRevisions.set(key,result.saved.revision)
   savedDrafts.value = result.drafts
-  draftMessage.value = '已保存当前原件的草稿字段。'
+  draftMessage.value = intake.value?.genericMapping && !draftFields.value.length
+    ? '已保存当前原件的填写位置。' : '已保存当前原件的草稿字段。'
 }
 
 async function reopenSavedProgress() {
@@ -386,6 +418,29 @@ function fillFromAccountProfile(candidates: ProfileCandidate[]) {
   completion.value = [...new Set([...completion.value,...applied.map(item=>item.id)])]
   changed()
   message.value = '已从当前账户的本机画像带入 '+applied.map(item=>item.label).join('、')+'。请核对本次填写值。'
+}
+
+function useAssistantRequirement(id:string,plan:Plan,refs:Source[]) {
+  if (!intake.value?.genericMapping || exporting.value || saving.value) return
+  assistantRules.value[id]={plan,refs}
+  if (!completion.value.includes(id)) completion.value.push(id)
+  changed()
+}
+
+function applyAssistant(entries:Approved[]) {
+  const mapping=intake.value?.genericMapping
+  if (!mapping || exporting.value || saving.value) return
+  const writable=new Set(mappedFields(mapping).filter(item=>item.slot && !item.field.sensitive).map(item=>item.field.id))
+  for (const entry of entries) {
+    const field=scenarioFields(scenario.value).find(item=>item.id===entry.fieldId)
+    if (!field || !writable.has(field.id) || checkAssistantValue(field,entry.plan,entry.value)) continue
+    values.value[field.id]=entry.value
+    assisted.value[field.id]=entry
+    assistantRules.value[field.id]={plan:entry.plan,refs:entry.references}
+    delete profileFields.value[field.id]
+    if (!completion.value.includes(field.id)) completion.value.push(field.id)
+  }
+  if (entries.length) changed()
 }
 
 function clearProfileFields() {
@@ -639,6 +694,26 @@ async function deliver(destination:'download'|'vault') {
       await selection.verifyExport()
       if (!stillConfirmed()) return
     }
+    if (Object.keys(assistantRules.value).length || Object.keys(assisted.value).length) {
+      const rows=selection?.genericMapping ? mappedFields(selection.genericMapping) : []
+      const usesCurrentValue=Object.values(assisted.value).flatMap(item=>item.references)
+        .filter(source=>source.id.startsWith('filled:f'))
+      if (usesCurrentValue.some(source=>{
+        const field=rows[Number(source.id.slice('filled:f'.length))]?.field
+        return !field || values.value[field.id]?.trim().slice(0,2000)!==source.text
+      })) throw Error('智能填写引用了已改动的字段。请核对并重新生成相关候选。')
+      await selection?.verifyAssistantContext?.()
+      if (!stillConfirmed()) return
+      const referenced=Object.values(assisted.value).flatMap(item=>item.references)
+        .filter(source=>source.kind==='profile' || source.kind==='experience')
+      if (referenced.length && accountId) {
+        const fresh=await accountFacts(accountId,selection?.caseId || '')
+        if (!stillConfirmed()) return
+        if (referenced.some(source=>!fresh.some(item=>item.id===source.id && item.text===source.text))) {
+          throw Error('智能填写使用的画像或经历已变化。请重新生成，或核对后手工修改该项。')
+        }
+      }
+    }
     if ((sources.length || awards.length || reasonAwardsUsed.length) && accountId) {
       const [workspace,entries] = await Promise.all([
         sources.length ? loadWorkspace(accountId) : undefined,
@@ -765,10 +840,12 @@ function displayed(value: string, sensitive?: boolean) {
         <h2>保存原件草稿</h2>
         <p>主动保存后保留 {{ draftRetentionDays }} 天。同一账号可在此设备重新登录续填。主动退出会清除此账号在此设备的全部草稿。</p>
         <p v-if="draftFields.length">可保存的手填字段 · {{ draftFields.map(field=>field.label).join('、') }}。续填时可重新带入画像。证件号、联系方式、理由、照片和导出确认仅用于当前填写。</p>
+        <p v-else-if="intake.genericMapping">可保存已核对的填写分区和位置。</p>
         <p v-else>这份表暂无可保存的字段。</p>
+        <p v-if="intake.genericMapping">模型候选、问答和资料引用在本次页面内使用。续填时可重新选择资料分析。</p>
         <p v-if="draftExpiryLabel">当前草稿保存至 {{ draftExpiryLabel }}。</p>
         <div class="actions">
-          <button type="button" :disabled="exporting || draftBusy || account.formDraftEpoch===null || !draftFields.length" @click="saveDraftProgress">保存当前草稿</button>
+          <button type="button" :disabled="exporting || draftBusy || account.formDraftEpoch===null || (!draftFields.length && !intake.genericMapping)" @click="saveDraftProgress">保存当前草稿</button>
           <button v-if="draftConflict" type="button" :disabled="exporting || draftBusy" @click="reopenSavedProgress">读取已保存的版本</button>
           <button v-if="savedDrafts.length" type="button" :disabled="exporting || draftBusy" @click="clearDraftProgress">清除本批次保存的草稿</button>
         </div>
@@ -818,6 +895,9 @@ function displayed(value: string, sensitive?: boolean) {
         <div class="actions">
           <button type="button" @click="showAll=!showAll">{{ showAll ? '只显示补录字段' : '显示并编辑整张表单' }}</button>
         </div>
+        <SmartFormFill v-if="intake?.genericMapping" :key="String(intake.id)+':'+(account.user?.id || '')"
+          :owner="account.user?.id || ''" :intake="intake" :values="values" :disabled="saving || exporting"
+          @apply="applyAssistant" @requirement="useAssistantRequirement"/>
         <AccountProfileFill v-if="intake && (savedBatchId || intake.genericMapping) && account.signedIn" :key="intake.id"
           :scenario="scenario" :case-id="intake.caseId" :values="values" :disabled="saving || exporting"
           @apply="fillFromAccountProfile"/>
@@ -847,6 +927,23 @@ function displayed(value: string, sensitive?: boolean) {
               </small>
               <small v-if="field.hint">{{ field.hint }}</small>
               <small v-if="review.errors[field.id]" class="warning">{{ review.errors[field.id] }}</small>
+              <details v-if="assistantRules[field.id]">
+                <summary>查看已采用的字段要求</summary>
+                <ul>
+                  <li v-for="(cite,index) in assistantRules[field.id].plan.requirements" :key="index">
+                    {{ assistantRules[field.id].refs.find(source=>source.id===cite.source_id)?.locator }} · {{ cite.quote }}
+                  </li>
+                </ul>
+                <button type="button" @click="delete assistantRules[field.id]; changed()">撤销采用的要求</button>
+              </details>
+              <details v-if="assisted[field.id]">
+                <summary>{{ assisted[field.id].plan.strategy==='derive' ? '程序计算' : '智能填写' }} · 查看候选依据</summary>
+                <ul>
+                  <li v-for="(cite,index) in [...assisted[field.id].plan.facts,...(assisted[field.id].plan.calculation?.operands || [])]" :key="index">
+                    {{ assisted[field.id].references.find(source=>source.id===cite.source_id)?.locator }} · {{ cite.quote }}
+                  </li>
+                </ul>
+              </details>
               <details v-if="profileFields[field.id]">
                 <summary>已从个人画像带入</summary>
                 <small v-for="source in profileFields[field.id].refs" :key="source.id">{{ source.quote }} · {{ source.id }}<br></small>

@@ -19,7 +19,7 @@ type Slot = {
   prefix?: string; suffix?: string; checks?: string
 }
 type FormSection = {id:string; label:string}
-type Candidate = {field:Field; label:string; where:string; slot?:Slot; section?:FormSection}
+type Candidate = {field:Field; label:string; where:string; context?:string; slot?:Slot; section?:FormSection}
 export type GenericForm = {
   name: string; format: Format; bytes: Uint8Array
   fields: {id:string; candidates:Candidate[]}[]
@@ -117,6 +117,13 @@ function canExpand(row: Element | undefined) {
     .some(height=>height.getAttributeNS(word,'hRule')==='exact')
 }
 
+function openField(label:string, where:string):Field | undefined {
+  const clean = label.trim()
+  if (!clean || clean.length>240 || reservedLabel(clean) || !/\p{L}/u.test(clean) ||
+      /^(?:说明|填写须知|提示|示例|附件|第.{1,8}部分)[：:]|(?:申请表|登记表|报名表)$/.test(clean)) return
+  return {id:'label-open-'+where, label:clean, type:'long', optional:true}
+}
+
 function inlineField(text: string) {
   const match = /^(.{1,24}?[：:])([\s_＿]*(?:-\s*学年第\s*学期)?[\s_＿]*)$/s.exec(text)
   if (!match) return
@@ -175,7 +182,8 @@ function wordLayout(parts: Package): Layout {
         }
         const cell = cells[index]
         const nextCell = cells[index+1]
-        const field = detectField(text,recognizable && Boolean(wordInput(nextCell,false)))
+        const field = detectField(text,recognizable && Boolean(wordInput(nextCell,false))) ||
+          (wordInput(nextCell,true) ? openField(text,where) : undefined)
         if (field) {
           const long = field.type==='long'
           let target = (!long || canExpand(row)) ? wordInput(nextCell,long) : undefined
@@ -190,7 +198,7 @@ function wordLayout(parts: Package): Layout {
               targetWhere = '表 '+tableNumber+' · 第 '+(rowIndex+2)+' 行 · 第 1 格'
             }
           }
-          layout.fields.push({field,label:text,where,slot:target
+          layout.fields.push({field,label:text,where,context:labels.join(' · ').slice(0,500),slot:target
             ? location(mainWord,target,'paragraph',targetWhere) : undefined})
           continue
         }
@@ -333,7 +341,8 @@ function sheetLayout(parts: Package): Layout {
           continue
         }
         let target = horizontal ? (example ? dataRow : rowAfter)?.find(other=>other.position.column===cell.position.column) : beside(cell)
-        const field = detectField(cell.text,header && Boolean(target && emptyPlaceholder(target.text)))
+        const field = detectField(cell.text,header && Boolean(target && emptyPlaceholder(target.text))) ||
+          (writable(target) && emptyPlaceholder(target.text) ? openField(cell.text,where) : undefined)
         if (!field) continue
         if (!horizontal && !target && field.type==='long' && row.filter(item=>item.text.trim()).length===1) {
           const labelArea = merged(cell)
@@ -352,7 +361,7 @@ function sheetLayout(parts: Package): Layout {
         if (slot && choices.length && target) slot.checks = target.text
         if (slot && suffix) slot.suffix = suffix
         layout.fields.push({field:choices.length ? {...field,choices,type:'choice'} : field,
-          label:cell.text,where,slot,section})
+          label:cell.text,where,context:row.map(item=>item.text).join(' · ').slice(0,500),slot,section})
       }
     }
   }

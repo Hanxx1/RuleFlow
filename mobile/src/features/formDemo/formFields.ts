@@ -44,15 +44,17 @@ const lengthNumber = '([0-9]{1,4})'
 const lowerLimit = new RegExp('(?:不少于|不低于|不得少于|至少)\\s*'+lengthNumber+'\\s*字')
 const upperLimit = new RegExp('(?:不超过|不得超过|最多|不多于)\\s*'+lengthNumber+'\\s*字|'+lengthNumber+'\\s*字以内')
 const lengthRange = new RegExp(lengthNumber+'\\s*(?:至|[-—–~])\\s*'+lengthNumber+'\\s*字')
+const exactLength = new RegExp('(?:恰好|正好)\\s*'+lengthNumber+'\\s*字')
 const lengthInstruction = new RegExp('^(?:(?:字数(?:要求|为)?[：:]?)?\\s*(?:'+
-  [lengthRange,lowerLimit,upperLimit].map(rule=>rule.source).join('|')+')[\\s、,，;；]*)+$')
+  [lengthRange,lowerLimit,upperLimit,exactLength].map(rule=>rule.source).join('|')+')[\\s、,，;；]*)+$')
 
 export function readTextLimits(text:string) {
   const normalized = text.normalize('NFKC')
   const matches = (rule:RegExp) => [...normalized.matchAll(new RegExp(rule.source,'g'))]
   const ranges = matches(lengthRange)
-  const minimums = [...ranges.map(match=>match[1]),...matches(lowerLimit).map(match=>match[1])].map(Number)
-  const maximums = [...ranges.map(match=>match[2]),...matches(upperLimit).map(match=>match[1] ?? match[2])].map(Number)
+  const exact = matches(exactLength).map(match=>match[1])
+  const minimums = [...ranges.map(match=>match[1]),...matches(lowerLimit).map(match=>match[1]),...exact].map(Number)
+  const maximums = [...ranges.map(match=>match[2]),...matches(upperLimit).map(match=>match[1] ?? match[2]),...exact].map(Number)
   return {
     min:minimums.length ? Math.max(...minimums) : undefined,
     max:maximums.length ? Math.min(...maximums) : undefined,
@@ -76,7 +78,7 @@ export function detectField(raw: string, allowCustom = false): Field | undefined
   const canonical = label.normalize('NFKC').replace(/\*+$/,'')
   const cleaned = canonical.replace(/\(([^()]*)\)/g,(original,inside:string)=>
     lengthInstruction.test(inside) ? '' : original)
-  const suffix = /^(.*?)(?=字数|不少于|不低于|不得少于|至少|不超过|不得超过|最多|不多于|\d)/.exec(cleaned)?.[0]
+  const suffix = /^(.*?)(?=字数|不少于|不低于|不得少于|至少|不超过|不得超过|最多|不多于|恰好|正好|\d)/.exec(cleaned)?.[0]
   const base = suffix && lengthInstruction.test(cleaned.slice(suffix.length)) ? suffix : cleaned
   const normalized = normalizedLabel(base).replace(/(?:非必填|选填|必填)$/,'')
   const semantic = Object.entries(aliases).find(([,names])=>names.includes(normalized))?.[0]

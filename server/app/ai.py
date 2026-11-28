@@ -69,6 +69,9 @@ class AIAnalysis(BaseModel):
 class LLMProvider(Protocol):
     model_id: str
 
+    def complete_json(self, instructions: str, content: str, schema: dict) -> dict:
+        """Return an untrusted JSON object for a task-specific validator."""
+
     def analyze(self, evidence: list[dict[str, str]]) -> AIAnalysis:
         """Return only structured candidates. The caller remains responsible for execution."""
 
@@ -85,6 +88,9 @@ class AIInvalidOutput(RuntimeError):
 class DisabledProvider:
     model_id: str = "none"
 
+    def complete_json(self, instructions: str, content: str, schema: dict) -> dict:
+        raise AIUnavailable("LLM 服务未配置")
+
     def analyze(self, evidence: list[dict[str, str]]) -> AIAnalysis:
         raise AIUnavailable("LLM 服务未配置")
 
@@ -100,6 +106,34 @@ class OpenAICompatibleProvider:
         self.thinking = thinking
         # Per-instance, content-free telemetry; never record credentials or prompts.
         self.request_metrics: list[dict[str, Any]] = []
+
+    def complete_json(self, instructions: str, content: str, schema: dict) -> dict:
+        if len(content) > self.max_input_chars:
+            raise AIUnavailable("本次请求超过模型输入限制")
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        payload = {
+            "model": self.model_id, "temperature": 0,
+            "response_format": {"type": "json_object"}, "max_tokens": self.max_output_tokens,
+            "messages": [
+                {"role": "system", "content": instructions + "\nJSON Schema:\n" + json.dumps(schema, ensure_ascii=False)},
+                {"role": "user", "content": content},
+            ],
+        }
+        if self.thinking is not None and (urlparse(self.base_url).hostname or '').lower() == 'api.deepseek.com':
+            payload['thinking'] = {'type': self.thinking}
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise AIUnavailable("模型连接失败") from exc
+        try:
+            choice = response.json()["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise AIInvalidOutput("模型结果超过输出限制")
+            return parse_json_object(choice["message"]["content"])
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
+            raise AIInvalidOutput("模型响应结构不完整") from exc
 
     def analyze(self, evidence: list[dict[str, str]]) -> AIAnalysis:
         prompt = build_prompt(evidence, self.max_input_chars)
