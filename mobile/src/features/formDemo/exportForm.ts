@@ -1,6 +1,7 @@
 import templateData from './templateData.json'
 import {strFromU8,strToU8,unzipSync,zipSync} from 'fflate'
 import {leaveDays,reviewForm,scenarioFields,validateFilename,type FormValues,type Scenario} from './scenarios'
+import {officeFilename,officeMime} from './officeDelivery'
 
 const worksheet = 'xl/worksheets/sheet1.xml'
 const document = 'word/document.xml'
@@ -51,6 +52,8 @@ function fillDocument(xml: string, scenario: Scenario, values: FormValues) {
     field.id, formatted(values[field.id]?.trim() || '',field.type==='date'),
   ]))
   if (scenario.id === 'leave') {
+    const name = values.name.trim()
+    replacements.set('leaveAddressee',name.endsWith('同学') ? name : name+'同学')
     replacements.set('className',(values.className || '').trim().replace(/班$/,''))
     replacements.delete('parentAware')
     replacements.set('awareYes',values.parentAware==='是'?'☑':'☐')
@@ -81,13 +84,16 @@ function fillDocument(xml: string, scenario: Scenario, values: FormValues) {
     replacements.set('previousYes',values.previousReplacement==='是'?'☑':'☐')
     replacements.set('previousNo',values.previousReplacement==='否'?'☑':'☐')
   }
-  const replaced = new Set<string>()
+  const replaced = new Map<string,number>()
   const result = xml.replace(/\{\{CW:([a-zA-Z0-9]+)\}\}/g,(_,key: string)=>{
     if (!replacements.has(key)) throw Error('演示模板字段未知')
-    replaced.add(key)
+    replaced.set(key,(replaced.get(key) || 0)+1)
     return xmlText(replacements.get(key) || '')
   })
   if (replaced.size !== replacements.size) throw Error('演示模板字段映射不完整')
+  if (scenario.id==='leave' && [...replaced.values()].some(count=>count!==2)) {
+    throw Error('请假表两联的填写位置不一致，请核对原件。')
+  }
   return result
 }
 
@@ -111,9 +117,6 @@ export function buildForm(scenario: Scenario, values: FormValues, photo: string,
       parts[portrait] = fromDataUrl(photo)
     }
   }
-  const mime = scenario.format==='xlsx'
-    ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const filename = (demo && !stem.startsWith('演示-') ? '演示-'+stem : stem)+'.'+scenario.format
-  return {filename,blob:new Blob([zipSync(parts,{level:6}).slice().buffer],{type:mime})}
+  const filename = officeFilename(scenario.format,stem,demo)
+  return {filename,blob:new Blob([zipSync(parts,{level:6}).slice().buffer],{type:officeMime(scenario.format)})}
 }

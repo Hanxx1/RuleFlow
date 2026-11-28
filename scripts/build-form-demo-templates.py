@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 import re
 from shutil import copyfile
+from zipfile import ZipFile
 
 from docx import Document
-from docx.shared import Pt
 from PIL import Image, ImageDraw
 
 from form_demo_maps import HASHES, prepare_additional
@@ -50,10 +50,18 @@ def leave_template(source, output):
         paragraphs = document.paragraphs[start:start + 5]
         replace_blanks(paragraphs[0].runs[0], r"_{3,}", ("course", "teacher"))
         intro = paragraphs[1].runs
-        intro[1].text, intro[3].text, intro[5].text = map(slot, ("major", "className", "reason"))
-        replace_blanks(intro[4], r"_{3,}", ("name",))
+        intro[1].text, intro[3].text = map(slot, ("major", "className"))
+        if intro[5].text.strip():
+            raise ValueError("Expected a blank reason continuation in leave introduction")
+        intro[5].text = ""
+        if intro[4].text.count("（具体事由）") != 1:
+            raise ValueError("Unexpected reason placeholder in leave introduction")
+        intro[4].text = intro[4].text.replace("（具体事由）", "", 1)
+        replace_blanks(intro[4], r"_{3,}同学", ("leaveAddressee",))
         timing = paragraphs[2].runs
-        timing[0].text = ""
+        if timing[0].text.strip():
+            raise ValueError("Expected the original leave reason writing space")
+        timing[0].text = slot("reason") + "，"
         replace_blanks(
             timing[1], r"_{3,}年_{3,}月_{3,}日|_{3,}",
             ("start", "startPeriod", "end", "endPeriod", "days", "periodCount"),
@@ -64,14 +72,10 @@ def leave_template(source, output):
         for index, field in ((1, "awareYes"), (3, "awareNo")):
             guardian[index].text = slot(field)
             guardian[index].font.name = "Segoe UI Symbol"
-    # Keep both filled copies on one page by compacting only blank separators.
-    for paragraph in document.paragraphs[8:12]:
-        if paragraph.text.strip():
-            raise ValueError("Unexpected text between the two leave copies")
-        paragraph.paragraph_format.line_spacing = Pt(6)
-        paragraph.paragraph_format.space_before = Pt(0)
-        paragraph.paragraph_format.space_after = Pt(0)
-    document.save(output / "leave.docx")
+    with ZipFile(source) as original, ZipFile(output / "leave.docx", "w") as prepared:
+        for part in original.infolist():
+            data = document.part.blob if part.filename == "word/document.xml" else original.read(part)
+            prepared.writestr(part, data)
 
 
 def proof_template(source, output):

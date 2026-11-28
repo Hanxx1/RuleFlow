@@ -23,6 +23,7 @@ const sourceText = limit => [
   '附件1文件名为“姓名_学号_奖学金.xlsx”。',
   '附件2申请理由不超过35字。',
   '附件2文件名为“学号_姓名_补办.docx”。',
+  '附件1请以打印预览核对申请理由是否完整。',
   '申请人签字后交件。',
 ].join('\n')
 
@@ -186,16 +187,20 @@ async function run() {
     }
     const download = async (expected,entry,values,artifactName=expected)=>{
       await confirm()
+      const delivery = preview.getByRole('region',{name:'版式与交付检查'})
+      await delivery.getByText(expected,{exact:true}).waitFor()
+      await delivery.getByText('下载后请按通知自行提交文件。',{exact:true}).waitFor()
       const waiting = page.waitForEvent('download')
       await preview.getByRole('button',{name:/确认并下载/}).click()
       const result = await waiting
       assert.equal(result.suggestedFilename(),expected)
       const output = path.join(out,artifactName)
       await result.saveAs(output)
-      const parts = unzipSync(new Uint8Array(await readFile(output)))
+      const bytes = await readFile(output)
+      const parts = unzipSync(new Uint8Array(bytes))
       const text = strFromU8(parts[entry]).replace(/<[^>]+>/g,'')
       for (const value of values) assert.ok(text.includes(value),`${expected} 缺少 ${value}`)
-      return {parts,text}
+      return {parts,text,bytes}
     }
     const blocked = async (message,afterConfirm)=>{
       const before = downloads.length
@@ -206,6 +211,25 @@ async function run() {
       assert.equal(downloads.length,before)
       assert.equal(await preview.getByLabel('我确认这份文件的填写值和文件名').isChecked(),false)
     }
+
+    // Update the actual notice while the selected original is in transit.
+    await pick(aName)
+    await intake.getByLabel('我已核对这份表的通知原文及提交要求').check()
+    const firstOriginal = '**/documents/'+a.metadata.document_id+'/content'
+    let replacedDuringDownload = false
+    await page.route(firstOriginal,async route=>{
+      const response = await route.fetch()
+      await remove(notice)
+      notice = await upload('办理通知.txt','text/plain',sourceText(180))
+      replacedDuringDownload = true
+      await route.fulfill({response})
+    },{times:1})
+    await intake.getByRole('button',{name:'核验并填写选中原表'}).click()
+    await intake.getByRole('alert').filter({hasText:/来源仍在更新|通知或适用范围已变化/}).waitFor()
+    assert.equal(replacedDuringDownload,true)
+    assert.equal(await edit.count(),0)
+    await refresh()
+    console.log('PASS replacing the notice during original delivery suspends the stale form before editing')
 
     await open(aName)
     await intake.getByText(/原文第 .* 行/).first().waitFor()
@@ -379,6 +403,39 @@ async function run() {
       ['顾景禾','00003180','已更正学院','手填专业',awardTitle,awardIssuer,finalReason])
     assert.ok(aFile.parts['xl/worksheets/sheet2.xml'])
     assert.equal(aFile.text.includes(pendingTitle),false)
+    const deliveryReview = preview.getByRole('region',{name:'版式与交付检查'})
+    await deliveryReview.getByText(/固定行高可能裁切/).waitFor()
+    await deliveryReview.getByText('核对通知中的办理要求',{exact:true}).click()
+    await deliveryReview.getByText(/正文第 .* 行 · 附件1请以打印预览核对/).waitFor()
+    await deliveryReview.getByText(/正文第 .* 行 · 申请人签字后交件/).waitFor()
+    await preview.getByRole('status').filter({hasText:'文件校验通过 · 顾景禾_00003180_奖学金.xlsx'}).waitFor()
+    await deliveryReview.screenshot({path:path.join(out,'打印版式与交付检查.png')})
+    await page.evaluate(()=>{
+      const click = HTMLAnchorElement.prototype.click
+      HTMLAnchorElement.prototype.click = function() {
+        if (!this.download) return click.call(this)
+        HTMLAnchorElement.prototype.click = click
+        throw Error('本机下载暂时不可用')
+      }
+    })
+    await preview.getByRole('button',{name:/确认并下载/}).click()
+    await page.getByRole('alert').filter({hasText:'本机下载暂时不可用'}).waitFor()
+    assert.equal(await preview.getByLabel('我确认这份文件的填写值和文件名').isChecked(),true)
+    const repeated = await download('顾景禾_00003180_奖学金.xlsx','xl/worksheets/sheet1.xml',[finalReason])
+    assert.deepEqual(repeated.bytes,aFile.bytes)
+    const scholarshipPath = path.resolve(documentRoot,owner,a.metadata.document_id)
+    const scholarshipBytes = await readFile(scholarshipPath)
+    try {
+      const updated = Buffer.from(scholarshipBytes)
+      updated[updated.length-1]^=1
+      await writeFile(scholarshipPath,updated)
+      await blocked('下载内容与来源原件不一致')
+    } finally {
+      await writeFile(scholarshipPath,scholarshipBytes)
+    }
+    assert.equal(await preview.getByText(/文件校验通过/).count(),0)
+    assert.equal(await editReason.inputValue(),finalReason)
+    console.log('PASS download handoff, original notice steps and file checks; retry uses identical bytes but still rejects a changed original')
     console.log('PASS confirmed award fits empty row; edited source cancels apply/export, manual values survive, actual XLSX matches')
     console.log('PASS scholarship draft keeps manual version, requires explicit source selection, and XLSX contains the exact final reason')
     console.log('PASS saved entry, two named targets, formal lines, drafts and XLSX download')
@@ -430,7 +487,7 @@ async function run() {
       const edited = Buffer.from(original)
       edited[edited.length-1]^=1
       await writeFile(stored,edited)
-      await blocked('原件指纹不符')
+      await blocked('下载内容与来源原件不一致')
     } finally { await writeFile(stored,original) }
     assert.equal(await edit.locator('#name').inputValue(),'周映宁')
     console.log('PASS same-size on-disk byte change rejected at export, input preserved')

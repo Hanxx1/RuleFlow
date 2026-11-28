@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import {computed,onMounted,ref} from 'vue'
+import {computed,onMounted,ref,shallowRef} from 'vue'
 import {useImportDraftStore} from '../imports/draftStore'
-import {analyzeNotice,applyNotice,matchAttachment,preserveAttachmentKeys,readNotice,suggestedTarget,type AttachmentMatch,type NoticeEvidence,type NoticeRequirements,type NoticeSelection} from './noticeIntake'
+import {analyzeNotice,applyNotice,isLegacyXls,isPdfAttachment,legacyXlsHint,matchAttachment,noticeTargetMatches,pdfAttachmentHint,preserveAttachmentKeys,readNotice,
+  suggestedTarget,type AttachmentMatch,type NoticeEvidence,type NoticeRequirements,type NoticeSelection} from './noticeIntake'
+import GenericMappingReview from './GenericMappingReview.vue'
+import {canWriteMapping,genericScenario,mappedFields,type GenericForm,type GenericMapping,type GenericMappingSelection} from './genericForm'
 
 type FileRole = 'form' | 'proof' | 'instructions' | 'school' | 'unknown'
 const props = defineProps<{busy:boolean; progress:Record<string,'editing'|'exported'>}>()
@@ -25,6 +28,7 @@ const acknowledged = ref(false)
 const accepted = ref(false)
 const loading = ref(false)
 const error = ref('')
+const pendingMapping = shallowRef<GenericForm>()
 const disabled = computed(()=>loading.value || props.busy)
 const noticeFiles = computed(()=>files.value.flatMap((file,index)=>
   /\.(txt|docx)$/i.test(file.name) && !matches.value[index]?.scenario ? [{index,name:file.name}] : []))
@@ -33,7 +37,7 @@ const attachments = computed(()=>matches.value.flatMap((match,index)=>
 const targets = computed(()=>attachments.value.flatMap(({match,index,role})=>
   role==='form' || (role==='unknown' && /\.(docx|xlsx)$/i.test(match.name))
     ? [{id:index,name:match.name,title:match.scenario?.title}] : []))
-const formIndexes = computed(()=>attachments.value.flatMap(({match,index,role})=>role==='form' && match.scenario ? [index] : []))
+const formIndexes = computed(()=>attachments.value.flatMap(({match,index,role})=>role==='form' && match.sha256 ? [index] : []))
 const labels = {length:'字数校验',filename:'文件名',photo:'打印后贴照',review:'待人工核对'}
 const roleLabels: Record<FileRole,string> = {
   form:'申请人填写',proof:'另附证明',instructions:'须知',school:'校方填写',unknown:'待确认用途',
@@ -48,17 +52,25 @@ const manualReviews = computed(()=>inspected.value?.evidence.filter(item=>
   item.kind==='review' || scopeById.value.get(item.id)==='manual').length || 0)
 const candidate = computed(()=>{
   const match = matches.value[selected.value]
-  if (!match?.scenario || !inspected.value || !formIndexes.value.includes(selected.value)) return undefined
+  if (!match || !inspected.value || !formIndexes.value.includes(selected.value)) return undefined
+  const manualIds = new Set(inspected.value.evidence.filter(item=>{
+    if (item.kind!=='review') return false
+    const {references,named} = noticeTargetMatches(item,targets.value)
+    return references.length ? references.some(target=>target.id===selected.value) : !named
+  }).map(item=>item.id))
   const requirements = analyzeNotice(text.value,clause=>{
+    if (manualIds.has(clause.id)) return true
     const scope = scopeById.value.get(clause.id)
     return scope===String(selected.value) || scope==='all'
   })
-  return {...applyNotice(match.scenario,requirements),requirements,attachment:match.name}
+  const effective = match.scenario ? applyNotice(match.scenario,requirements) : undefined
+  return {scenario:effective?.scenario,conflict:effective?.conflict || '',requirements,attachment:match.name}
 })
 
 function pauseForm() {
   acknowledged.value = false
   accepted.value = false
+  pendingMapping.value = undefined
   emit('invalidate')
 }
 
@@ -92,7 +104,7 @@ async function inventory() {
   try {
     if (files.value.length>10) throw Error('每次最多核对 10 个文件。')
     const next = await Promise.all(files.value.map(async file=>{
-      if (!/\.(docx|xlsx)$/i.test(file.name)) return {name:file.name}
+      if (!/\.(docx|xls|xlsx|pdf)$/i.test(file.name)) return {name:file.name}
       try { return await matchAttachment(file) } catch { return {name:file.name,error:'本机无法核验此文件。'} }
     }))
     const keys = preserveAttachmentKeys(matches.value,attachmentKeys.value,next,()=>`local:${serial++}`)
@@ -172,12 +184,46 @@ function pick(index: number) {
   pauseForm()
 }
 
-function accept() {
-  if (disabled.value || accepted.value || !candidate.value || candidate.value.conflict || !acknowledged.value ||
+async function accept(mappingSelection?:GenericMappingSelection) {
+  const current = candidate.value
+  if (disabled.value || accepted.value || !current || current.conflict || !acknowledged.value ||
       unassigned.value || inspected.value?.competition) return
+  const index = selected.value
+  const key = attachmentKeys.value[index]
+  let scenario = current.scenario
+  let mapping:GenericMapping | undefined
+  let exportBlocked = ''
+  if (!scenario) {
+    const form = pendingMapping.value
+    if (!mappingSelection) {
+      const file = files.value[index]
+      const expected = {sha256:matches.value[index].sha256!,size:file.size}
+      loading.value = true
+      error.value = ''
+      try {
+        const result = await matchAttachment(file,expected,true)
+        if (!result.generic) throw Error(result.error || '无法核对原表位置。')
+        pendingMapping.value = result.generic
+      } catch (problem) {
+        error.value = problem instanceof Error ? problem.message : '无法核对原表位置。'
+      } finally {
+        loading.value = false
+      }
+      return
+    }
+    if (!form) return
+    mapping = {form,...mappingSelection}
+    if (!mappedFields(mapping).length || mappedFields(mapping).some(item=>!item.choice)) return
+    const effective = applyNotice(genericScenario(mapping,current.requirements.physicalPhoto),current.requirements)
+    scenario = effective.scenario
+    exportBlocked = effective.conflict ||
+      (!canWriteMapping(mapping) ? '还有无法安全写入的字段，请在原件中核对填写清单。' : '')
+  }
+  pendingMapping.value = undefined
   accepted.value = true
-  emit('accept',{id:attachmentKeys.value[selected.value],scenario:candidate.value.scenario,requirements:candidate.value.requirements,
-    attachment:candidate.value.attachment,manualReviews:manualReviews.value})
+  emit('accept',{id:mapping ? key+':'+JSON.stringify([mapping.section,mappedFields(mapping).map(item=>item.choice)]) : key,
+    progressId:key,scenario,requirements:current.requirements,attachment:current.attachment,
+    manualReviews:manualReviews.value,genericMapping:mapping,exportBlocked})
 }
 </script>
 
@@ -193,8 +239,13 @@ function accept() {
     </label>
     <label>通知正文<textarea v-model="text" :disabled="disabled" rows="6" maxlength="30000" @input="source='手动编辑的通知正文'; invalidate()"></textarea></label>
     <label>选择通知文件（TXT 或 DOCX）<input type="file" accept=".txt,.docx" :disabled="disabled" @change="chooseNotice"></label>
-    <label>选择申请表原件（DOCX 或 XLSX）<input type="file" multiple accept=".docx,.xlsx" :disabled="disabled" @change="chooseAttachments"></label>
-    <ul v-if="files.length && !inspected"><li v-for="(file,index) in files" :key="index">{{ file.name }}</li></ul>
+    <label>选择申请表原件（DOCX 或 XLSX）<input type="file" multiple accept=".docx,.xlsx,.xls,.pdf" :disabled="disabled" @change="chooseAttachments"></label>
+    <ul v-if="files.length && !inspected">
+      <li v-for="(file,index) in files" :key="index">
+        {{ file.name }}<p v-if="isLegacyXls(file.name)">{{ legacyXlsHint }}</p>
+        <p v-else-if="isPdfAttachment(file.name)">{{ pdfAttachmentHint }}</p>
+      </li>
+    </ul>
     <button type="button" :disabled="disabled" @click="inspect">{{ loading?'正在本机核对…':'核对通知与附件' }}</button>
     <p v-if="error" role="alert">{{ error }}</p>
     <template v-if="inspected && !loading">
@@ -205,17 +256,17 @@ function accept() {
       <h3>附件清单</h3>
       <ul v-if="attachments.length">
         <li v-for="{match,index,role} in attachments" :key="index">
-          <label v-if="match.scenario && role==='form'"><input type="radio" name="original" :checked="selected===index" :disabled="disabled" @change="pick(index)"> {{ match.name }} · {{ match.scenario.title }}</label>
+          <label v-if="match.sha256 && role==='form'"><input type="radio" name="original" :checked="selected===index" :disabled="disabled" @change="pick(index)"> {{ match.name }} · {{ match.scenario?.title || '写入位置待核对' }}</label>
           <p v-else>{{ match.name }} <template v-if="role==='unknown' || role==='form'">· {{ match.error || '待核对' }}</template></p>
-          <small v-if="match.scenario && role==='form'">{{ progress[attachmentKeys[index]]==='exported'?'已导出':progress[attachmentKeys[index]]==='editing'?'填写中':'原表已核验，可填写' }}</small>
+          <small v-if="match.sha256 && role==='form'">{{ progress[attachmentKeys[index]]==='exported'?'已导出':progress[attachmentKeys[index]]==='editing'?'填写中':match.scenario?'原表已核验，可填写':'需对照原表确认位置' }}</small>
           <label>附件用途
             <select :aria-label="'附件用途 · '+match.name" :value="role" :disabled="disabled" @change="changeRole(index,$event)">
-              <option v-for="(label,key) in roleLabels" :key="key" :value="key">{{ label }}</option>
+              <option v-for="(label,key) in roleLabels" :key="key" :value="key" :disabled="key==='form' && (isLegacyXls(match.name) || isPdfAttachment(match.name))">{{ label }}</option>
             </select>
           </label>
         </li>
       </ul>
-      <p v-if="!formIndexes.length && !inspected.competition">待核对：请选择能确认来源和版本的申请表原件。</p>
+      <p v-if="!formIndexes.length && !inspected.competition">要在此填写，请提供可核验的 DOCX 或 XLSX 申请表原件。</p>
       <h3>通知依据</h3>
       <p v-if="!inspected.evidence.length">待核对：未识别到可引用的具体要求，继续前请检查原通知。</p>
       <ol v-else>
@@ -234,8 +285,9 @@ function accept() {
       <p v-if="unassigned && targets.length && !inspected.competition" role="alert">请确认上方未分配的要求适用哪份附件，或标记待人工核对。</p>
       <p v-if="candidate?.conflict && !inspected.competition" role="alert">{{ candidate.attachment }} · {{ candidate.conflict }}</p>
       <template v-if="!inspected.competition">
-        <label><input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="accepted=false; emit('invalidate')"> 我已核对通知原文和需人工办理的要求</label>
-        <button type="button" :disabled="disabled || accepted || !candidate || Boolean(candidate.conflict) || unassigned || !acknowledged" @click="accept">{{ accepted?'已启用该申请表':'按此通知填写选中原表' }}</button>
+        <label><input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="accepted=false; pendingMapping=undefined; emit('invalidate')"> 我已核对通知原文和需人工办理的要求</label>
+        <button type="button" :disabled="disabled || accepted || !candidate || Boolean(candidate.conflict) || unassigned || !acknowledged" @click="accept()">{{ accepted?'已启用该申请表':'按此通知填写选中原表' }}</button>
+        <GenericMappingReview v-if="pendingMapping" :key="attachmentKeys[selected]" :form="pendingMapping" :disabled="disabled" @accept="accept"/>
       </template>
     </template>
   </section>
