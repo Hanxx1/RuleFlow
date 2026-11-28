@@ -8,7 +8,7 @@ semantic correctness or eligibility.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -73,6 +73,7 @@ class CandidatePreview:
     course_id: str | None
     source_refs: tuple[_SourceRef, ...]
     review_reasons: tuple[str, ...]
+    _source_texts: tuple[str, ...] = field(repr=False)
     eligibility: Literal['UNKNOWN'] = 'UNKNOWN'
 
 
@@ -112,7 +113,7 @@ def _check_ref(ref, sources):
         _reject('CANDIDATE_QUOTE_INVALID')
     if source.get('parent_reference_state') == 'missing':
         reasons.add('SOURCE_PARENT_REVIEW_REQUIRED')
-    return reasons
+    return text, reasons
 
 
 def validate_candidate_output(payload: object, snapshot: dict, *,
@@ -148,14 +149,18 @@ def validate_candidate_output(payload: object, snapshot: dict, *,
             _reject('CANDIDATE_TARGET_INVALID')
         reasons = {'USER_REVIEW_REQUIRED'}
         refs = set()
+        source_texts = []
         for ref in candidate.source_refs:
             key = (ref.source_id, ref.document_id, ref.document_revision, ref.line_id, ref.quote)
             if key in refs:
                 _reject('CANDIDATE_REFERENCE_DUPLICATE')
             refs.add(key)
-            reasons.update(_check_ref(ref, sources))
+            text, ref_reasons = _check_ref(ref, sources)
+            source_texts.append(text)
+            reasons.update(ref_reasons)
         result.append(CandidatePreview(candidate.candidate_id, candidate.kind, candidate.title,
-                                       candidate.course_id, tuple(candidate.source_refs), tuple(sorted(reasons))))
+                                       candidate.course_id, tuple(candidate.source_refs), tuple(sorted(reasons)),
+                                       tuple(source_texts)))
     return tuple(result)
 
 

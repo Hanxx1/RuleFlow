@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import ValidationError
 
 from ..ai import AIAnalysis, AIInvalidOutput, validate_ai_payload, validate_candidates
-from .date_candidates import extract_dates
+from .date_candidates import DATE, extract_dates
 from .notice_candidate_validation import CandidatePreview, CandidateValidationError
 
 
@@ -53,10 +53,11 @@ def candidate_content_sources(candidate: CandidatePreview) -> tuple[ContentSourc
     return tuple(result)
 
 
-def _check_ast_bounds(ast: dict, refs: set[str]) -> None:
+def _check_ast_bounds(ast: dict, refs: set[str]) -> list[dict]:
     # Bound traversal before the existing recursive validator; require grounded
     # leaves so a cited rule cannot hide an uncited second condition.
     pending = [(ast, 0)]
+    leaves = []
     count = 0
     while pending:
         node, depth = pending.pop()
@@ -75,8 +76,36 @@ def _check_ast_bounds(ast: dict, refs: set[str]) -> None:
             if not isinstance(children, list) or not children or len(children) > 256:
                 raise CandidateValidationError('CANDIDATE_CONTENT_AST_INVALID')
             pending.extend((child, depth + 1) for child in children)
-        elif not evidence or not isinstance(node.get('field'), str):
-            raise CandidateValidationError('CANDIDATE_CONTENT_AST_INVALID')
+        else:
+            if not evidence or not isinstance(node.get('field'), str):
+                raise CandidateValidationError('CANDIDATE_CONTENT_AST_INVALID')
+            leaves.append(node)
+    return leaves
+
+
+def _extract_scoped_dates(sources: tuple[ContentSource, ...], source_texts: tuple[str, ...]) -> list[dict]:
+    dates = extract_dates([(source.local_ref, source.text) for source in sources])
+    for source, source_text in zip(sources, source_texts, strict=True):
+        if source.text == source_text:
+            continue
+        scoped_dates = [item for item in dates if item['evidence_ids'] == [source.local_ref]]
+        if not scoped_dates:
+            continue
+        full_spans = {match.span() for match in DATE.finditer(source_text)}
+        # A short quote has no occurrence offset. Every occurrence must agree
+        # with the source date boundary before we keep the parsed value.
+        offset = source_text.find(source.text)
+        while offset != -1 and scoped_dates:
+            complete_dates = []
+            for item in scoped_dates:
+                if (offset + item['start'], offset + item['end']) in full_spans:
+                    complete_dates.append(item)
+                else:
+                    item['value'] = None
+                    item['review_reasons'].append('truncated_date_quote')
+            scoped_dates = complete_dates
+            offset = source_text.find(source.text, offset + 1)
+    return dates
 
 
 def validate_candidate_content(candidate: CandidatePreview, payload: object) -> CandidateContentPreview:
@@ -107,8 +136,7 @@ def validate_candidate_content(candidate: CandidatePreview, payload: object) -> 
         label = getattr(item, 'title', getattr(item, 'label', None))
         if label is not None and not label.strip():
             raise CandidateValidationError('CANDIDATE_CONTENT_INVALID')
-    for rule in analysis.rules:
-        _check_ast_bounds(rule.ast, set(rule.evidence_ids))
+    leaves_by_rule = [_check_ast_bounds(rule.ast, set(rule.evidence_ids)) for rule in analysis.rules]
     # The existing task schema permits a model deadline string. Do not accept it
     # here: the date extractor and a later explicit user decision own that step.
     if any(task.deadline is not None for task in analysis.tasks):
@@ -116,13 +144,19 @@ def validate_candidate_content(candidate: CandidatePreview, payload: object) -> 
     try:
         analysis = validate_ai_payload(analysis.model_dump())
         reasons = set(validate_candidates(analysis, evidence))
+        for rule, leaves in zip(analysis.rules, leaves_by_rule, strict=True):
+            for leaf in leaves:
+                refs = leaf['evidence']
+                scoped_rule = rule.model_copy(update={'ast': leaf, 'evidence_ids': refs,
+                    'evidence_quotes': {ref: rule.evidence_quotes[ref] for ref in refs}})
+                validate_candidates(AIAnalysis(rules=[scoped_rule]), evidence)
     except AIInvalidOutput:
         raise CandidateValidationError('CANDIDATE_CONTENT_INVALID') from None
     reasons.update(candidate.review_reasons)
     reasons.add('USER_REVIEW_REQUIRED')
     if any(task.duration_minutes is not None for task in analysis.tasks):
         reasons.add('DURATION_REVIEW_REQUIRED')
-    dates = extract_dates([(source.local_ref, source.text) for source in sources])
+    dates = _extract_scoped_dates(sources, candidate._source_texts)
     if dates:
         reasons.add('DATE_REVIEW_REQUIRED')
     # No inferred qualification or execution state is accepted by AIAnalysis.

@@ -12,7 +12,7 @@ from app.services.notice_candidate_content import (
     candidate_content_sources, validate_candidate_content,
 )
 from app.services.notice_candidate_validation import CandidateValidationError, validate_candidate_output
-from test_notice_candidate_validation import candidate, document_source
+from test_notice_candidate_validation import candidate, document_source, ref
 from helpers import account, client, head
 
 
@@ -125,6 +125,25 @@ def test_uncited_leaf_hidden_inside_cited_rule_is_rejected(content):
     reject(preview, payload, 'CANDIDATE_CONTENT_AST_INVALID')
 
 
+@pytest.mark.parametrize('leaf_cites_condition', [True, False])
+def test_rule_leaf_requires_support_in_its_own_quote(content, leaf_cites_condition):
+    _, payload, output, snapshot = content
+    output['candidates'][0]['source_refs'].append(ref(snapshot['sources'][0], line=1))
+    preview = validate_candidate_output(output, snapshot)[0]
+    condition, form = (source.local_ref for source in candidate_content_sources(preview))
+    rule = payload['rules'][0]
+    rule['evidence_ids'] = [condition, form]
+    rule['evidence_quotes'] = {condition: '2023级及以后', form: '填写奖学金申请表'}
+    leaf = rule['ast']
+    leaf['evidence'] = [condition if leaf_cites_condition else form]
+    rule['ast'] = {'op': 'and', 'args': [leaf], 'evidence': [condition, form]}
+    payload['materials'] = payload['tasks'] = []
+    if leaf_cites_condition:
+        assert json.loads(validate_candidate_content(preview, payload).analysis_json)['rules']
+    else:
+        reject(preview, payload)
+
+
 @pytest.mark.parametrize('field,value', [('op', []), ('field', {}), ('evidence', [False])])
 def test_malformed_ast_values_return_safe_errors(content, field, value):
     preview, payload, _, _ = content
@@ -182,6 +201,19 @@ def test_unresolved_dates_remain_unresolved(content, text, reason):
     dates = json.loads(result.dates_json)
     assert dates[0]['value'] is None and reason in dates[0]['review_reasons']
     assert result.eligibility == 'UNKNOWN'
+
+
+@pytest.mark.parametrize('quote', ['报名截止2026-12-1', '12-10'])
+def test_truncated_date_quote_is_unresolved_against_the_source_line(content, quote):
+    _, _, output, snapshot = content
+    output['candidates'][0]['source_refs'][0]['quote'] = quote
+    preview = validate_candidate_output(output, snapshot)[0]
+    result = validate_candidate_content(preview, {})
+    dates = json.loads(result.dates_json)
+    assert len(dates) == 1
+    assert dates[0]['value'] is None
+    assert 'truncated_date_quote' in dates[0]['review_reasons']
+    assert 'DATE_REVIEW_REQUIRED' in result.review_reasons
 
 
 def test_changed_source_version_changes_local_alias(content):
