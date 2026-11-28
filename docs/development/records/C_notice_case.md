@@ -31,6 +31,8 @@ Windows，复用 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`，从�
 - `scripts/check-api-contract.py`：通过，指纹仍为 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`；`scripts/check-docs.py`：271 个本地链接目标通过；`scripts/check-paths.py`、`node scripts/check-demo.mjs`（8 份副本）及 `git diff --check` 均通过。
 - 未运行完整后端、前端构建、真实模型／外部资源、B 工作区或 Android。Fake Provider 成功／空输出／失败测试不等于真实识别效果或 RF-009/010 完成。
 
+2026-11-28 联调节点复核：单次禁用不可达代理 fetch 成功，`origin/main` 仍为 `bbeb9a4`；本分支 `350d00c` 与远端一致且工作区原本干净，未进入 main。正常本机权限复跑上述五个测试文件，使用 `--basetemp=.runtime/pytest-status-retry-20261128`，**95 passed，5 warnings，9.78 秒**。此前沙箱运行持续无输出，已中止，不计通过。本次只复验内部实验及来源兼容，不代表真实 Provider、候选存储或确认链可联调；本补记保留本地，未提交或推送。
+
 ### 6. 运行证据
 
 样例 JSON 与新增测试在本分支实际存在，全部为合成文本及占位 ID；测试输出在当前 Codex 会话，未另存日志或真实通知／个人数据。`.runtime/pytest-rf014-*` 是本次忽略的隔离测试输出，不作为正式业务备份。原始 Codex 会话分享链接或导出待保留；无本轮 APK。
@@ -38,6 +40,21 @@ Windows，复用 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`，从�
 ### 7. 未完成与限制
 
 模块未接公开路由、Provider 或页面；没有真实多事项识别、行动／日期／材料／规则内容校验、预算／幂等、存储或执行。内部模型不代表正式契约获批。B/D 需回核来源与归属语义，A/B 协调正式协议；RF-015／016 的 DDL、版本和确认事务继续按唯一决策表确认，CM-007 不消费本模型执行正式写入。快照授权和新鲜度由调用方保障，当前校验不能独立防止传入伪造快照或保证返回后来源不变。
+
+### 2026-11-28 续：规则、材料、行动与日期内容校验
+
+1. **任务信息** — C，RF-014。用户在远端同步与下一阶段建议后明确“开始”。继续使用 `feat/RF-014-candidate-validation` / `350d00c`，fetch 后 `origin/main` 仍为 `bbeb9a4`；原有两行复测记录保留。完成内部内容校验切片，未获新的公共 DTO／Provider／存储实施确认，未将通用开工指令代记为团队签认。本轮尚未提交、推送或创建 PR，RF-014 整卡未完成。
+2. **技术实现** — 新增 `server/app/services/notice_candidate_content.py` 及 `server/tests/test_notice_candidate_content.py`，更新原校验准备说明和本条记录。`candidate_content_sources` 建立仅限当前候选短引的本地校验别名及原引用索引；`validate_candidate_content` 复用 `AIAnalysis`、既有规则／引用／语义检查及 `extract_dates`，返回不可修改的内容／日期 JSON 快照。未改公共 AI、路由、数据库、存储、B/D 文件、前端或 Android，无新依赖。
+3. **设计与关键决策** — 每个候选只消费自己的已核验短引，防止同源不同事项串用依据；本地别名不注册正式 Evidence，不允许用于执行。规则叶节点需引用，AST 有深度／节点预算；模型截止值拒绝，程序日期保持待核对、不自动绑定 Task，时长保留确认提示。资格保持 UNKNOWN，不读画像、不计算通过结论；引用有效不能证明标题或事项划分语义正确。正式模型和附件适用范围保留待评审。
+4. **遇到的问题及解决** — Git 报工作区归属不一致，用单次 `-c safe.directory=<当前已知工作区>` 操作，未改全局配置。首次沙箱 fetch 代理不可达，正常本机权限 fetch 成功。首次沙箱 pytest 无输出，已中止，未计通过；正常本机权限隔离目录重跑成功。复查发现 AST 操作符／字段若为列表或对象，既有校验器可能抛类型异常，本模块提前拒绝并补 3 项安全错误用例；未改既有公共校验器。
+5. **测试与验证** — Windows，复用 `../RuleFlow/.runtime/c-venv/Scripts/python.exe -X utf8`。首次定向 `-m pytest --rootdir=. --basetemp=.runtime/pytest-rf014-content-retry server/tests/test_notice_candidate_content.py -q -p no:cacheprovider --tb=short`：45 passed、5 warnings、1.18 秒。补真实快照／失效原件／跨候选日期后相关回归157项通过；补畸形AST后最终使用 `--basetemp=.runtime/pytest-rf014-content-final`，测试文件为 `test_notice_candidate_content.py`、`test_notice_candidate_validation.py`、`test_ai.py`、`test_date_candidates.py`、`test_action_candidates.py`、`test_notice_source_snapshot.py`、`test_form_context.py`、`test_notice_migration_baseline.py`（均位于server/tests），参数 `-q -p no:cacheprovider --tb=short --disable-warnings`：**160 passed、5 项既有弃用警告、8.45 秒**，其中新增51项。真实API仅上传合成TXT，在既有授权快照链读取；校验前后数据库dump相同。未执行完整后端、前端构建、真实模型、Office或Android／真机测试；静态及契约检查结果见后续补记。
+
+   静态检查补记：`scripts/check-api-contract.py` 通过，OpenAPI 指纹仍为 `d11b23bb0e1bfaffecffe4304651c93ef86c9b6cc756d8690ffc15f39c28d7cf`；`node scripts/check-demo.mjs` 8份副本一致。文档／路径检查首次因脚本的 Git 子进程触发归属校验而失败；仅当前进程通过 `GIT_CONFIG_COUNT/KEY_0/VALUE_0` 信任已知工作区后重跑，`scripts/check-docs.py` **273个本地链接目标通过**（外链未检）、`scripts/check-paths.py` 通过；未修改全局Git配置。已阅读实际文档diff与新增模块，`git diff --check` 和两个新增文件的 `git diff --no-index --check` 无空白错误（no-index因存在新文件差异返回1），仅有既有CRLF转换提示。
+
+6. **运行证据** — 本会话命令回执与新增51项测试；隔离输出 `.runtime/pytest-rf014-content-*` 忽略、不提交。无真实账户资料、校方附件、密钥、新commit／PR或APK。原始Codex会话分享链接或导出待成员保留。
+7. **未完成与限制** — 当前仅内部纯校验，未接真实多事项生成或页面；完整语义、附件适用范围、预算／幂等、候选存储和确认执行未实现。调用方仍负责来源授权、新鲜度及执行前重核；课程集合亦不得由模型授权。B/D需回核输出消费，A/B协调正式协议及Provider接入范围，RF-015与D迁移顺序按唯一决策表确认后实施。工作保留本地等待评审及提交授权，不自动创建PR或合并。
+
+提交授权补记：用户随后明确要求“提交并推送”。本轮提交内容校验模块、51项测试、原准备说明和本人记录，共4个文件，包含此前已保留的两行复测记录；沿 `feat/RF-014-candidate-validation` 推送。前述未提交状态保留为开发阶段快照，最终commit和推送结果以Git回执为准。提供覆盖本分支最终差异的PR DES，不创建PR或合并；生产代码未再调整，沿用本节160项相关回归结果，不重复执行产品测试。
 
 ## RF-013 与 CM-004｜正文入口核查和课程资料交接（2026-11-27）
 
