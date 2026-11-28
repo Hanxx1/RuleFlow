@@ -1,3 +1,4 @@
+import {noticeLongField,readTextLimits} from './formFields'
 import {strFromU8,unzipSync} from 'fflate'
 import templateData from './templateData.json'
 import {inspectGenericForm,type GenericForm,type GenericMapping} from './genericForm'
@@ -32,22 +33,26 @@ export type NoticeRequirements = {
 const fileLimit = 10*1024*1024
 const textLimit = 30_000
 export const isLegacyXls = (name:string) => /\.xls$/i.test(name)
-export const legacyXlsHint = '旧版 XLS 请保留原件，按校方要求手工填写。校方明确接受 XLSX 时，可在 Excel 或 WPS 中另存为。仅修改后缀无法转换格式。打印前请检查长文本是否完整。'
-
+export const legacyXlsHint = '可在本机核对旧版 XLS 的申请人空格，导出 XLS 副本。'
 export const isPdfAttachment = (name:string) => /\.pdf$/i.test(name)
-export const pdfAttachmentHint = '如为申请表，请保留 PDF 原件并按校方要求处理。可填写的 PDF 可在支持表单的阅读器中填写。普通 PDF 或扫描件请核对是否要打印填写。签字、盖章和审批由对应人员处理。'
+export const pdfAttachmentHint = '在原 PDF 的空白文本框填写，或在扫描页点选申请人位置后导出副本。'
+export const isExtendedOriginal = (name:string) => /\.(xls|pdf|png|jpe?g)$/i.test(name)
 
 export async function matchAttachment(file: File, expected?: {sha256:string;size:number},inspectUnknown=false): Promise<AttachmentMatch> {
   const name = file.name
-  if (isLegacyXls(name)) return {name,error:legacyXlsHint}
-  if (isPdfAttachment(name)) return {name,error:pdfAttachmentHint}
-  if (!/\.(docx|xlsx)$/i.test(name)) return {name,error:'当前仅核对 DOCX、XLSX 原表。'}
+  if (!isExtendedOriginal(name) && !/\.(docx|xlsx)$/i.test(name)) return {name,error:'暂不支持此附件格式。'}
   if (file.size>fileLimit || file.size<4) return {name,error:'文件大小不符合本机核对限制。'}
   const bytes = await file.arrayBuffer()
   const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))]
     .map(value=>value.toString(16).padStart(2,'0')).join('')
   if (expected && (bytes.byteLength!==expected.size || hash!==expected.sha256)) {
     return {name,error:'原件指纹不符，请从来源页核对或重新导入。'}
+  }
+  if (isExtendedOriginal(name)) {
+    const header = isLegacyXls(name) ? [208,207,17,224,161,177,26,225] : isPdfAttachment(name) ? [37,80,68,70,45]
+      : /\.png$/i.test(name) ? [137,80,78,71,13,10,26,10] : [255,216,255]
+    const data = new Uint8Array(bytes)
+    return header.every((byte,i)=>data[i]===byte) ? {name,sha256:hash} : {name,error:'文件内容与扩展名不符。'}
   }
   const signature = new Uint8Array(bytes,0,4)
   if (signature.join(',')!=='80,75,3,4') return {name,error:'文件内容与 DOCX/XLSX 格式不符。'}
@@ -164,22 +169,20 @@ export function analyzeNotice(text: string, include: (clause: NoticeClause)=>boo
       result.evidence.push({...evidence,kind:'photo'})
       continue
     }
-    const field = /(?:申请|请假|缓考)(?:理由|事由|原因)/.test(text)?'reason':/个人.*总结/.test(text)?'achievement':undefined
-    if (field && /字/.test(text) && !/推荐理由|教师意见|院系意见|审核/.test(text)) {
-      const range = /(\d{1,4})\s*(?:至|[-—–~～])\s*(\d{1,4})\s*字/.exec(text)
-      const min = range?.[1] ?? /(?:不少于|不低于|至少)\s*(\d{1,4})\s*字/.exec(text)?.[1]
-      const max = range?.[2] ?? /(?:不超过|不得超过|最多|不多于)\s*(\d{1,4})\s*字/.exec(text)?.[1] ?? /(\d{1,4})\s*字以内/.exec(text)?.[1]
-      if (min || max) {
+    const field = noticeLongField(text)
+    const {min,max} = readTextLimits(text)
+    if (min!==undefined || max!==undefined) {
+      if (field && !/推荐理由|教师意见|院系意见|审核/.test(text)) {
         const previous = result.lengths[field] || {}
         const constraint = {
-          min:min ? Math.max(previous.min || 0,Number(min)) : previous.min,
-          max:max ? Math.min(previous.max ?? Infinity,Number(max)) : previous.max,
+          min:min===undefined ? previous.min : Math.max(previous.min ?? 0,min),
+          max:max===undefined ? previous.max : Math.min(previous.max ?? Infinity,max),
         }
-        if (constraint.min && constraint.max!==undefined && constraint.min>constraint.max) result.conflict = '通知的字数要求互相冲突，请核对。'
+        if (constraint.min!==undefined && constraint.max!==undefined && constraint.min>constraint.max) result.conflict = '通知的字数要求互相冲突，请核对。'
         result.lengths[field] = constraint
         result.evidence.push({...evidence,kind:'length'})
-        continue
-      }
+      } else result.evidence.push({...evidence,kind:'review'})
+      continue
     }
     if (/必须|必填|填写|格式|字体|字号|宋体|黑体|仿宋|楷体|小四|行距|签字|手签|盖章|提交|截止|打印|照片|附件|证明|上传|邮件|扫描|压缩包/.test(text)) {
       result.evidence.push({...evidence,kind:'review'})
@@ -195,10 +198,9 @@ export function applyNotice(scenario: Scenario, requirements: NoticeRequirements
   let conflict = requirements.conflict
   const groups = scenario.groups.map(group=>({...group,fields:group.fields.map(field=>{
     const limit = requirements.lengths[field.id]
-    if (!limit) return field
-    const min = limit.min===undefined ? field.min : Math.max(field.min || 0,limit.min)
-    const max = limit.max===undefined ? field.max : Math.min(field.max ?? Infinity,limit.max)
-    if (min!==undefined && max!==undefined && min>max) conflict = field.label+'的通知要求和原表限制不一致，请核对。'
+    const min = limit?.min===undefined ? field.min : Math.max(field.min || 0,limit.min)
+    const max = limit?.max===undefined ? field.max : Math.min(field.max ?? Infinity,limit.max)
+    if (min!==undefined && max!==undefined && min>max) conflict = field.label+'的字数要求互相冲突，请核对原表和通知。'
     return {...field,min,max}
   })}))
   if (requirements.physicalPhoto && !scenario.photo) conflict = '通知要求贴照，但此原表没有已核验的照片位置。请核对附件。'

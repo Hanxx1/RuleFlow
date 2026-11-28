@@ -33,6 +33,13 @@ describe('form context reading',()=>{
     expect(fetch.mock.calls[0][0]).toMatch(/\/batch\/form-context\?expected_revision=2$/);
     expect(fetch.mock.calls[0][1]).toMatchObject({method:'GET',cache:'no-store',headers:{Authorization:'Bearer synthetic-access'}});
   });
+  it('accepts an OCR quadrilateral and rejects mixed or incomplete coordinates',()=>{
+    const data=sample(),line=data.sources[1].lines[0]
+    line.bbox=[[0,0],[10,0],[10,4],[0,4]]
+    expect(parseFormContext(data,'batch',2)).toBe(data)
+    line.bbox[0][0]=NaN
+    expect(()=>parseFormContext(data,'batch',2)).toThrow(FormContextInvalid)
+  })
   it('encodes batch identifiers and checks the response belongs to that batch',async()=>{
     const data={...sample(),batch_id:'a/b ?'};
     const fetch=vi.fn().mockResolvedValue(response({data}));vi.stubGlobal('fetch',fetch);

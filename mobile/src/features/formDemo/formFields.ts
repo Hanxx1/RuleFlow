@@ -19,6 +19,7 @@ const aliases: Record<string, readonly string[]> = {
   exchangeInstitution:['境外院校/机构名称及所在国家或地区','境外院校名称及所在国家或地区'],
   postalCode:['邮编','邮政编码'],
   reason:['申请理由','申请原因','申请事由','申请补办原因','本人申请','申请事项及理由','原因','事由','更改理由'],
+  statement:['情况说明','个人情况说明','申请情况说明','补充说明'],
   achievement:['个人总结','个人事迹','主要事迹'],
   semester:['学年学期','申请学期','学期'],
   applicationDate:['申请日期','申请时间','填表日期','填表时间'],
@@ -39,28 +40,62 @@ export function startsProtectedSection(text: string) {
     /^(辅导员|指导教师|导师|班主任|推荐人|负责人|经办人|审核人|审批人)(?:基本|联系|身份)?(?:信息|资料|栏|区)?$/.test(label)
 }
 
+const lengthNumber = '([0-9]{1,4})'
+const lowerLimit = new RegExp('(?:不少于|不低于|不得少于|至少)\\s*'+lengthNumber+'\\s*字')
+const upperLimit = new RegExp('(?:不超过|不得超过|最多|不多于)\\s*'+lengthNumber+'\\s*字|'+lengthNumber+'\\s*字以内')
+const lengthRange = new RegExp(lengthNumber+'\\s*(?:至|[-—–~])\\s*'+lengthNumber+'\\s*字')
+const lengthInstruction = new RegExp('^(?:(?:字数(?:要求|为)?[：:]?)?\\s*(?:'+
+  [lengthRange,lowerLimit,upperLimit].map(rule=>rule.source).join('|')+')[\\s、,，;；]*)+$')
+
+export function readTextLimits(text:string) {
+  const normalized = text.normalize('NFKC')
+  const matches = (rule:RegExp) => [...normalized.matchAll(new RegExp(rule.source,'g'))]
+  const ranges = matches(lengthRange)
+  const minimums = [...ranges.map(match=>match[1]),...matches(lowerLimit).map(match=>match[1])].map(Number)
+  const maximums = [...ranges.map(match=>match[2]),...matches(upperLimit).map(match=>match[1] ?? match[2])].map(Number)
+  return {
+    min:minimums.length ? Math.max(...minimums) : undefined,
+    max:maximums.length ? Math.min(...maximums) : undefined,
+  }
+}
+
+export function noticeLongField(text:string) {
+  const normalized = normalizedLabel(text)
+  const ids = [
+    [/(?:申请|请假|缓考)(?:事项及)?(?:理由|事由|原因)/,'reason'],
+    [/个人事迹|主要事迹|个人.{0,8}总结/,'achievement'],
+    [/情况说明|补充说明/,'statement'],
+  ] as const
+  const matching = ids.filter(([pattern])=>pattern.test(normalized))
+  return matching.length===1 ? matching[0][1] : undefined
+}
+
 export function detectField(raw: string, allowCustom = false): Field | undefined {
   if (reservedLabel(raw)) return
   const label = raw.trim().replace(/\s+/g,'').replace(/[：:]$/,'')
-  const normalized = normalizedLabel(label).replace(/\*+$/,'').replace(/(?:非必填|选填|必填)$/,'').replace(/\d{1,4}[-–—至]\d{1,4}字$/,'')
+  const canonical = label.normalize('NFKC').replace(/\*+$/,'')
+  const cleaned = canonical.replace(/\(([^()]*)\)/g,(original,inside:string)=>
+    lengthInstruction.test(inside) ? '' : original)
+  const suffix = /^(.*?)(?=字数|不少于|不低于|不得少于|至少|不超过|不得超过|最多|不多于|\d)/.exec(cleaned)?.[0]
+  const base = suffix && lengthInstruction.test(cleaned.slice(suffix.length)) ? suffix : cleaned
+  const normalized = normalizedLabel(base).replace(/(?:非必填|选填|必填)$/,'')
   const semantic = Object.entries(aliases).find(([,names])=>names.includes(normalized))?.[0]
-  if (!semantic && (!allowCustom || !/^[\p{L}\p{N}（）()／/、·]{2,16}\**$/u.test(label) ||
+  if (!semantic && (!allowCustom || !/^[\p{L}\p{N}（）()／/、·]{2,16}$/u.test(base) ||
       /申请表|登记表|汇总表|材料清单|情况说明|^附件|^说明|^合计|^序号/.test(label))) return
-  const length = /(\d{1,4})\s*[-–—至]\s*(\d{1,4})\s*字/.exec(raw)
+  const limits = readTextLimits(raw)
+  const long = semantic==='reason' || semantic==='achievement' || semantic==='statement' ||
+    limits.min!==undefined || limits.max!==undefined
   const field: Field = {
     id:semantic || 'label-'+normalized,
     label,
-    type:semantic==='reason' || semantic==='achievement' ? 'long' : undefined,
+    type:long ? 'long' : undefined,
     optional:/(?:非必填|选填)\s*[)）]?$/.test(raw.trim()),
     sensitive:Boolean(semantic && ['identity','credential','phone','address'].includes(semantic) ||
       /邮箱|e-?mail|QQ|微信|电话|手机|证件|身份证|住址|卡号|银行账号/i.test(normalized)),
     // The institution of an imported original has not been independently verified.
     reusable:semantic==='name' || semantic==='gender',
   }
-  if (length && Number(length[1])<=Number(length[2])) {
-    field.min = Number(length[1])
-    field.max = Number(length[2])
-  }
+  if (long) Object.assign(field,limits)
   return field
 }
 

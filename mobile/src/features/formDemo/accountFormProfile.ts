@@ -22,12 +22,13 @@ export function reviewAccountProfile(workspace: Workspace,scenario: Scenario,cas
   const skipped: string[] = []
   const resolved = resolvedFacts(workspace,caseId,today)
   const {facts,evidence,conflicts} = resolved
-  const school = applicantSchools[scenario.id]
+  const generic = scenario.id==='imported-template'
+  const school = generic ? scenario.school : applicantSchools[scenario.id]
   let issue = ''
-  if (!school) issue = '此模板暂无可从当前学籍画像带入的字段。'
+  if (!school) issue = generic ? '请在字段位置核对页填写原件适用的学校全称。' : '此模板暂无可从当前学籍画像带入的字段。'
   else if (conflicts.includes('school')) issue = '画像学校存在冲突，请先在个人画像中核对。'
   else if (typeof facts.school!=='string') issue = '画像缺少可用学校，请先确认适用于本次的学校全称。'
-  else if (schoolName(facts.school)!==school) issue = '画像学校与此原表适用的学校不同，仍可手工填写。'
+  else if (schoolName(facts.school)!==schoolName(school)) issue = '画像学校与此原表适用的学校不同，仍可手工填写。'
   if (issue) return {revision:workspace.revision,candidates,skipped,issue}
 
   for (const field of scenarioFields(scenario)) {

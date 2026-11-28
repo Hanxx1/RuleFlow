@@ -1,4 +1,5 @@
 import {scenarioFields,scenarios,type FormValues,type Scenario} from './scenarios'
+import {validPositions,type StoredPositions} from './genericDraftMapping'
 import {draftIdentity} from './savedDraftSession'
 
 export const draftRetentionDays = 7
@@ -10,7 +11,7 @@ const channelName = 'campusweave-form-draft-logout'
 export type SavedFormDraft = {
   key:string; scenarioId:string; revision:number; values:FormValues; savedAt:number
 }
-export type DraftReference = {batchId:string; sourceId:string; documentId:string; documentRevision:number; sha256:string}
+export type DraftReference = {batchId:string; sourceId:string; documentId:string; documentRevision:number; sha256:string; positions?:StoredPositions}
 export type DraftState = {epoch:number; revision:number; records:SavedFormDraft[]}
 export type DraftSession = {owner:string; epoch:number}
 export type DraftOperation = {type:'open'|'logout'} | ({epoch:number; batch:string} & (
@@ -28,20 +29,21 @@ export class DraftSessionExpired extends Error {
 export function readDraftReference(key:string): DraftReference | undefined {
   try {
     const data: unknown = JSON.parse(key)
-    if (!Array.isArray(data) || data.length!==5) return
+    if (!Array.isArray(data) || (data.length!==5 && (data.length!==6 || !validPositions(data[5])))) return
     const [batchId,sourceId,documentId,documentRevision,sha256] = data
     if ([batchId,sourceId,documentId].some(value=>typeof value!=='string' || !draftIdentity.test(value)) ||
         !Number.isSafeInteger(documentRevision) || documentRevision<0 ||
         typeof sha256!=='string' || !/^[0-9a-f]{64}$/.test(sha256)) return
-    return {batchId,sourceId,documentId,documentRevision,sha256}
+    return {batchId,sourceId,documentId,documentRevision,sha256,...(data.length===6 ? {positions:data[5]} : {})}
   } catch { return undefined }
 }
 
 export function recoverableFields(scenario:Scenario) {
-  return scenarioFields(scenario).filter(field=>allowedFields.has(field.id) && field.reusable && !field.sensitive)
+  return scenarioFields(scenario).filter(field=>allowedFields.has(field.id) && !field.sensitive &&
+    (scenario.id==='imported-template' ? field.export!==false : field.reusable))
 }
 
-function allowedValues(scenario:Scenario,values:FormValues) {
+export function allowedValues(scenario:Scenario,values:FormValues) {
   return Object.fromEntries(recoverableFields(scenario).flatMap(field=>{
     const value = values[field.id]
     return typeof value==='string' && value.trim() && [...value].length<=(field.max ?? 40) &&
@@ -66,13 +68,16 @@ export function applyDraftOperation(previous:DraftState | undefined,operation:Dr
   }
   if (operation.type!=='save') throw Error('无法核对草稿操作。')
   const scenario = scenarios.find(item=>item.id===operation.scenarioId)
-  if (!scenario || readDraftReference(operation.key)?.batchId!==operation.batch) {
+  const reference = readDraftReference(operation.key)
+  const generic = operation.scenarioId==='imported-template' && Boolean(reference?.positions)
+  if ((!scenario && !generic) || Boolean(reference?.positions)!==generic || reference?.batchId!==operation.batch) {
     throw Error('原件版本待核对，请重新打开表单。')
   }
   const matching = batchRecords.find(draft=>draft.key===operation.key)
   if ((matching?.revision ?? 0)!==operation.revision) throw new DraftRevisionConflict()
-  const saved = {key:operation.key,scenarioId:scenario.id,revision:state.revision+1,
-    values:allowedValues(scenario,operation.values),savedAt:now}
+  const saved = {key:operation.key,scenarioId:operation.scenarioId,revision:state.revision+1,
+    values:scenario ? allowedValues(scenario,operation.values) : Object.fromEntries(Object.entries(operation.values)
+      .filter(([id,value])=>allowedFields.has(id) && typeof value==='string' && value.trim() && [...value].length<=40)),savedAt:now}
   return {state:{...state,revision:saved.revision,records:[...state.records.filter(draft=>draft!==matching),saved]},
     saved, drafts:[...batchRecords.filter(draft=>draft!==matching),saved]}
 }

@@ -50,7 +50,7 @@ describe('application reason drafts',()=>{
     expect(draftApplicationReason(photo,'原学生证遗失',[]).version?.text).toContain('补发学生证')
     expect(reasonField({...scholarship,id:'other'})).toBeUndefined()
     expect(reasonField(scenarios.find(item=>item.id==='workstudy')!)).toBeUndefined()
-    expect(reasonLength(' 甲𠮷。 ')).toBe(3)
+    expect(reasonLength(' 甲\n𠮷。 ')).toBe(3)
   })
 
   it('offers facts only when a whole award row was sourced from the confirmed archive',()=>{

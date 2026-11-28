@@ -2,6 +2,15 @@ import {describe,expect,it} from 'vitest'
 import {checkboxOptions,detectField,emptyPlaceholder,reservedLabel,startsProtectedSection} from './formFields'
 
 describe('generic form field evidence',()=>{
+  it('separates long-text field labels from printed length constraints',()=>{
+    expect(detectField('申请理由（不少于３００字）')).toMatchObject({id:'reason',type:'long',min:300})
+    expect(detectField('情况说明（100～400字，最多300字）')).toMatchObject({
+      id:'statement',type:'long',min:100,max:300,
+    })
+    expect(detectField('个人总结（不得超过500字）')).toMatchObject({id:'achievement',type:'long',max:500})
+    expect(detectField('审核人情况说明（不少于300字）',true)).toBeUndefined()
+  })
+
   it('separates applicant aliases from protected roles',()=>{
     expect(detectField('申 请 人 姓 名')?.id).toBe('name')
     expect(detectField('学　号')).toMatchObject({id:'studentId',reusable:false})

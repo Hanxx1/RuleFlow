@@ -8,6 +8,14 @@ const scholarship = scenarios.find(scenario=>scenario.id==='scholarship')!
 const resume = scenarios.find(scenario=>scenario.id==='resume')!
 
 describe('notice-driven form intake',()=>{
+  it('intersects requirements for the same long field and flags contradictions',()=>{
+    const requirements = analyzeNotice('情况说明不少于300字。\n情况说明400字以内。')
+    expect(requirements.lengths.statement).toEqual({min:300,max:400})
+    const original = {...resume,groups:[{title:'申请人',fields:[{id:'statement',label:'情况说明',type:'long' as const,max:299}]}]}
+    expect(applyNotice(original,requirements).conflict).toContain('字数要求互相冲突')
+    expect(analyzeNotice('申请理由和情况说明均不少于300字。').lengths).toEqual({})
+  })
+
   it('matches source bytes and rejects a same-name modified workbook',async()=>{
     const original = Uint8Array.from(atob(templateData['scholarship.xlsx']),char=>char.charCodeAt(0))
     expect((await matchAttachment(new File([original],'重命名.xlsx'))).scenario?.id).toBe('scholarship')
@@ -16,19 +24,19 @@ describe('notice-driven form intake',()=>{
     expect((await matchAttachment(new File(['not an Office package'],'假.xlsx'))).error).toBeTruthy()
   })
 
-  it('keeps XLS as manual and rejects a renamed binary workbook',async()=>{
+  it('recognizes the XLS signature and rejects a renamed binary workbook',async()=>{
     const ole = new Uint8Array([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1])
     const legacy = await matchAttachment(new File([ole],'申请表.XLS'),undefined,true)
-    expect(legacy.error).toContain('仅修改后缀无法转换格式')
+    expect(legacy.sha256).toMatch(/^[0-9a-f]{64}$/)
     expect(legacy.generic).toBeUndefined()
     expect((await matchAttachment(new File([ole],'申请表.xlsx'),undefined,true)).error).toContain('文件内容与')
   })
 
-  it('keeps PDF as a manual attachment and rejects it under an Office extension',async()=>{
+  it('recognizes a PDF header and rejects it under an Office extension',async()=>{
     const bytes = '%PDF-1.7'
     const pdf = await matchAttachment(new File([bytes],'申请表.PDF'),undefined,true)
-    expect(pdf).toEqual({name:'申请表.PDF',error:expect.stringContaining('保留 PDF 原件')})
-    expect(pdf.error).toContain('签字、盖章和审批')
+    expect(pdf.sha256).toMatch(/^[0-9a-f]{64}$/)
+    expect((await matchAttachment(new File(['wrong bytes'],'申请表.pdf'))).sha256).toBeUndefined()
     expect((await matchAttachment(new File([bytes],'申请表.docx'),undefined,true)).error).toContain('文件内容与')
   })
 

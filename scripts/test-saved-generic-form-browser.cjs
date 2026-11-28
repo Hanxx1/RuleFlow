@@ -86,8 +86,9 @@ async function run() {
     await upload(sample.name,sample.bytes,sample.name.endsWith('.docx') ? wordMime : sheetMime)
   }
   const browser = await chromium.launch({channel:'msedge',headless:true})
+  let page
   try {
-    const page = await browser.newPage({viewport:{width:420,height:900},acceptDownloads:true})
+    page = await browser.newPage({viewport:{width:420,height:900},acceptDownloads:true})
     page.setDefaultTimeout(10000)
     const errors = []
     const writes = []
@@ -98,24 +99,11 @@ async function run() {
     await page.getByRole('button',{name:'提交',exact:true}).click()
     await page.waitForURL(url=>!url.pathname.startsWith('/auth'))
     page.on('request',request=>{
-      if (request.url().startsWith(backend+'/api/') && !['GET','OPTIONS'].includes(request.method())) writes.push(request.method())
+      if (!request.url().includes('/auth/login') && request.url().startsWith(backend+'/api/') && !['GET','OPTIONS'].includes(request.method())) writes.push(request.method())
     })
     await page.locator('#app').evaluate((root,id)=>root.__vue_app__.config.globalProperties.$router.push('/imports/'+id+'/sources'),batch)
     await page.getByRole('link',{name:'按已保存通知填表'}).click()
     const intake = page.getByRole('region',{name:'已保存通知与附件'})
-    if (legacy) {
-      const manual = intake.getByRole('region',{name:'待手工填写的 XLS 原件'})
-      await manual.getByText(legacy.name,{exact:true}).waitFor()
-      await manual.getByText(/校方明确接受 XLSX/).waitFor()
-      assert.equal(await intake.getByRole('radio',{name:legacy.name,exact:false}).count(),0)
-    }
-    if (pdf) {
-      const manual = intake.getByRole('region',{name:'PDF 附件',exact:true})
-      await manual.getByText(pdf.name,{exact:true}).waitFor()
-      await manual.getByText(/签字、盖章和审批由对应人员处理/).waitFor()
-      assert.equal(await intake.getByRole('radio',{name:pdf.name,exact:false}).count(),0)
-      await manual.screenshot({path:path.join(output,'saved-pdf-fallback.png')})
-    }
     const mapping = intake.getByRole('group',{name:'核对原表字段位置'})
     const consent = mapping.getByRole('checkbox',{name:'我已对照原表确认写入位置和需人工核对的要求'})
     const apply = mapping.getByRole('button',{name:'使用已核对的位置填写'})
@@ -178,6 +166,24 @@ async function run() {
     assert.equal((xml.match(/沈言初/g) || []).length,1)
     console.log('PASS ambiguous role requires explicit mapping, changed mapping starts blank, protected role stays and manual fallback blocks export')
 
+    await page.getByRole('button',{name:'保存当前草稿'}).click()
+    await page.getByText('已保存当前原件的草稿字段。').waitFor()
+    const savedRoute=page.url()
+    await page.goto(base+'/auth/login')
+    await page.locator('input[type=email]').fill(email)
+    await page.locator('input[type=password]').fill(password)
+    await page.getByRole('button',{name:'提交',exact:true}).click()
+    await page.waitForURL(url=>!url.pathname.startsWith('/auth'))
+    await page.locator('#app').evaluate((root,route)=>root.__vue_app__.config.globalProperties.$router.push(route),new URL(savedRoute).pathname)
+    await select(synthetic.name)
+    await mapping.getByLabel('恢复已保存的字段位置').selectOption('0')
+    assert.equal(await positions.inputValue(),'1')
+    assert.equal(await apply.isDisabled(),true)
+    await enable()
+    await editor.getByRole('button',{name:'显示并编辑整张表单'}).click()
+    assert.equal(await editor.locator('#name').inputValue(),'沈言初')
+    assert.equal(await editor.locator('#studentId').inputValue(),'00005834')
+    console.log('PASS reopened saved original restores confirmed positions and permitted manual values after fresh login')
     await select(reviewerSample.name)
     const studentIdPosition = mapping.getByRole('combobox',{name:/写入位置 · 学号/})
     assert.equal(await studentIdPosition.inputValue(),'0')
@@ -230,6 +236,17 @@ async function run() {
       assert.ok(Object.entries(parts).some(([name,bytes])=>writable.test(name) && strFromU8(bytes).includes(values.name)))
       console.log('PASS public source, verified user mapping and native format export:',sample.name)
     }
+    for(const entry of [legacy,pdf].filter(Boolean)){
+      await select(entry.name)
+      const panel=intake.getByRole('group',{name:'填写原件副本'})
+      const field=entry===legacy ? panel.locator('input[maxlength="1000"]').first() : panel.getByRole('textbox',{name:'Name',exact:true})
+      await field.fill('00007325')
+      await panel.getByLabel('我已核对通知、申请人位置、填写内容和文件名').check()
+      const [copy]=await Promise.all([page.waitForEvent('download'),panel.getByRole('button',{name:'下载填写副本'}).click()])
+      await copy.saveAs(path.join(output,copy.suggestedFilename()))
+      assert.equal(path.extname(copy.suggestedFilename()),path.extname(entry.name))
+      console.log('PASS saved original native-format download:',entry.name,await field.evaluate(e=>e.parentElement.textContent.trim()))
+    }
     assert.deepEqual(errors,[])
     assert.deepEqual(writes,[])
 
@@ -240,7 +257,7 @@ async function run() {
     const called = []
     local.on('request',request=>{if (/\/api\//.test(request.url())) called.push(request.method())})
     await local.getByLabel('通知正文').fill('本机填写回归\n请申请人核对表格并签字。')
-    await local.getByLabel('选择申请表原件（DOCX 或 XLSX）').setInputFiles({name:synthetic.name,mimeType:wordMime,buffer:synthetic.bytes})
+    await local.getByLabel(/选择申请表原件/).setInputFiles({name:synthetic.name,mimeType:wordMime,buffer:synthetic.bytes})
     await local.getByRole('button',{name:'核对通知与附件'}).click()
     await local.getByLabel('附件用途 · '+synthetic.name).selectOption('form')
     await local.getByLabel('我已核对通知原文和需人工办理的要求').check()
@@ -261,33 +278,9 @@ async function run() {
     assert.match(localXml,/学生姓名[\s\S]*?周泽安[\s\S]*?申请人姓名[\s\S]*?00001734/)
     assert.deepEqual(called,[])
     console.log('PASS local-import mapping and native export work offline with no API calls')
-    if (pdf) {
-      await local.getByLabel('选择申请表原件（DOCX 或 XLSX）').setInputFiles({
-        name:pdf.name,mimeType:'application/pdf',buffer:pdf.bytes,
-      })
-      await local.getByText(/保留 PDF 原件/).waitFor()
-      await local.getByRole('button',{name:'核对通知与附件'}).click()
-      await local.getByText(/签字、盖章和审批由对应人员处理/).waitFor()
-      await local.getByText('要在此填写，请提供可核验的 DOCX 或 XLSX 申请表原件。').waitFor()
-      const roles = local.getByLabel('附件用途 · '+pdf.name)
-      assert.equal(await roles.locator('option[value=form]').evaluate(option=>option.disabled),true)
-      assert.equal(await local.getByRole('radio',{name:pdf.name,exact:false}).count(),0)
-      assert.equal(await local.getByRole('button',{name:'按此通知填写选中原表'}).isDisabled(),true)
-      assert.deepEqual(called,[])
-      await local.screenshot({path:path.join(output,'local-pdf-fallback.png')})
-      console.log('PASS real PDF remains manual in both entries; Office writeback and offline mode stay available')
-    }
-    if (legacy) {
-      await local.getByLabel('选择申请表原件（DOCX 或 XLSX）').setInputFiles({
-        name:legacy.name,mimeType:'application/vnd.ms-excel',buffer:legacy.bytes,
-      })
-      await local.getByRole('button',{name:'核对通知与附件'}).click()
-      await local.getByText(/仅修改后缀无法转换格式/).waitFor()
-      assert.equal(await local.getByRole('radio',{name:legacy.name,exact:false}).count(),0)
-      assert.equal(await local.getByRole('button',{name:'按此通知填写选中原表'}).isDisabled(),true)
-      assert.deepEqual(called,[])
-      console.log('PASS real legacy XLS gets a manual-only explanation in both entries; never selected for writeback')
-    }
+  } catch(error) {
+    console.error((await page?.locator('body').innerText())?.slice(-1600))
+    throw error
   } finally {
     await browser.close()
   }

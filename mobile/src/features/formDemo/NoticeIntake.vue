@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import {computed,onMounted,ref,shallowRef} from 'vue'
+import {computed,defineAsyncComponent,onMounted,ref,shallowRef} from 'vue'
 import {useImportDraftStore} from '../imports/draftStore'
-import {analyzeNotice,applyNotice,isLegacyXls,isPdfAttachment,legacyXlsHint,matchAttachment,noticeTargetMatches,pdfAttachmentHint,preserveAttachmentKeys,readNotice,
+import {analyzeNotice,applyNotice,isExtendedOriginal,isLegacyXls,isPdfAttachment,legacyXlsHint,matchAttachment,noticeTargetMatches,pdfAttachmentHint,preserveAttachmentKeys,readNotice,
   suggestedTarget,type AttachmentMatch,type NoticeEvidence,type NoticeRequirements,type NoticeSelection} from './noticeIntake'
 import GenericMappingReview from './GenericMappingReview.vue'
 import {canWriteMapping,genericScenario,mappedFields,type GenericForm,type GenericMapping,type GenericMappingSelection} from './genericForm'
@@ -12,6 +12,8 @@ const emit = defineEmits<{
   (event:'invalidate'):void
   (event:'accept',value:NoticeSelection):void
 }>()
+const OriginalCopyEditor = defineAsyncComponent(()=>import('./OriginalCopyEditor.vue'))
+const extended = shallowRef<File>()
 const draft = useImportDraftStore()
 const text = ref(draft.text)
 const source = ref('导入的通知正文')
@@ -35,7 +37,7 @@ const noticeFiles = computed(()=>files.value.flatMap((file,index)=>
 const attachments = computed(()=>matches.value.flatMap((match,index)=>
   index===noticeIndex.value ? [] : [{match,index,role:roles.value[index] || 'unknown'}]))
 const targets = computed(()=>attachments.value.flatMap(({match,index,role})=>
-  role==='form' || (role==='unknown' && /\.(docx|xlsx)$/i.test(match.name))
+  role==='form' || (role==='unknown' && !!match.sha256)
     ? [{id:index,name:match.name,title:match.scenario?.title}] : []))
 const formIndexes = computed(()=>attachments.value.flatMap(({match,index,role})=>role==='form' && match.sha256 ? [index] : []))
 const labels = {length:'字数校验',filename:'文件名',photo:'打印后贴照',review:'待人工核对'}
@@ -68,6 +70,7 @@ const candidate = computed(()=>{
 })
 
 function pauseForm() {
+  extended.value = undefined
   acknowledged.value = false
   accepted.value = false
   pendingMapping.value = undefined
@@ -104,7 +107,7 @@ async function inventory() {
   try {
     if (files.value.length>10) throw Error('每次最多核对 10 个文件。')
     const next = await Promise.all(files.value.map(async file=>{
-      if (!/\.(docx|xls|xlsx|pdf)$/i.test(file.name)) return {name:file.name}
+      if (!/\.(docx|xls|xlsx|pdf|png|jpe?g)$/i.test(file.name)) return {name:file.name}
       try { return await matchAttachment(file) } catch { return {name:file.name,error:'本机无法核验此文件。'} }
     }))
     const keys = preserveAttachmentKeys(matches.value,attachmentKeys.value,next,()=>`local:${serial++}`)
@@ -190,6 +193,11 @@ async function accept(mappingSelection?:GenericMappingSelection) {
       unassigned.value || inspected.value?.competition) return
   const index = selected.value
   const key = attachmentKeys.value[index]
+  if (isExtendedOriginal(files.value[index].name)) {
+    extended.value = files.value[index]
+    accepted.value = true
+    return
+  }
   let scenario = current.scenario
   let mapping:GenericMapping | undefined
   let exportBlocked = ''
@@ -239,7 +247,7 @@ async function accept(mappingSelection?:GenericMappingSelection) {
     </label>
     <label>通知正文<textarea v-model="text" :disabled="disabled" rows="6" maxlength="30000" @input="source='手动编辑的通知正文'; invalidate()"></textarea></label>
     <label>选择通知文件（TXT 或 DOCX）<input type="file" accept=".txt,.docx" :disabled="disabled" @change="chooseNotice"></label>
-    <label>选择申请表原件（DOCX 或 XLSX）<input type="file" multiple accept=".docx,.xlsx,.xls,.pdf" :disabled="disabled" @change="chooseAttachments"></label>
+    <label>选择申请表原件（Word、Excel、PDF 或图片）<input type="file" multiple accept=".docx,.xlsx,.xls,.pdf,.png,.jpg,.jpeg" :disabled="disabled" @change="chooseAttachments"></label>
     <ul v-if="files.length && !inspected">
       <li v-for="(file,index) in files" :key="index">
         {{ file.name }}<p v-if="isLegacyXls(file.name)">{{ legacyXlsHint }}</p>
@@ -261,12 +269,12 @@ async function accept(mappingSelection?:GenericMappingSelection) {
           <small v-if="match.sha256 && role==='form'">{{ progress[attachmentKeys[index]]==='exported'?'已导出':progress[attachmentKeys[index]]==='editing'?'填写中':match.scenario?'原表已核验，可填写':'需对照原表确认位置' }}</small>
           <label>附件用途
             <select :aria-label="'附件用途 · '+match.name" :value="role" :disabled="disabled" @change="changeRole(index,$event)">
-              <option v-for="(label,key) in roleLabels" :key="key" :value="key" :disabled="key==='form' && (isLegacyXls(match.name) || isPdfAttachment(match.name))">{{ label }}</option>
+              <option v-for="(label,key) in roleLabels" :key="key" :value="key" :disabled="key==='form' && !match.sha256">{{ label }}</option>
             </select>
           </label>
         </li>
       </ul>
-      <p v-if="!formIndexes.length && !inspected.competition">要在此填写，请提供可核验的 DOCX 或 XLSX 申请表原件。</p>
+      <p v-if="!formIndexes.length && !inspected.competition">要在此填写，请提供可核验的申请表原件。</p>
       <h3>通知依据</h3>
       <p v-if="!inspected.evidence.length">待核对：未识别到可引用的具体要求，继续前请检查原通知。</p>
       <ol v-else>
@@ -285,11 +293,12 @@ async function accept(mappingSelection?:GenericMappingSelection) {
       <p v-if="unassigned && targets.length && !inspected.competition" role="alert">请确认上方未分配的要求适用哪份附件，或标记待人工核对。</p>
       <p v-if="candidate?.conflict && !inspected.competition" role="alert">{{ candidate.attachment }} · {{ candidate.conflict }}</p>
       <template v-if="!inspected.competition">
-        <label><input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="accepted=false; pendingMapping=undefined; emit('invalidate')"> 我已核对通知原文和需人工办理的要求</label>
+        <label><input v-model="acknowledged" type="checkbox" :disabled="disabled" @change="accepted=false; extended=undefined; pendingMapping=undefined; emit('invalidate')"> 我已核对通知原文和需人工办理的要求</label>
         <button type="button" :disabled="disabled || accepted || !candidate || Boolean(candidate.conflict) || unassigned || !acknowledged" @click="accept()">{{ accepted?'已启用该申请表':'按此通知填写选中原表' }}</button>
         <GenericMappingReview v-if="pendingMapping" :key="attachmentKeys[selected]" :form="pendingMapping" :disabled="disabled" @accept="accept"/>
       </template>
     </template>
+    <OriginalCopyEditor v-if="extended" :file="extended" />
   </section>
 </template>
 
