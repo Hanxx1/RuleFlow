@@ -1,5 +1,9 @@
 # CM-002 本机课程与交互样例
 
+课程档案、要求和自定义字段有未保存输入时，切换编辑项／分区、返回列表、取消或离开主应用课程页会先询问是否放弃；拒绝后保留当前输入。点击当前分区不关闭编辑器。保存失败及“读取最新记录，保留草稿”继续保留输入；保存要求不会将尚未添加的自定义字段当成已保存。刷新／关闭页签注册浏览器离开提醒，实际提示由浏览器决定，不能保证进程回收时恢复草稿。切换账户直接清除本页输入，不把前一身份的草稿带给新身份。
+
+自动验证：`npm.cmd --prefix mobile test -- src/features/courses/courseDraftGuard.test.ts src/features/courses/coursePersistence.test.ts`。启动下方本机 Vite 服务后，可通过 `COURSE_TEST_BASE` 指定回环地址，运行 `node scripts/test-course-draft-browser.cjs`；默认端口 5186。浏览器脚本需要现有 Playwright 与 Edge，可用 `PLAYWRIGHT_MODULE` 指定 Playwright 模块位置，不是新增运行时依赖。脚本使用独立浏览器上下文、合成课程、真实 IndexedDB；账户切换由合成 Pinia 身份驱动，不代表真实登录验收。
+
 从仓库根运行 `npm.cmd --prefix mobile run dev -- --host 127.0.0.1 --port 5174 --strictPort`，打开 `http://127.0.0.1:5174/course-preview.html`。
 
 主应用入口为工作台“我的课程”→`/courses`，由路由懒加载，按当前身份读取和保存本机课程。`course-preview.html` 保留为独立 Vite 内存样例入口，未单独配置为生产构建入口。品牌文案使用有绪 CampusWeave。
