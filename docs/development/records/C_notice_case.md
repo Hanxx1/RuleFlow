@@ -746,6 +746,43 @@ Windows；现有 `.runtime/c-venv` Python 3.12.14；测试进程 TEMP/TMP 指向
 
 提交授权补记（2026-11-14）：用户明确要求“提交推送并写DES”，授权将本次本机保存切片及本记录提交并推送至 `feat/CM-002-course-persistence`，提供 PR 标题和描述；实际提交号及远端状态以 Git 记录为准。范围共12个文件，排除独立 RF-013 未跟踪测试；不创建或合并 PR。
 
+### 2026-11-28 续：已保存课程的未保存输入保护
+
+#### 1. 任务信息
+
+C；用户明确要求“先进行 CM 最近的模块开发”。基于现有可直接实施的 CM-002 本机课程页面，修复切换编辑项、分区及离页时静默丢失未保存输入的问题。fetch 后 main 为 `e2cd59d`，从该基线建立独立工作区 `RuleFlow-CM002-draft-guards`、分支 `fix/CM-002-unsaved-course-edits`。状态：正式课程入口与独立样例的输入保护切片已实现、自测通过，待评审；CM-002 整卡未新增验收结论。未提交、推送或创建 PR；先前 RF-014 文档工作区独立保留。
+
+#### 2. 技术实现
+
+新增 `mobile/src/features/courses/courseDraftGuard.ts` 与同目录 8 项测试，在 `CoursePreview.vue` 接入档案／要求／自定义字段的输入基线、放弃确认、主应用路由离开守卫和 `beforeunload` 提醒。统一编辑器清理，保存成功重置已保存部分，失败保留输入；同分区点击不关闭编辑器，保存要求后未添加的自定义字段继续受保护。账号变化沿原生命周期清除草稿与基线。新增 `scripts/test-course-draft-browser.cjs` 实际浏览器回归，更新课程 README 和本记录。未改 Workspace schema、服务端 API、数据库、公共 AI、路由配置、B/D 模块或 Android；无新项目依赖。
+
+#### 3. 设计与关键决策
+
+输入保护只存在页面内存，复用既有显式保存及 revision 冲突机制，不引入草稿存储。未修改输入或还原原值时不提示；用户拒绝放弃保持编辑位置和原输入。账户切换直接隔离旧身份，不询问将旧草稿保留到新账户。保存过程中不允许课程页内丢弃或路由离开，刷新注册提醒；浏览器终止或系统回收无法保证弹框或恢复。原课程 Task／资料区及删除／恢复只读边界保持不变。
+
+#### 4. 遇到的问题及解决
+
+沙箱 fetch 代理不可达，正常权限重跑成功。最初复用原前端依赖目录：相对目标错误、沙箱创建 junction 被拒，修正绝对路径并正常权限创建后，定向测试通过；首轮构建发现现有依赖目录缺少锁文件已声明的 `@capacitor/local-notifications`，不是本次代码类型错误。随后在新工作区运行 `npm.cmd --prefix mobile install --ignore-scripts --no-save --package-lock=false`，npm 将 junction 替换为新工作区的独立依赖目录，未改依赖清单或锁文件；最终构建通过。沙箱 Edge 启动失败；正常权限浏览器起初无法访问沙箱 Vite，将两者放到同一本机环境后回归通过。上述失败不计通过。
+
+#### 5. 测试与验证
+
+Windows，Node／现有 Vitest、Vue 与 Edge。实际执行：
+
+- `npm.cmd --prefix mobile test -- src/features/courses/courseDraftGuard.test.ts src/features/courses/coursePersistence.test.ts src/features/courses/demoModel.test.ts`：3 文件、27 项通过，含新增 8 项。
+- 依赖恢复后 `npm.cmd --prefix mobile test`：**43 文件、316 项通过**；`npm.cmd --prefix mobile run build`：vue-tsc 及 Web 生产构建通过，253 modules，保留既有 Vite CJS 弃用提示。
+- 本机 Vite 仅绑定 `127.0.0.1:5186`，用 `PLAYWRIGHT_MODULE` 指向本机已有测试工具后执行 `node scripts/test-course-draft-browser.cjs`：通过。覆盖真实 `/courses` 新增及 IndexedDB 保存、取消拒绝保留、要求／分区／列表／路由切换拒绝保留、同分区不清空、真实 revision 冲突失败后保留与重读重试、已保存内容刷新重开、要求保存后自定义草稿仍受保护、确认放弃保留原记录、合成身份切换清空、独立样例及 390×844 窄屏无横向溢出；无 pageerror。刷新保护以可取消 beforeunload 事件验证，未声称所有浏览器／设备关闭时必定弹框。
+- `scripts/check-docs.py`：274 个本地链接目标通过（外链未检）；`scripts/check-paths.py` 通过；`node scripts/check-demo.mjs`：8 份样例副本一致；`node --check scripts/test-course-draft-browser.cjs` 通过。已阅读实际组件 diff 和新增代码，`git diff --check` 通过，新增文件另行检查文本空白。未运行后端测试、真实登录鉴权、模型、Android 或真机；没有 APK。
+
+#### 6. 运行证据
+
+新增测试源码与浏览器脚本可复核，实际命令输出在本 Codex 会话。忽略目录 `.runtime/course-draft-browser/courses-mobile.png`（独立样例）与 `courses-desktop.png`（合成身份切换后的真实页面）已生成；手机截图已目视检查，未见裁切或重叠。截图仅为合成数据，不是跨成员／设备验收证据。未另存测试日志；原始会话分享链接或导出待成员保留。无提交／PR／APK。
+
+#### 7. 未完成与限制
+
+仅完成 CM-002 输入保护切片，不实现自动保存、进程回收恢复或跨标签页草稿同步；浏览器原生离开提醒受平台限制。真实账号登录／退出链和 Android 返回键／系统终止未验。CM-003 实际删除／恢复、CM-004 资料及 CM-006 Task／时间仍依赖对应公共契约与 B/D 实码，不将本次 UI 修复记为课程全链完成。不修改其他成员记录；本轮改动保留本地等待评审及提交授权。
+
+提交授权补记：用户随后明确要求“提交并推送”。本次仅提交课程页面、草稿保护模块及其 8 项测试、浏览器回归脚本、课程 README 和本记录，共 6 个文件，沿 `fix/CM-002-unsaved-course-edits` 推送。原 RF-014 文档工作区和 `RuleFlow` 任务表改动均排除；提供 PR DES，不创建或合并 PR。前述未提交状态为开发阶段快照，最终 commit 与推送状态以 Git 回执为准。提交前复核实际 diff，业务代码未再修改，沿用本节已记录的 316 项前端测试、构建和浏览器结果，未重复执行产品测试。
+
 ## 当前进度与下一工作入口（2026-11-10 历史快照）
 
 本节只索引下方原任务记录，不新建平行验收结论。当时安排为：**暂停 CM 开发，先完成 C 的近期 RF 工作**；后续已恢复 CM 页面开发，最新进展见上方 CM-002 的 11-12 补记。团队任务编号、分工、检查点及验收标准保持原约定。
